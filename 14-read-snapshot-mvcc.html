@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>14 · Concurrency II: read snapshots and MVCC — The Quipu-Log Book</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ Contents</button><b>The Quipu-Log Book</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn active" href="14-read-snapshot-mvcc.html">EN</a><a class="langbtn" href="ko/14-read-snapshot-mvcc.html">한국어</a></div>
+<a class="home" href="index.html">The Quipu-Log Book</a>
+<div class="sub">Storage engines and tamper-evident audit logs, built on nothing but the filesystem — explained from the ground up</div>
+<div class="part">Part 1 · Starting point: files, not a DB</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>What an audit log is, and why “files, no DB”</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>The map, and the DB↔filesystem correspondence</a>
+<div class="part">Part 2 · Filesystem basics</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>Filesystem basics: files, directories, inodes, descriptors</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>Reading &amp; writing, and the atomicity of rename</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>When data really hits disk: the page cache and fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>The std::fs toolbox: handling files in Rust</a>
+<div class="part">Part 3 · The heart of the engine: the append-only log</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>Append-only log = the WAL is the database</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>Segment files and rollover</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>Record framing: length, CRC32, magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>Serialization: turning structs into bytes</a>
+<div class="part">Part 4 · Re-creating what a DB gave you for free, on files</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>Durability: fsync policy and group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>Atomicity and crash recovery: torn writes and tail detection</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>Concurrency I: single-writer and the file lock</a>
+<a class="lnk active" href="14-read-snapshot-mvcc.html"><span class="n">14</span>Concurrency II: read snapshots and MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>Indexing: in-memory index + on-disk tokens</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>Query execution: segment scans and cursor pagination</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>Deletion and retention: segment unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>Store layout and format versioning</a>
+<div class="part">Part 5 · Integrity: making tampering evident (Security I)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>Hash functions and SHA-256: a digital fingerprint</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>The Merkle history tree: committing the log to 32 bytes</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>Inclusion proofs and consistency proofs</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>Checkpoints and external anchoring</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>Tamper-evident vs tamper-proof, and the threat model</a>
+<div class="part">Part 6 · Confidentiality: searching while keeping secrets (Security II)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>Field protection in four levels: plaintext/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>Symmetric, asymmetric, hybrid encryption and AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>Blind indexes: searching without plaintext</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>Write-only deployment: a server without the private key</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>Key management: keyring, versioning, rotation vs re-keying</a>
+<div class="part">Part 7 · The write &amp; read paths</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>The async pipeline: non-blocking emit and backpressure</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>Reliability: retries, backoff, DLQ, idempotency</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>The tower middleware: auto-recording HTTP requests</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>Permissions (RBAC), filters, and meta-audit</a>
+<div class="part">Part 8 · Distribution, operations, scaling</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>Single point of failure and availability: the client spool</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>Horizontal scaling: sharding, consistent hashing, read replicas</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>Server, client, MCP, and observability</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">Part 4 · Re-creating what a DB gave you for free, on files</span><h1><span class="chno">14</span> · Concurrency II: read snapshots and MVCC</h1></div><article>
+
+<p class="lead">What happens to reads while a write is in flight? A DB uses MVCC (Multi-Version Concurrency Control) to keep reads and writes from blocking each other. Quipu-Log has no B-tree, no transaction versions. Yet it achieves the same goal — <strong>reads don't block writes, and writes don't block reads</strong> — with a far simpler approach: clone the index and pin the file length.</p>
+
+<div class="callout"><span class="lab">In one sentence</span><p>A <code>ReadSnapshot</code> clones the in-memory index and records the file length of each segment file at that exact moment. No matter how many writes happen afterward, the snapshot sees only what existed when it was taken — without any locks.</p></div>
+
+<h2>First, what you already know: MVCC in a DB</h2>
+
+<p>PostgreSQL and MySQL InnoDB attach a version to every row. An <code>UPDATE</code> doesn't delete the old version — it creates a new version and marks the old one expired. A read transaction receives a "snapshot ID" when it starts and simply cannot see changes committed after that point. That's Snapshot Isolation. The key insight: <strong>a read transaction doesn't block writes, and a write transaction doesn't block reads.</strong></p>
+
+<p>The price is implementation complexity. Tracking "which versions can this transaction see?" requires elaborate data structures: an undo log, MVCC version chains, a vacuum process.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ Filesystem</span><p><strong>DB MVCC</strong> keeps multiple versions of the same row on disk and has each read transaction pick the version it's allowed to see. Precise, but complex. <strong>Quipu-Log's ReadSnapshot</strong> clones the entire in-memory index and caps each segment file at its current length. The structure is different; the goal is the same: non-blocking reads and writes.</p></div>
+
+<h2>ReadSnapshot: copy-on-read</h2>
+
+<p>Calling <code>AuditStore::snapshot()</code> produces a <code>ReadSnapshot</code>.</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs — AuditStore::snapshot()</span><code><span class="kw">pub fn</span> <span class="fn">snapshot</span>(&amp;<span class="kw">mut</span> self) -&gt; <span class="ty">Result</span>&lt;<span class="ty">ReadSnapshot</span>&gt; {
+    <span class="ty">Ok</span>(<span class="ty">ReadSnapshot</span> {
+        keys: self.cfg.keys.clone(),
+        <span class="hl">registries: self.registries
+            .iter()
+            .map(|(k, v)| (k.clone(), v.idx.clone())) <span class="com">// clone the index</span>
+            .collect(),</span>
+        <span class="hl">logs: self.logs.slices()?,      <span class="com">// segment file paths + current lengths</span></span>
+        relations: self.relations.slices()?,
+    })
+}</code></pre>
+
+<p>Two things happen here.</p>
+
+<ol>
+  <li><strong>Registry index clone</strong> — the current in-memory index (entity ID → version uid) is copied. This clone is independent: subsequent <code>append()</code> calls update the original, but the snapshot's copy stays frozen.</li>
+  <li><strong>Segment slices</strong> — each segment file's path and its <em>current length at this exact moment</em> are recorded as a <code>SegmentSlice</code>. No matter how many bytes future appends add to the file, the snapshot will never read past that <code>bound</code>.</li>
+</ol>
+
+<figure>
+<svg viewBox="0 0 700 260" role="img" aria-label="Snapshot creation and non-blocking read-write flow">
+  <defs>
+    <marker id="arr14a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#7aa2ff"/>
+    </marker>
+    <marker id="arr14b" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#8be9c0"/>
+    </marker>
+    <marker id="arr14c" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+
+  <!-- Writer thread -->
+  <rect x="20" y="20" width="140" height="50" rx="8" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="90" y="42" text-anchor="middle" fill="#e6e8ee" font-size="12" font-family="-apple-system,sans-serif" font-weight="600">Writer thread</text>
+  <text x="90" y="58" text-anchor="middle" fill="#8be9c0" font-size="11" font-family="-apple-system,sans-serif">append() keeps running</text>
+
+  <!-- AuditStore -->
+  <rect x="220" y="20" width="160" height="80" rx="8" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="300" y="46" text-anchor="middle" fill="#e6e8ee" font-size="12" font-family="-apple-system,sans-serif" font-weight="600">AuditStore</text>
+  <text x="300" y="64" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">registries (live index)</text>
+  <text x="300" y="80" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">logs (segment files)</text>
+  <text x="300" y="96" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">snapshot() → clone</text>
+
+  <!-- Arrow Writer → Store -->
+  <line x1="160" y1="50" x2="218" y2="60" stroke="#8be9c0" stroke-width="1.5" marker-end="url(#arr14b)"/>
+
+  <!-- ReadSnapshot -->
+  <rect x="460" y="20" width="200" height="80" rx="8" fill="#16241d" stroke="#2c4a3a" stroke-width="1.5"/>
+  <text x="560" y="44" text-anchor="middle" fill="#8be9c0" font-size="12" font-family="-apple-system,sans-serif" font-weight="600">ReadSnapshot</text>
+  <text x="560" y="62" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">registries (clone — independent)</text>
+  <text x="560" y="78" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">logs: [SliceA(bound=1024), ...]</text>
+  <text x="560" y="94" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">won't read past this bound</text>
+
+  <!-- Arrow Store → Snapshot (clone) -->
+  <line x1="380" y1="55" x2="458" y2="55" stroke="#7aa2ff" stroke-width="1.5" marker-end="url(#arr14a)"/>
+  <text x="419" y="46" text-anchor="middle" fill="#7aa2ff" font-size="10" font-family="-apple-system,sans-serif">clone()</text>
+
+  <!-- Caller thread -->
+  <rect x="460" y="155" width="200" height="60" rx="8" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="560" y="178" text-anchor="middle" fill="#e6e8ee" font-size="12" font-family="-apple-system,sans-serif" font-weight="600">Caller thread</text>
+  <text x="560" y="196" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">snapshot.query() runs here</text>
+  <text x="560" y="212" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">(independent of writer)</text>
+
+  <!-- Arrow Snapshot → Caller -->
+  <line x1="560" y1="100" x2="560" y2="153" stroke="#9aa3b2" stroke-width="1.5" marker-end="url(#arr14c)"/>
+  <text x="580" y="130" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">handed off</text>
+</svg>
+<figcaption>The snapshot is created on the writer thread (just the clone cost), but the actual scan runs on the caller's thread independently. The writer doesn't wait for the scan.</figcaption>
+</figure>
+
+<h2>SegmentReader's bound: pinning the file length</h2>
+
+<p>The <code>bound</code> field in <code>SegmentSlice</code> is the key. The file length at snapshot time is recorded as <code>bound</code>. When scanning, <code>SegmentReader::open_bounded()</code> refuses to read past it.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — SegmentReader::open_bounded()</span><code><span class="kw">pub fn</span> <span class="fn">open_bounded</span>(path: &amp;<span class="ty">Path</span>, bound: <span class="ty">u64</span>) -&gt; <span class="ty">Result</span>&lt;Self&gt; {
+    <span class="kw">let</span> file = <span class="ty">File</span>::open(path)?;
+    <span class="hl">let end = file.metadata()?.len().min(bound); <span class="com">// never read past bound</span></span>
+    <span class="kw">let mut</span> reader = <span class="ty">BufReader</span>::with_capacity(<span class="num">256</span> * <span class="num">1024</span>, file);
+    <span class="dim">if end &gt;= SEGMENT_HEADER as u64 { read_header(&amp;mut reader, path)?; }</span>
+    <span class="ty">Ok</span>(<span class="ty">Self</span> { <span class="dim">path, reader,</span> offset: <span class="ty">SEGMENT_HEADER</span>.min(end as usize) as u64,
+               <span class="hl">end</span> <span class="com">/* reads stop here */</span> })
+}</code></pre>
+
+<p>Why does this matter? Even while an append is actively adding bytes to the end of the file, the snapshot reader only looks up to <code>bound</code>. It never sees a half-written frame sitting in a BufWriter that hasn't flushed yet. Reads and writes share the same file; the boundary keeps them cleanly separated.</p>
+
+<h2>The scan runs on the caller's thread</h2>
+
+<p>In pipeline mode, calling <code>AuditHandle::snapshot()</code> only creates the snapshot object on the writer thread (the index clone). After that the snapshot is returned to the caller, and <code>snapshot.query()</code> executes on the caller's thread. The writer thread keeps processing <code>emit()</code>-ed events the whole time. A slow query never stalls the write path.</p>
+
+<p>From the README's Snapshots section:</p>
+<blockquote>
+<p>Queries run on a read snapshot (<code>handle.snapshot(&amp;role)?</code>): it clones the in-memory registry indexes and scans on the caller's thread, never blocking writes.</p>
+</blockquote>
+
+<p>This is Quipu-Log's answer to MVCC. No version chains — just an index clone and a file bound, and read-write isolation is achieved.</p>
+
+<h2>Comparing with MVCC: what's the same, what's different</h2>
+
+<table>
+  <tr>
+    <th>Property</th>
+    <th>DB MVCC</th>
+    <th>Quipu-Log ReadSnapshot</th>
+  </tr>
+  <tr>
+    <td>Purpose</td>
+    <td>Non-blocking reads and writes</td>
+    <td>Non-blocking reads and writes</td>
+  </tr>
+  <tr>
+    <td>Mechanism</td>
+    <td>Per-row version chains, undo log</td>
+    <td>Index clone + file bound</td>
+  </tr>
+  <tr>
+    <td>Snapshot cost</td>
+    <td>Low (assign a transaction ID)</td>
+    <td>Index clone — O(entity count)</td>
+  </tr>
+  <tr>
+    <td>Changes after snapshot</td>
+    <td>Hidden by the version chain</td>
+    <td>Not read — file past the bound is ignored</td>
+  </tr>
+  <tr>
+    <td>Vacuum needed?</td>
+    <td>Yes (clean up old versions)</td>
+    <td>No (retention deletes whole segments)</td>
+  </tr>
+</table>
+
+<div class="callout analogy"><span class="lab">Analogy</span><p>A library keeps acquiring new books. Imagine you were handed a printed copy of the current catalogue. New arrivals after that moment don't change your printout — you search using the catalogue as it was when it was printed. Quipu-Log's snapshot works exactly the same way: the index clone is your printout.</p></div>
+
+<h2>Limits of the snapshot</h2>
+
+<div class="callout warn"><span class="lab">Caution</span><p>The index clone cost is linear in the number of registered entities. With millions of entities the clone itself could take tens of milliseconds. Also, because a snapshot is immutable, any append that happens while a scan is running won't be visible to that scan — this is intentional snapshot isolation behavior, but "why isn't what I just appended showing up?" can be confusing. Call <code>flush()</code> and take a fresh snapshot; the new records will appear.</p></div>
+
+<h2>Recap</h2>
+<ul>
+  <li>Quipu-Log achieves the same goal as DB MVCC (non-blocking reads and writes) through a copy-on-read snapshot.</li>
+  <li>A <code>ReadSnapshot</code> is made by cloning the registry index and recording the current file length of each segment as a <code>bound</code>. Subsequent appends grow the file, but the snapshot only reads up to that bound.</li>
+  <li>The scan runs on the caller's thread. The writer thread is never made to wait for a scan.</li>
+  <li>There are no version chains, no undo log, no vacuum — but snapshot cost is linear in index size.</li>
+</ul>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① In one paragraph, explain how DB MVCC and Quipu-Log's ReadSnapshot achieve the same goal differently.<br>② An append happens immediately after a snapshot is taken. Can that append be seen through the snapshot? If not, why?<br>③ Explain, from a pipeline perspective, why the query scan must run on the caller's thread rather than the writer thread.</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="13-single-writer-lock.html"><span class="dir">← Prev</span><span class="t">13 · Concurrency I: single-writer and the file lock</span></a><a class="next" href="15-indexing.html"><span class="dir">Next →</span><span class="t">15 · Indexing: in-memory index + on-disk tokens</span></a></div>
+</div>
+</main>
+</div>
+<script src="assets/textbook.js"></script>
+</body>
+</html>

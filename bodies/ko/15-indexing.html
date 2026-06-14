@@ -1,0 +1,185 @@
+<article>
+
+<p class="lead">감사 로그가 1천만 건을 넘으면, 인덱스 없이 "사용자 alice의 모든 행동"을 찾으려면 전체를 읽어야 합니다. DB가 B-tree 보조 인덱스를 만들 듯, Quipu-Log도 인덱스를 만듭니다. 단, 디스크 위에 별도 B-tree 파일을 쓰는 대신 <strong>메모리 안에 HashMap을 품고, 재시작 시 로그 재생으로 재구축</strong>하는 방식을 택했습니다. 왜 그랬는지, 그리고 디스크에 영속하는 "토큰"이 어떻게 검색을 가능하게 만드는지를 이번 챕터에서 살펴봅니다.</p>
+
+<div class="callout"><span class="lab">한 문장 요약</span><p>Quipu-Log의 인덱스는 <em>인메모리 HashMap</em>(재시작마다 로그 재생으로 재구축)과 <em>디스크에 영속된 블라인드 토큰</em>(보호 필드 검색용)의 두 층으로 이루어집니다. 암호학은 <span class="pill">26장</span>의 몫이고, 이 챕터는 자료구조와 영속·재구축 메커니즘에 집중합니다.</p></div>
+
+<h2>당신이 아는 것: DB의 보조 인덱스</h2>
+
+<p>관계형 DB에서 <code>SELECT * FROM users WHERE email = 'alice@example.com'</code>을 실행하면, <code>email</code> 컬럼에 인덱스가 없는 한 테이블 전체를 스캔합니다(full table scan). 인덱스를 만들면 — <code>CREATE INDEX ON users(email)</code> — DB는 별도 B-tree 구조를 유지합니다. B-tree에는 이메일 값 → 행 주소(heap tuple pointer)가 정렬되어 들어있어, 검색이 O(log n)으로 끝납니다.</p>
+
+<p>이 B-tree 인덱스는 디스크의 별도 파일에 영속됩니다. 새 행이 삽입될 때마다 인덱스도 함께 갱신되고, DB 재시작 후에도 그대로 사용 가능합니다.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ 파일시스템</span><p><strong>DB에서는</strong> 보조 인덱스가 별도 B-tree 파일로 존재하며, 쓰기마다 두 곳(테이블 + 인덱스)을 원자적으로 갱신한다. <strong>Quipu-Log에서는</strong> 인덱스가 인메모리 HashMap으로만 존재하고, 재시작 시 레지스트리 로그를 처음부터 읽어(replay) 재구축한다. 별도 인덱스 파일이 없으니 갱신 원자성 문제가 없고, 레지스트리 레코드 수는 로그 레코드보다 훨씬 적으므로 재구축 비용이 낮다.</p></div>
+
+<h2>레지스트리: 엔티티 메타데이터를 담는 테이블</h2>
+
+<p>감사 로그의 행(log row)은 "누가(actor) 무슨 행위를 했는가"만 기록합니다. "alice가 어떤 사람인지" — 이름, 역할, 부서 같은 메타데이터 — 는 <strong>레지스트리(registry)</strong>에 따로 저장됩니다. 레지스트리도 append-only 로그이지만, 저장하는 건 엔티티의 버전 이력입니다.</p>
+
+<p>레지스트리의 핵심 자료구조는 <code>RegistryIndex</code>입니다. 이것이 곧 "인덱스"입니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/registry.rs</span><code><span class="kw">struct</span> <span class="ty">RegistryIndex</span> {
+    schema: <span class="ty">TypeSchema</span>,
+    <span class="dim">/// entity_id -> 버전 uid 목록 (오래된 순)</span>
+    versions: <span class="ty">HashMap</span>&lt;<span class="ty">String</span>, <span class="ty">Vec</span>&lt;<span class="ty">Uid</span>&gt;&gt;,
+    <span class="dim">/// uid -> 실제 레코드</span>
+    by_uid: <span class="ty">HashMap</span>&lt;<span class="ty">Uid</span>, <span class="ty">RegistryRecord</span>&gt;,
+<span class="hl">    /// 인덱스 필드 -> 검색키 -> entity_id 집합 (주 색인)</span>
+<span class="hl">    index: <span class="ty">HashMap</span>&lt;<span class="ty">String</span>, <span class="ty">HashMap</span>&lt;<span class="ty">Vec</span>&lt;<span class="ty">u8</span>&gt;, <span class="ty">HashSet</span>&lt;<span class="ty">String</span>&gt;&gt;&gt;,</span>
+<span class="hl">    /// 블라인드 토큰 색인: 필드 -> 토큰 다이제스트 -> entity_id 집합</span>
+<span class="hl">    token_index: <span class="ty">HashMap</span>&lt;<span class="ty">String</span>, <span class="ty">HashMap</span>&lt;<span class="ty">String</span>, <span class="ty">HashSet</span>&lt;<span class="ty">String</span>&gt;&gt;&gt;,</span>
+    <span class="dim">// ...인메모리 평문 캐시 (opt-in)</span>
+}</code></pre>
+
+<p>이 중에서 실제로 검색을 빠르게 만드는 두 층이 보입니다. <code>index</code>는 평문 값(또는 SHA-256/HMAC 다이제스트)으로 검색하는 주 색인, <code>token_index</code>는 접두사·부분문자열 검색을 위한 블라인드 토큰 색인입니다.</p>
+
+<h2>인덱스는 언제, 어떻게 채워지나</h2>
+
+<p><code>RegistryIndex</code>는 두 경로로 채워집니다.</p>
+
+<p><strong>1. 쓰기 시점 — absorb()</strong>: 새 엔티티 버전이 디스크 레지스트리 로그에 기록된 직후, 인메모리 인덱스에 반영합니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/registry.rs</span><code><span class="kw">fn</span> <span class="fn">absorb</span>(&amp;<span class="kw">mut</span> <span class="kw">self</span>, rec: <span class="ty">RegistryRecord</span>) {
+    <span class="kw">for</span> (name, stored) in &amp;rec.fields {
+        <span class="kw">if</span> <span class="kw">let</span> <span class="ty">Some</span>(key) = index_key(stored) {
+<span class="hl">            self.index.entry(name.clone()).or_default()</span>
+<span class="hl">                     .entry(key).or_default()</span>
+<span class="hl">                     .insert(rec.entity_id.clone());</span>
+        }
+    }
+    <span class="kw">for</span> (field, tokens) in &amp;rec.tokens {
+        <span class="kw">let</span> posting = self.token_index.entry(field.clone()).or_default();
+        <span class="kw">for</span> d in &amp;tokens.digests {
+<span class="hl">            posting.entry(d.clone()).or_default()</span>
+<span class="hl">                   .insert(rec.entity_id.clone());</span>
+        }
+    }
+    <span class="dim">// versions / by_uid 갱신...</span>
+}</code></pre>
+
+<p><strong>2. 재시작 시점 — 재구축</strong>: 프로세스가 새로 뜰 때, <code>TypeRegistry::open()</code>이 레지스트리 로그 전체를 스캔하여 모든 레코드에 <code>absorb()</code>를 호출합니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/registry.rs</span><code><span class="kw">pub fn</span> <span class="fn">open</span>(dir: &amp;<span class="ty">Path</span>, schema: <span class="ty">TypeSchema</span>, ...) -&gt; <span class="ty">Result</span>&lt;<span class="ty">Self</span>&gt; {
+    <span class="kw">let mut</span> table = <span class="ty">Table</span>::open(dir, max_segment_bytes)?;
+    <span class="kw">let mut</span> idx = <span class="ty">RegistryIndex</span>::new(schema, cache_plaintexts);
+<span class="hl">    let records: <span class="ty">Vec</span>&lt;<span class="ty">RegistryRecord</span>&gt; = table.scan()?.collect::&lt;<span class="ty">Result</span>&lt;<span class="ty">Vec</span>&lt;_&gt;&gt;&gt;()?;</span>
+<span class="hl">    for rec in records { idx.absorb(rec); }</span>
+    <span class="ty">Ok</span>(<span class="ty">Self</span> { table, idx, fingerprints: <span class="ty">HashMap</span>::new() })
+}</code></pre>
+
+<p>레지스트리 레코드는 엔티티 버전이므로, 사용자 1000명 × 평균 3버전 = 3000개입니다. 이걸 한 번 스캔하는 비용은 무시할 수준이지요. 그래서 "별도 인덱스 파일을 관리하는 복잡성" 없이 "재시작마다 재구축"이 실용적인 선택입니다.</p>
+
+<figure>
+<svg viewBox="0 0 720 340" role="img" aria-label="레지스트리 인덱스 자료구조와 재구축 흐름">
+  <defs>
+    <marker id="arr15" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .t15{fill:#e6e8ee;font:600 13px -apple-system,sans-serif}
+    .s15{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .bx15{fill:#161922;stroke:#2a2f3d;stroke-width:1.5;rx:6}
+    .hl15{fill:#1a2535;stroke:#7aa2ff;stroke-width:1.5;rx:4}
+    .ar15{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#arr15)}
+    .kwd{fill:#7aa2ff;font:bold 11px monospace}
+    .val{fill:#8be9c0;font:11px monospace}
+  </style>
+
+  <!-- 디스크: 레지스트리 로그 -->
+  <text x="20" y="26" class="t15">디스크: 레지스트리 세그먼트 로그</text>
+  <rect x="20" y="38" width="300" height="100" class="bx15"/>
+  <rect x="32" y="50" width="276" height="22" rx="3" fill="#0b0d12"/>
+  <text x="38" y="65" class="val">RegistryRecord { uid, entity_id:"alice", fields:{name:"Alice"}, tokens:{name:[d1,d2]} }</text>
+  <rect x="32" y="78" width="276" height="22" rx="3" fill="#0b0d12"/>
+  <text x="38" y="93" class="s15" fill="#e6e8ee">RegistryRecord { uid, entity_id:"alice", fields:{name:"Alicia"}, tokens:... }</text>
+  <rect x="32" y="106" width="200" height="22" rx="3" fill="#0b0d12"/>
+  <text x="38" y="121" class="s15" fill="#e6e8ee">RegistryRecord { uid, entity_id:"bob", fields:{name:"Bob"}, ... }</text>
+
+  <!-- 화살표: 재구축 -->
+  <line x1="170" y1="142" x2="170" y2="175" class="ar15"/>
+  <text x="178" y="162" class="s15">open() 시 scan+absorb()</text>
+
+  <!-- 인메모리: RegistryIndex -->
+  <text x="20" y="196" class="t15">인메모리: RegistryIndex</text>
+
+  <!-- index (주 색인) -->
+  <rect x="20" y="210" width="200" height="110" class="hl15"/>
+  <text x="30" y="228" class="kwd">index</text>
+  <text x="30" y="246" class="s15">"name" →</text>
+  <text x="55" y="264" class="val">"Alice" → {alice}</text>
+  <text x="55" y="282" class="val">"Alicia" → {alice}</text>
+  <text x="55" y="300" class="val">"Bob" → {bob}</text>
+  <text x="30" y="316" class="s15">과거 값도 모두 들어있다</text>
+
+  <!-- token_index (토큰 색인) -->
+  <rect x="240" y="210" width="200" height="110" class="hl15"/>
+  <text x="250" y="228" class="kwd">token_index</text>
+  <text x="250" y="246" class="s15">"name" →</text>
+  <text x="275" y="264" class="val">digest(ali) → {alice}</text>
+  <text x="275" y="282" class="val">digest(ali) → {alice}</text>
+  <text x="275" y="300" class="val">digest(lic) → {alice}</text>
+  <text x="250" y="316" class="s15">prefix/trigram 토큰 다이제스트</text>
+
+  <!-- by_uid -->
+  <rect x="460" y="210" width="240" height="110" class="bx15"/>
+  <text x="470" y="228" class="kwd">by_uid / versions</text>
+  <text x="470" y="250" class="s15">"alice" → [uid1, uid2]</text>
+  <text x="470" y="270" class="s15">uid1 → RegistryRecord(v0)</text>
+  <text x="470" y="290" class="s15">uid2 → RegistryRecord(v1)</text>
+  <text x="470" y="316" class="s15">최신 버전을 latest()로 조회</text>
+</svg>
+<figcaption>레지스트리 로그는 append-only이고, 인메모리 RegistryIndex는 재시작마다 로그를 replay해 재구축된다. index는 평문 검색, token_index는 토큰 다이제스트로 접두사·부분문자열 검색을 가능하게 한다.</figcaption>
+</figure>
+
+<h2>디스크에 영속하는 것: FieldTokens</h2>
+
+<p>인덱스 자체는 인메모리입니다. 그런데 보호 필드(SHA-256·HMAC 등으로 해시된 필드)는 특별한 문제가 있습니다. 해시는 단방향이라 재시작 후에 원문을 복원할 수 없습니다. 접두사·부분문자열 검색을 위한 토큰 다이제스트를 재구축할 원본이 없는 것이죠.</p>
+
+<p>해법은 <strong>쓰기 시점에 토큰을 미리 계산해서 레코드 자체에 영속</strong>하는 것입니다. <code>RegistryRecord.tokens</code> 필드가 바로 그 역할입니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/registry.rs</span><code><span class="kw">pub struct</span> <span class="ty">RegistryRecord</span> {
+    <span class="dim">pub uid: Uid,</span>
+    <span class="dim">pub entity_id: String,</span>
+    <span class="dim">pub fields: BTreeMap&lt;String, StoredValue&gt;,  // 보호된 값</span>
+<span class="hl">    /// 쓰기 시점에 계산·영속된 블라인드 인덱스 토큰 다이제스트.</span>
+<span class="hl">    /// 원문이 디스크에 없는 보호 필드를 재시작 후에도 검색 가능하게 한다.</span>
+<span class="hl">    pub tokens: BTreeMap&lt;String, FieldTokens&gt;,</span>
+}
+
+<span class="kw">pub struct</span> <span class="ty">FieldTokens</span> {
+    <span class="dim">pub key_version: u32,  // 어떤 HMAC 키로 다이제스트 했는지</span>
+    pub digests: <span class="ty">Vec</span>&lt;<span class="ty">String</span>&gt;,   <span class="com">// 예: ["digest(ali)", "digest(lic)", "digest(ice)"]</span>
+}</code></pre>
+
+<p>예를 들어 사용자 이름 "Alice"를 HMAC-SHA256으로 보호하고, trigram(n=3) 인덱스를 선언했다면, 쓰기 시 "ali", "lic", "ice" 세 토큰의 다이제스트가 계산되어 레코드에 저장됩니다. 재시작 후 <code>absorb()</code>가 이 레코드를 읽으면 <code>tokens</code>에서 다이제스트를 꺼내 <code>token_index</code>에 넣습니다. 원문 없이도 재구축 완료.</p>
+
+<div class="callout why"><span class="lab">왜 이렇게?</span><p>별도 인덱스 파일에 영속하지 않는 이유는 <strong>원자성</strong>입니다. "레코드 파일 갱신 + 인덱스 파일 갱신"을 원자적으로 하려면 잠금이나 WAL이 하나 더 필요합니다. 토큰을 레코드 안에 넣으면 "레코드를 append하면 인덱스 정보도 자동으로 따라온다"가 되어, 별도 원자성 장치 없이 재구축이 항상 일관됩니다.</p></div>
+
+<h2>스키마로 인덱스 행동 결정: FieldIndex</h2>
+
+<p>어떤 필드를 어떤 형태로 인덱싱할지는 스키마 선언으로 결정됩니다. <code>FieldIndex</code> enum이 세 가지 검색 형태를 정의합니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/schema.rs</span><code><span class="kw">pub enum</span> <span class="ty">FieldIndex</span> {
+    <span class="dim">None,                // 인덱스 없음 (기본)</span>
+    Exact,               <span class="com">// 전체 값을 소문자화한 토큰 1개 (대소문자 무시 정확 일치)</span>
+<span class="hl">    Prefix(<span class="ty">usize</span>),     // 1..=n 길이 접두사 토큰 (Prefix(4) → "a","al","ali","alic")</span>
+<span class="hl">    Ngram(<span class="ty">usize</span>),      // n글자 슬라이딩 창 토큰 (Ngram(3) → "ali","lic","ice")</span>
+}</code></pre>
+
+<p><code>Prefix(n)</code>은 n글자 이하의 접두사 검색을 인덱스만으로(스캔 없이) 처리합니다. <code>Ngram(n)</code>은 n글자 이상 탐색어의 부분문자열 검색을 후보 집합으로 좁힙니다. 두 경우 모두 토큰 다이제스트가 레코드에 영속되어 재시작 후에도 동작합니다.</p>
+
+<div class="callout warn"><span class="lab">주의</span><p>FieldIndex 선언은 영구적입니다. 기존 레코드에는 <em>선언 당시</em>의 토큰이 영속되어 있으므로, 나중에 <code>Prefix(4)</code>를 <code>Prefix(8)</code>로 바꿔도 과거 레코드는 5~8글자 접두사 검색에 응답하지 못합니다. 코드도 이를 검사합니다 — <code>define_type()</code>은 기존 필드의 <code>search</code>가 바뀌면 오류를 반환합니다.</p></div>
+
+<h2>정리</h2>
+
+<ul>
+  <li>DB의 B-tree 보조 인덱스와 달리, Quipu-Log는 <strong>인메모리 HashMap</strong>을 인덱스로 쓰고 재시작마다 레지스트리 로그 재생으로 재구축한다.</li>
+  <li>보호 필드의 접두사·부분문자열 검색을 위한 <strong>토큰 다이제스트는 쓰기 시점에 레코드에 영속</strong>된다 (<code>RegistryRecord.tokens</code>). 원문이 없어도 재구축 가능.</li>
+  <li><code>FieldIndex::Exact / Prefix(n) / Ngram(n)</code> 스키마 선언이 쓰기 시 생성되는 토큰의 종류를 결정한다.</li>
+  <li>블라인드 인덱스의 암호학적 상세 — 토큰 다이제스트 생성 방식, 정보 누출 분석 — 는 <span class="pill">26장 블라인드 인덱스</span>에서 다룬다.</li>
+</ul>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① DB는 인덱스를 별도 파일에 영속하는데, Quipu-Log는 왜 인덱스를 별도 파일 없이 재시작마다 재구축하는가? 그 전제 조건은?<br>② SHA-256으로 보호된 이름 필드에 <code>FieldIndex::Prefix(4)</code>를 선언한다면, 쓰기 시 어떤 일이 일어나는가? 재시작 후 "Alic"로 검색할 수 있는 이유는?<br>③ <code>FieldIndex</code>를 나중에 바꿀 수 없는 이유를 "과거 레코드에는 어떤 데이터가 있나"로 설명해 보세요.</p></div>
+
+</article>

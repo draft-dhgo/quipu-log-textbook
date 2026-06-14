@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>24 · Field protection in four levels: plaintext/SHA-256/HMAC/RSA — The Quipu-Log Book</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ Contents</button><b>The Quipu-Log Book</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn active" href="24-field-protection.html">EN</a><a class="langbtn" href="ko/24-field-protection.html">한국어</a></div>
+<a class="home" href="index.html">The Quipu-Log Book</a>
+<div class="sub">Storage engines and tamper-evident audit logs, built on nothing but the filesystem — explained from the ground up</div>
+<div class="part">Part 1 · Starting point: files, not a DB</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>What an audit log is, and why “files, no DB”</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>The map, and the DB↔filesystem correspondence</a>
+<div class="part">Part 2 · Filesystem basics</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>Filesystem basics: files, directories, inodes, descriptors</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>Reading &amp; writing, and the atomicity of rename</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>When data really hits disk: the page cache and fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>The std::fs toolbox: handling files in Rust</a>
+<div class="part">Part 3 · The heart of the engine: the append-only log</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>Append-only log = the WAL is the database</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>Segment files and rollover</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>Record framing: length, CRC32, magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>Serialization: turning structs into bytes</a>
+<div class="part">Part 4 · Re-creating what a DB gave you for free, on files</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>Durability: fsync policy and group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>Atomicity and crash recovery: torn writes and tail detection</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>Concurrency I: single-writer and the file lock</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>Concurrency II: read snapshots and MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>Indexing: in-memory index + on-disk tokens</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>Query execution: segment scans and cursor pagination</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>Deletion and retention: segment unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>Store layout and format versioning</a>
+<div class="part">Part 5 · Integrity: making tampering evident (Security I)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>Hash functions and SHA-256: a digital fingerprint</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>The Merkle history tree: committing the log to 32 bytes</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>Inclusion proofs and consistency proofs</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>Checkpoints and external anchoring</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>Tamper-evident vs tamper-proof, and the threat model</a>
+<div class="part">Part 6 · Confidentiality: searching while keeping secrets (Security II)</div>
+<a class="lnk active" href="24-field-protection.html"><span class="n">24</span>Field protection in four levels: plaintext/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>Symmetric, asymmetric, hybrid encryption and AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>Blind indexes: searching without plaintext</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>Write-only deployment: a server without the private key</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>Key management: keyring, versioning, rotation vs re-keying</a>
+<div class="part">Part 7 · The write &amp; read paths</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>The async pipeline: non-blocking emit and backpressure</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>Reliability: retries, backoff, DLQ, idempotency</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>The tower middleware: auto-recording HTTP requests</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>Permissions (RBAC), filters, and meta-audit</a>
+<div class="part">Part 8 · Distribution, operations, scaling</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>Single point of failure and availability: the client spool</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>Horizontal scaling: sharding, consistent hashing, read replicas</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>Server, client, MCP, and observability</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">Part 6 · Confidentiality: searching while keeping secrets (Security II)</span><h1><span class="chno">24</span> · Field protection in four levels: plaintext/SHA-256/HMAC/RSA</h1></div><article>
+
+<p class="lead">Databases do support "column encryption." But there's a reason it rarely gets used in practice — the moment you encrypt a column, you can no longer search it with a WHERE clause. Quipu-Log sidesteps this dilemma with a different approach: <em>pick the right protection level for each field, based on how it will be used.</em> This chapter compares the four protection modes and lays out which one to choose for which kind of field.</p>
+
+<div class="callout"><span class="lab">In one sentence</span><p>Field protection is not a global switch. Each field picks one of <code>None / Sha256 / Hmac / Rsa</code>, and accepts the trade-off between searchability and key dependency that comes with it.</p></div>
+
+<h2>What databases do — the limits of TDE and column encryption</h2>
+
+<p>Relational databases have two main ways to protect sensitive data.</p>
+
+<ul>
+  <li><strong>TDE (Transparent Data Encryption)</strong> — encrypts the entire disk file at the OS level. The DB engine decrypts transparently on reads and writes, so queries keep working as usual. The problem: it's <em>completely transparent to any insider who can reach the DB process</em> (a DBA, a log collector, anyone with backup-read access), so it offers no protection against insider threats.</li>
+  <li><strong>Column encryption</strong> — encrypts specific column values before storing them. An insider who opens the file sees only ciphertext. The trade-off: <em>an encrypted column can't be searched with <code>WHERE col = 'Alice'</code>.</em> Comparing values requires decryption first, which means the DB engine has to hold the key — and the moment it does, insider protection collapses.</li>
+</ul>
+
+<div class="callout dbfs"><span class="lab">DB ↔ Filesystem</span><p><strong>DB column encryption</strong> can't escape the dilemma of "encrypt it and lose search." <strong>Quipu-Log</strong> breaks through in two ways — one-way hashing lets you run exact-match queries without ever storing plaintext, and <span class="pill">Ch. 26 blind index</span> makes partial-match search possible on top of that. If you need both encryption and searchability, the next chapters explain how.</p></div>
+
+<h2>The four levels: what gets stored, what you get</h2>
+
+<p>Quipu-Log's <code>FieldProtection</code> has four levels. Let's start with the full picture in a comparison table.</p>
+
+<table>
+  <tr>
+    <th>Protection level</th>
+    <th>What's stored on disk</th>
+    <th>Searchability</th>
+    <th>Key required</th>
+    <th>Primary use</th>
+  </tr>
+  <tr>
+    <td><code>None</code></td>
+    <td>plaintext as-is</td>
+    <td>exact · contains · prefix — all of them</td>
+    <td>none</td>
+    <td>non-sensitive general fields</td>
+  </tr>
+  <tr>
+    <td><code>Sha256</code></td>
+    <td>SHA-256 digest (64-char hex)</td>
+    <td>exact match only</td>
+    <td>none</td>
+    <td>medium-entropy values (email, medical record number, etc.)</td>
+  </tr>
+  <tr>
+    <td><code>Hmac</code></td>
+    <td>HMAC-SHA-256 digest (64-char hex) + key_version</td>
+    <td>exact match only</td>
+    <td>HMAC key</td>
+    <td>low-entropy values (SSN, national ID, phone number)</td>
+  </tr>
+  <tr>
+    <td><code>Rsa</code></td>
+    <td>ciphertext (AES-256-GCM) + wrapped key + nonce</td>
+    <td>none by default (blind index can be added)</td>
+    <td>RSA public key (write) + private key (read)</td>
+    <td>values that need to be decrypted (full name, address, etc.)</td>
+  </tr>
+</table>
+
+<p>In code, these four levels are expressed as the <code>FieldProtection</code> enum.</p>
+
+<pre><span class="filename">crates/quipu-core/src/schema.rs</span><code><span class="kw">pub enum</span> <span class="ty">FieldProtection</span> {
+    <span class="hl">None,</span>
+    <span class="hl">Sha256,</span>  <span class="com">// keyless — works without a key, vulnerable on low-entropy values</span>
+    <span class="hl">Hmac,</span>    <span class="com">// keyed — offline brute-force impossible without the HMAC key</span>
+    <span class="hl">Rsa,</span>     <span class="com">// hybrid AES-256-GCM + RSA-OAEP, decryptable</span>
+}</code></pre>
+
+<p>The protected result is persisted on disk as a <code>StoredValue</code>.</p>
+
+<pre><span class="filename">crates/quipu-core/src/model.rs</span><code><span class="kw">pub enum</span> <span class="ty">StoredValue</span> {
+    <span class="dim">Plain(Value),                       // None → plaintext</span>
+    <span class="dim">Sha256(String),                     // hex digest</span>
+    Hmac { key_version: <span class="ty">u32</span>, digest: <span class="ty">String</span> }, <span class="com">// keyed digest + version</span>
+    <span class="hl">Rsa {</span>
+        <span class="hl">key_version: <span class="ty">u32</span>,               // version of the public key used for encryption</span>
+        <span class="hl">wrapped_key: <span class="ty">String</span>,           // AES key wrapped with RSA (b64)</span>
+        <span class="hl">nonce: <span class="ty">String</span>, ciphertext: <span class="ty">String</span>,</span>
+    <span class="hl">},</span>
+}</code></pre>
+
+<h2>Walking through each level</h2>
+
+<figure>
+<svg viewBox="0 0 760 320" role="img" aria-label="FieldProtection four-level flow comparison">
+  <defs>
+    <marker id="arr24" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .t24{fill:#e6e8ee;font:600 13px -apple-system,sans-serif}
+    .s24{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .box24{rx:8;stroke-width:1.5}
+    .arr24{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#arr24)}
+  </style>
+
+  <!-- None -->
+  <rect x="10" y="30" width="160" height="52" class="box24" fill="#161922" stroke="#2a2f3d"/>
+  <text x="90" y="52" class="t24" text-anchor="middle">plaintext value</text>
+  <text x="90" y="70" class="s24" text-anchor="middle">"Alice Smith"</text>
+  <line x1="90" y1="82" x2="90" y2="108" class="arr24"/>
+  <rect x="10" y="108" width="160" height="40" class="box24" fill="#16241d" stroke="#8be9c0"/>
+  <text x="90" y="133" class="s24" text-anchor="middle" fill="#8be9c0">Plain("Alice Smith")</text>
+  <text x="90" y="8" class="t24" text-anchor="middle" fill="#9aa3b2">None</text>
+
+  <!-- SHA-256 -->
+  <rect x="195" y="30" width="160" height="52" class="box24" fill="#161922" stroke="#2a2f3d"/>
+  <text x="275" y="52" class="t24" text-anchor="middle">plaintext value</text>
+  <text x="275" y="70" class="s24" text-anchor="middle">"010-1234-5678"</text>
+  <line x1="275" y1="82" x2="275" y2="108" class="arr24"/>
+  <rect x="195" y="108" width="160" height="52" class="box24" fill="#1a1a0d" stroke="#ffd479"/>
+  <text x="275" y="128" class="s24" text-anchor="middle" fill="#ffd479">SHA-256</text>
+  <text x="275" y="148" class="s24" text-anchor="middle">→ "3a9f2b..." (hex)</text>
+  <text x="275" y="8" class="t24" text-anchor="middle" fill="#9aa3b2">Sha256</text>
+
+  <!-- HMAC -->
+  <rect x="380" y="30" width="160" height="52" class="box24" fill="#161922" stroke="#2a2f3d"/>
+  <text x="460" y="52" class="t24" text-anchor="middle">plaintext value</text>
+  <text x="460" y="70" class="s24" text-anchor="middle">"123-45-6789" (SSN)</text>
+  <line x1="460" y1="82" x2="460" y2="108" class="arr24"/>
+  <rect x="380" y="108" width="160" height="52" class="box24" fill="#0d1a20" stroke="#7aa2ff"/>
+  <text x="460" y="128" class="s24" text-anchor="middle" fill="#7aa2ff">HMAC + key</text>
+  <text x="460" y="148" class="s24" text-anchor="middle">→ keyed digest</text>
+  <text x="460" y="8" class="t24" text-anchor="middle" fill="#9aa3b2">Hmac</text>
+
+  <!-- RSA -->
+  <rect x="565" y="30" width="180" height="52" class="box24" fill="#161922" stroke="#2a2f3d"/>
+  <text x="655" y="52" class="t24" text-anchor="middle">plaintext value</text>
+  <text x="655" y="70" class="s24" text-anchor="middle">"Jane Doe" (name)</text>
+  <line x1="655" y1="82" x2="655" y2="108" class="arr24"/>
+  <rect x="565" y="108" width="180" height="52" class="box24" fill="#200d1a" stroke="#ff8b8b"/>
+  <text x="655" y="128" class="s24" text-anchor="middle" fill="#ff8b8b">AES-GCM ciphertext</text>
+  <text x="655" y="148" class="s24" text-anchor="middle">+ RSA-wrapped key</text>
+  <text x="655" y="8" class="t24" text-anchor="middle" fill="#9aa3b2">Rsa</text>
+
+  <!-- Labels below -->
+  <text x="90" y="185" class="s24" text-anchor="middle" fill="#8be9c0">search ✓ all modes</text>
+  <text x="275" y="185" class="s24" text-anchor="middle" fill="#ffd479">search ✓ exact only</text>
+  <text x="460" y="185" class="s24" text-anchor="middle" fill="#7aa2ff">search ✓ exact only</text>
+  <text x="655" y="185" class="s24" text-anchor="middle" fill="#ff8b8b">search ✗ (by default)</text>
+
+  <text x="90" y="205" class="s24" text-anchor="middle">no key</text>
+  <text x="275" y="205" class="s24" text-anchor="middle">no key</text>
+  <text x="460" y="205" class="s24" text-anchor="middle">HMAC key</text>
+  <text x="655" y="205" class="s24" text-anchor="middle">RSA public key</text>
+
+  <!-- decryptable arrow -->
+  <text x="655" y="245" class="s24" text-anchor="middle" fill="#c792ea">← decryptable with private key</text>
+  <text x="90" y="245" class="s24" text-anchor="middle" fill="#ff8b8b">← one-way, no decryption</text>
+  <text x="275" y="245" class="s24" text-anchor="middle" fill="#ff8b8b">← one-way, no decryption</text>
+  <text x="460" y="245" class="s24" text-anchor="middle" fill="#ff8b8b">← one-way, no decryption</text>
+</svg>
+<figcaption>FieldProtection's four levels: how the plaintext is transformed before storage, and what is and isn't possible afterward.</figcaption>
+</figure>
+
+<h3>None — plaintext</h3>
+<p>Stored as-is, with no transformation. Use it for fields that aren't sensitive. All search modes work, and no key configuration is needed.</p>
+
+<h3>Sha256 — keyless one-way hash</h3>
+<p>Only the SHA-256 digest of the plaintext is stored. At search time, the query term is hashed with SHA-256 the same way, so <em>exact-match search</em> works. The original plaintext is not recoverable. The catch: with no key involved, an attacker who can read the disk can attempt a dictionary attack — this is dangerous for values with a finite search space, like phone numbers or national ID numbers.</p>
+
+<h3>Hmac — keyed one-way hash</h3>
+<p>An HMAC-SHA-256 digest is computed, and the key version used to produce it is stored alongside. At search time, the server hashes the query term with the same HMAC key and compares, so exact matching works. <strong>Without the key, offline dictionary attacks are impossible.</strong> This is exactly why low-entropy values like SSNs and phone numbers must use Hmac instead of Sha256.</p>
+
+<h3>Rsa — decryptable hybrid encryption</h3>
+<p>The value is encrypted with AES-256-GCM, and the AES key is wrapped with the RSA public key before storage. Only the holder of the private key can decrypt. Search is not available by default, but adding a <span class="pill">Ch. 26 blind index</span> enables prefix and n-gram search. The reasoning behind this unusual hybrid structure is explained in detail in <span class="pill">Ch. 25</span>.</p>
+
+<div class="callout key"><span class="lab">Security note</span><p>SHA-256 without a key means anyone in the world can produce the same hash. The SHA-256 of a phone number like 01012345678 is identical everywhere, so an attacker can pre-compute hashes for every plausible value and build a lookup table (a rainbow table) to recover the original from the digest alone. HMAC mixes in a server-side secret key, which makes that kind of precomputation impossible from the start.</p></div>
+
+<h2>Protection only applies to registry fields</h2>
+
+<p>This is the point that causes the most confusion. Keep it close.</p>
+
+<div class="callout warn"><span class="lab">Caution</span><p><strong>FieldProtection only applies to registry fields (entity attributes).</strong> The <code>method</code>, <code>url</code>, <code>content</code>, and custom columns of an audit log row are <em>always plaintext</em>. If you put sensitive information (PII, passwords, SSNs) into <code>content</code> or the URL, it will not be protected. Design sensitive values as registry fields with a protection level, and keep <code>entity_id</code> as an opaque identifier (a UUID or similar).</p></div>
+
+<p>For example, if you're recording patient information, design the schema like this.</p>
+
+<pre><span class="filename">TypeSchema design example</span><code><span class="fn">store</span>.define_type(<span class="ty">TypeSchema</span>::new(<span class="str">"patient"</span>, <span class="fn">vec!</span>[
+    <span class="hl"><span class="ty">FieldDef</span>::text(<span class="str">"ssn"</span>).protection(<span class="ty">FieldProtection</span>::Hmac).indexed(),</span>
+    <span class="ty">FieldDef</span>::text(<span class="str">"name"</span>).protection(<span class="ty">FieldProtection</span>::Rsa),
+    <span class="ty">FieldDef</span>::text(<span class="str">"mrn"</span>).protection(<span class="ty">FieldProtection</span>::Sha256).indexed(),
+]))?;
+<span class="com">// entity_id should be an opaque id (e.g. "patient-uuid-001") — never use the SSN directly</span>
+<span class="com">// do not put PII into log columns like content or url</span></code></pre>
+
+<h2>Recap</h2>
+<ul>
+  <li>Protection level is a <strong>per-field choice</strong> — not a global switch; pick the right level for each field's purpose.</li>
+  <li><strong>None</strong> is plaintext, <strong>Sha256</strong> is keyless one-way, <strong>Hmac</strong> is keyed one-way, <strong>Rsa</strong> is decryptable. Searchability: the first three support exact match (Rsa has none by default).</li>
+  <li><strong>Use Hmac for low-entropy values</strong> — Sha256 is vulnerable to offline dictionary attacks.</li>
+  <li><strong>Protection applies only to registry fields</strong> — log columns (method/url/content) are always plaintext.</li>
+  <li>If you need both encryption and search → <span class="pill">Ch. 25 hybrid encryption</span> and <span class="pill">Ch. 26 blind index</span>.</li>
+</ul>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① Why do TDE and column encryption in a DB create a "can't search it" problem? How do Quipu-Log's Sha256 and Hmac modes get around it?<br>② Explain in one sentence why protecting an SSN with Sha256 is risky and why Hmac is the right choice instead.<br>③ Why is putting a patient's name into the log's <code>url</code> field a problem? What's the correct design?</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="23-threat-model.html"><span class="dir">← Prev</span><span class="t">23 · Tamper-evident vs tamper-proof, and the threat model</span></a><a class="next" href="25-crypto-internals.html"><span class="dir">Next →</span><span class="t">25 · Symmetric, asymmetric, hybrid encryption and AEAD</span></a></div>
+</div>
+</main>
+</div>
+<script src="assets/textbook.js"></script>
+</body>
+</html>

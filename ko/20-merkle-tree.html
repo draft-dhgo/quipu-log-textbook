@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>20 · 머클 히스토리 트리: 로그를 32바이트로 커밋 — Quipu-Log 교과서</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ 목차</button><b>Quipu-Log 교과서</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn" href="../20-merkle-tree.html">EN</a><a class="langbtn active" href="20-merkle-tree.html">한국어</a></div>
+<a class="home" href="index.html">Quipu-Log 교과서</a>
+<div class="sub">파일시스템만으로 짓는 저장 엔진과 변조-탐지 감사 로그 — 밑바닥부터</div>
+<div class="part">파트 1 · 출발점: DB 없이, 파일로</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>감사 로그란, 그리고 왜 &#x27;DB 없이 파일로&#x27;인가</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>Quipu-Log 지도와 DB↔파일시스템 대응표</a>
+<div class="part">파트 2 · 파일시스템 기본기</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>파일시스템의 기본: 파일·디렉토리·inode·디스크립터</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>읽고 쓰기, 그리고 rename의 원자성</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>데이터는 언제 진짜 디스크에 남나: page cache와 fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>std::fs 도구상자: Rust로 파일 다루기</a>
+<div class="part">파트 3 · 저장 엔진의 심장: append-only 로그</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>append-only 로그 = WAL이 곧 데이터베이스</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>세그먼트 파일과 롤오버</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>레코드 프레이밍: 길이·CRC32·magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>직렬화: 구조체를 바이트로</a>
+<div class="part">파트 4 · DB가 공짜로 주던 보장을 파일로 재현</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>내구성: fsync 정책과 group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>원자성과 크래시 복구: torn write와 꼬리 탐지</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>동시성 제어 ①: single-writer와 파일 락</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>동시성 제어 ②: 읽기 스냅샷과 MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>인덱싱: 인메모리 인덱스 + 디스크 토큰</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>쿼리 실행: 세그먼트 스캔과 커서 페이지네이션</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>삭제와 보존: 세그먼트 unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>저장소 레이아웃과 포맷 버저닝</a>
+<div class="part">파트 5 · 무결성: 고치면 티가 나게 (보안 ①)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>해시 함수와 SHA-256: 디지털 지문</a>
+<a class="lnk active" href="20-merkle-tree.html"><span class="n">20</span>머클 히스토리 트리: 로그를 32바이트로 커밋</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>포함 증명·일관성 증명</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>체크포인트와 외부 앵커링</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>tamper-evident vs tamper-proof, 그리고 위협 모델</a>
+<div class="part">파트 6 · 기밀성: 비밀을 지키면서 검색하기 (보안 ②)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>필드 보호 4단계: 평문/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>대칭·비대칭·하이브리드 암호와 AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>블라인드 인덱스: 평문 없이 검색</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>쓰기 전용 배포: 개인키 없는 서버</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>키 관리: 키링·버저닝·로테이션 vs 리키</a>
+<div class="part">파트 7 · 쓰기·읽기 경로</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>비동기 파이프라인: 논블로킹 emit과 백프레셔</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>신뢰성: 재시도·백오프·DLQ·멱등성</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>tower 미들웨어: HTTP 요청 자동 기록</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>권한(RBAC)·필터·메타 감사</a>
+<div class="part">파트 8 · 분산·운영·확장</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>단일 장애점과 가용성: 클라이언트 스풀</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>수평 확장: 샤딩·일관성 해싱·읽기 복제</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>서버·클라이언트·MCP·관측성</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">파트 5 · 무결성: 고치면 티가 나게 (보안 ①)</span><h1><span class="chno">20</span> · 머클 히스토리 트리: 로그를 32바이트로 커밋</h1></div><article>
+
+<p class="lead">수백만 건의 감사 로그가 한 글자도 바뀌지 않았음을 어떻게 증명할 수 있을까요? 로그 전체를 매번 다시 읽어야 한다면 너무 느리고, 로그 각각에 해시를 붙이면 각개격파 위조가 가능합니다. 머클 트리(Merkle tree)는 이 두 문제를 한번에 해결합니다 — 수백만 건 전체를 32바이트 루트 하나로 "커밋"하고, 한 바이트만 바뀌어도 그 루트가 달라집니다.</p>
+
+<div class="callout"><span class="lab">한 문장 요약</span><p>머클 트리는 해시를 재귀적으로 쌓아 올린 이진 트리다. 리프는 레코드 해시, 내부 노드는 두 자식의 해시, 루트 32바이트 하나가 전체 로그를 "잠근다."</p></div>
+
+<h2>직관 먼저: 해시를 거듭 해시한다</h2>
+
+<p>해시 함수의 핵심 성질(<span class="pill">19장 SHA-256</span>)을 떠올려 보세요 — 입력이 1비트라도 바뀌면 출력이 완전히 달라집니다. 이 성질을 재귀적으로 이용하면 어떨까요?</p>
+
+<ol>
+  <li>레코드 4개 각각의 해시를 계산합니다 → <code>H(R0), H(R1), H(R2), H(R3)</code></li>
+  <li>인접한 둘을 묶어 다시 해시합니다 → <code>H(H(R0)||H(R1))</code>, <code>H(H(R2)||H(R3))</code></li>
+  <li>마지막으로 그 둘을 묶어 다시 해시합니다 → 루트 하나</li>
+</ol>
+
+<p>이렇게 하면 R0를 1비트 바꿔도, H(R0)가 달라지고, 그 부모 노드가 달라지고, 루트가 달라집니다. <strong>루트 하나만 비교하면 어딘가 바뀌었는지 알 수 있습니다.</strong></p>
+
+<figure>
+<svg viewBox="0 0 720 340" role="img" aria-label="n=4 머클 트리 구조: 리프, 내부 노드, 루트">
+  <defs>
+    <marker id="arr20" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .t20{fill:#e6e8ee;font:600 13px -apple-system,sans-serif;text-anchor:middle}
+    .s20{fill:#9aa3b2;font:11px -apple-system,sans-serif;text-anchor:middle}
+    .code20{fill:#8be9c0;font:600 11px monospace;text-anchor:middle}
+    .lf{fill:#16241d;stroke:#2c4a3a;stroke-width:1.5;rx:8}
+    .in{fill:#1a1f2e;stroke:#7aa2ff;stroke-width:1.5;rx:8}
+    .rt{fill:#241f12;stroke:#ffd479;stroke-width:2;rx:8}
+    .edge{stroke:#2a2f3d;stroke-width:1.5;marker-end:url(#arr20)}
+    .prefix{fill:#ffd479;font:700 11px monospace;text-anchor:middle}
+  </style>
+
+  <!-- 루트 -->
+  <rect x="270" y="20" width="180" height="56" class="rt" rx="8"/>
+  <text x="360" y="44" class="t20">Root</text>
+  <text x="360" y="62" class="code20">SHA-256(0x01 || L || R)</text>
+
+  <!-- 내부 노드 L, R -->
+  <rect x="90" y="130" width="180" height="56" class="in" rx="8"/>
+  <text x="180" y="154" class="t20">내부 노드 L</text>
+  <text x="180" y="172" class="s20">SHA-256(0x01||H0||H1)</text>
+
+  <rect x="450" y="130" width="180" height="56" class="in" rx="8"/>
+  <text x="540" y="154" class="t20">내부 노드 R</text>
+  <text x="540" y="172" class="s20">SHA-256(0x01||H2||H3)</text>
+
+  <!-- 루트 → 내부노드 edges -->
+  <line x1="310" y1="76" x2="215" y2="130" class="edge"/>
+  <line x1="410" y1="76" x2="505" y2="130" class="edge"/>
+
+  <!-- 리프 4개 -->
+  <rect x="20" y="240" width="140" height="76" class="lf" rx="8"/>
+  <text x="90" y="264" class="t20">리프 0</text>
+  <text x="90" y="281" class="s20">H0 = SHA-256(</text>
+  <text x="90" y="295" class="prefix">0x00</text>
+  <text x="90" y="309" class="s20">|| Record0)</text>
+
+  <rect x="175" y="240" width="140" height="76" class="lf" rx="8"/>
+  <text x="245" y="264" class="t20">리프 1</text>
+  <text x="245" y="281" class="s20">H1 = SHA-256(</text>
+  <text x="245" y="295" class="prefix">0x00</text>
+  <text x="245" y="309" class="s20">|| Record1)</text>
+
+  <rect x="380" y="240" width="140" height="76" class="lf" rx="8"/>
+  <text x="450" y="264" class="t20">리프 2</text>
+  <text x="450" y="281" class="s20">H2 = SHA-256(</text>
+  <text x="450" y="295" class="prefix">0x00</text>
+  <text x="450" y="309" class="s20">|| Record2)</text>
+
+  <rect x="535" y="240" width="140" height="76" class="lf" rx="8"/>
+  <text x="605" y="264" class="t20">리프 3</text>
+  <text x="605" y="281" class="s20">H3 = SHA-256(</text>
+  <text x="605" y="295" class="prefix">0x00</text>
+  <text x="605" y="309" class="s20">|| Record3)</text>
+
+  <!-- 내부 → 리프 edges -->
+  <line x1="150" y1="186" x2="100" y2="240" class="edge"/>
+  <line x1="200" y1="186" x2="235" y2="240" class="edge"/>
+  <line x1="500" y1="186" x2="460" y2="240" class="edge"/>
+  <line x1="575" y1="186" x2="590" y2="240" class="edge"/>
+
+  <!-- 접두사 범례 -->
+  <rect x="10" y="9" width="230" height="18" fill="none"/>
+  <text x="14" y="22" style="fill:#ffd479;font:11px monospace">0x00</text>
+  <text x="48" y="22" style="fill:#9aa3b2;font:11px -apple-system,sans-serif"> = 리프 접두사 (RFC 6962)</text>
+  <text x="14" y="36" style="fill:#7aa2ff;font:11px monospace">0x01</text>
+  <text x="48" y="36" style="fill:#9aa3b2;font:11px -apple-system,sans-serif"> = 내부 노드 접두사</text>
+</svg>
+<figcaption>n=4 머클 트리. 리프는 <code>SHA-256(0x00 || 레코드)</code>, 내부 노드는 <code>SHA-256(0x01 || 왼자식 || 오른자식)</code>. 접두사가 달라 리프와 내부 노드를 혼동할 수 없다 (RFC 6962 §2.1).</figcaption>
+</figure>
+
+<h2>RFC 6962 규칙: 접두사가 중요하다</h2>
+
+<p>Quipu-Log는 구글의 Certificate Transparency 표준인 RFC 6962 해싱 규칙을 그대로 따릅니다. 핵심은 <strong>리프와 내부 노드에 서로 다른 접두사</strong>를 씁니다:</p>
+
+<pre><span class="filename">RFC 6962 §2.1 (quipu-log/crates/quipu-core/src/merkle.rs 문서 발췌)</span><code>MTH({})        = <span class="fn">SHA-256</span>()               <span class="com">// 빈 트리</span>
+<span class="hl">leaf hash      = <span class="fn">SHA-256</span>(<span class="num">0x00</span> || record)  // 리프: 레코드 바이트 그대로</span>
+<span class="hl">interior node  = <span class="fn">SHA-256</span>(<span class="num">0x01</span> || left || right) // 내부 노드</span></code></pre>
+
+<p>왜 접두사가 필요할까요? 접두사 없이 <code>SHA-256(H0 || H1)</code>을 쓴다고 하면, "두 리프 H0과 H1의 연결을 단일 리프로 해시한 값"과 "H0||H1이라는 데이터의 리프 해시"를 구별할 수 없습니다. 이를 <em>second-preimage 혼동 공격</em>이라 합니다. 리프에 <code>0x00</code>, 내부 노드에 <code>0x01</code>을 붙이면 이 경우가 절대 같아질 수 없습니다.</p>
+
+<p>표준을 따르는 또 다른 이유: RFC 6962를 아는 누구나 외부 검증기를 직접 짤 수 있습니다. Quipu-Log만의 독자 규칙이 아니니, 법적 감사나 제3자 감증에 참고 문서가 있습니다.</p>
+
+<h2>Quipu-Log의 실제 구현: leaf_hash / node_hash / mth</h2>
+
+<p>RFC의 재귀 정의를 그대로 옮긴 코드를 보겠습니다:</p>
+
+<pre><span class="filename">crates/quipu-core/src/merkle.rs</span><code><span class="kw">pub fn</span> <span class="fn">leaf_hash</span>(record: <span class="ty">&amp;[u8]</span>) -&gt; <span class="ty">Hash</span> {
+    <span class="kw">let mut</span> h = <span class="ty">Sha256</span>::new();
+<span class="hl">    h.update([LEAF_PREFIX]);  <span class="com">// 0x00</span></span>
+    h.update(record);
+    h.finalize().into()
+}
+
+<span class="kw">pub fn</span> <span class="fn">node_hash</span>(left: <span class="ty">&amp;Hash</span>, right: <span class="ty">&amp;Hash</span>) -&gt; <span class="ty">Hash</span> {
+    <span class="kw">let mut</span> h = <span class="ty">Sha256</span>::new();
+<span class="hl">    h.update([NODE_PREFIX]);  <span class="com">// 0x01</span></span>
+    h.update(left);
+    h.update(right);
+    h.finalize().into()
+}
+
+<span class="com">/// 재귀 정의: D[n]의 루트</span>
+<span class="kw">pub fn</span> <span class="fn">mth</span>(leaves: <span class="ty">&amp;[Hash]</span>) -&gt; <span class="ty">Hash</span> {
+    <span class="kw">match</span> leaves.len() {
+        <span class="dim"><span class="num">0</span> =&gt; <span class="fn">empty_root</span>(),     <span class="com">// SHA-256()</span>
+        <span class="num">1</span> =&gt; leaves[<span class="num">0</span>],          <span class="com">// 리프 1개면 그대로</span></span>
+        n =&gt; {
+<span class="hl">            <span class="kw">let</span> k = <span class="fn">split</span>(n);  <span class="com">// n보다 작은 2의 최대 거듭제곱 (RFC 분할점)</span></span>
+            <span class="fn">node_hash</span>(&amp;<span class="fn">mth</span>(&amp;leaves[..k]), &amp;<span class="fn">mth</span>(&amp;leaves[k..]))
+        }
+    }
+}</code></pre>
+
+<p><code>split(n)</code>이 흥미롭습니다. n=4이면 k=2, n=5이면 k=4, n=6이면 k=4입니다. RFC 6962는 항상 "n보다 작은 2의 가장 큰 거듭제곱"을 왼쪽 완전 이진 트리의 크기로 씁니다. 이 덕분에 왼쪽 서브트리는 항상 완전 이진 트리(perfect subtree)가 되고, 증분 업데이트(아래의 Roots)가 효율적으로 됩니다.</p>
+
+<h2>증분 루트 추적: Roots</h2>
+
+<p>새 레코드가 하나 추가될 때마다 전체 트리를 처음부터 다시 계산하는 건 O(n)으로 너무 느립니다. <code>Roots</code> 구조체는 "완전 이진 트리의 피크(peak)" 목록만 유지하여 추가를 <strong>분할상환 O(1)</strong>로 처리합니다:</p>
+
+<pre><span class="filename">crates/quipu-core/src/merkle.rs — Roots::push</span><code><span class="kw">pub fn</span> <span class="fn">push</span>(&amp;<span class="kw">mut self</span>, leaf: <span class="ty">Hash</span>) {
+    <span class="kw">let mut</span> carry = (<span class="num">0u32</span>, leaf);
+<span class="hl">    <span class="kw">while let</span> Some(&amp;(h, _)) = <span class="kw">self</span>.peaks.last() {</span>
+<span class="hl">        <span class="kw">if</span> h != carry.<span class="num">0</span> { <span class="kw">break</span>; }</span>
+<span class="hl">        <span class="kw">let</span> (_, left) = <span class="kw">self</span>.peaks.pop().unwrap();</span>
+<span class="hl">        carry = (carry.<span class="num">0</span> + <span class="num">1</span>, <span class="fn">node_hash</span>(&amp;left, &amp;carry.<span class="num">1</span>));</span>
+    }
+    <span class="kw">self</span>.peaks.push(carry);
+    <span class="kw">self</span>.size += <span class="num">1</span>;
+}</code></pre>
+
+<p>같은 높이의 피크 두 개를 만나면 합쳐서 한 단계 위 피크로 올립니다. 이는 이진수 덧셈의 carry 전파와 정확히 같은 원리입니다. 100만 건이 있어도 피크는 최대 20개(log₂(1,000,000) ≈ 20)만 유지됩니다.</p>
+
+<div class="callout analogy"><span class="lab">비유</span><p>머클 트리를 영수증 묶음으로 상상해 보세요. 먼저 영수증 두 장씩 묶어 "소계 봉투"를 만들고, 소계 봉투 두 개씩 묶어 "중계 봉투"를 만들고, 마지막에 남은 하나의 "대계 봉투"가 루트입니다. 영수증 하나가 바뀌면 그 봉투를 타고 올라가는 모든 봉투가 달라지고, 결국 대계 봉투가 달라집니다. 감사원은 대계 봉투 하나만 비교하면 됩니다.</p></div>
+
+<h2>머클 스파인 파일: 리텐션 후에도 증명 가능</h2>
+
+<p>세그먼트 파일은 리텐션 정책(<span class="pill">17장 삭제와 보존</span>)에 따라 오래된 것이 삭제됩니다. 그런데 레코드가 지워지면 해당 리프 해시도 사라질까요?</p>
+
+<p>그래서 <code>MerkleLog</code>라는 별도의 스파인 파일(<code>merkle.spine</code>)이 있습니다. 각 레코드의 리프 해시(32바이트)만 따로 모아서 영속합니다. 리텐션 대상이 아니라, 레코드 페이로드가 사라져도 해시는 남아 있습니다:</p>
+
+<pre><span class="filename">crates/quipu-core/src/merkle_log.rs — 파일 포맷</span><code><span class="com">// [ "QMKL" magic ][ u8 version ][ leaf_0 (32B) ][ leaf_1 (32B) ] ...</span>
+<span class="hl"><span class="com">// 스파인은 리텐션 대상이 아닙니다 — 해시는 페이로드를 담지 않으니</span></span>
+<span class="hl"><span class="com">// 보관해도 기밀 유출이 없고, 덕분에 purge 후에도 inclusion/consistency</span></span>
+<span class="hl"><span class="com">// proof를 생성할 수 있습니다.</span></span></code></pre>
+
+<div class="callout key"><span class="lab">보안 포인트</span><p>해시는 원본을 복원할 수 없습니다(일방향성). 그래서 리프 해시를 영구 보관해도 기밀 정보가 새어나가지 않습니다. 반면 레코드 자체를 영구 보관하면 GDPR 등 규정 위반이 될 수 있습니다. 해시만 남기면 "증명할 수 있지만, 볼 수는 없다"는 이상적인 균형을 만들 수 있습니다.</p></div>
+
+<h2>정리</h2>
+
+<ul>
+  <li>머클 트리: 리프(레코드 해시) → 내부 노드(두 자식 해시의 해시) → 루트(32바이트) 하나로 전체 커밋.</li>
+  <li>RFC 6962 규칙: 리프는 <code>SHA-256(0x00 || 레코드)</code>, 내부 노드는 <code>SHA-256(0x01 || left || right)</code>. 접두사로 혼동 공격 차단.</li>
+  <li><code>Roots</code>는 피크만 유지해 추가를 분할상환 O(1), O(log n) 공간으로 처리.</li>
+  <li><code>merkle.spine</code> 파일에 리프 해시만 별도 보관 → 리텐션 후에도 증명 가능.</li>
+</ul>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① n=5인 머클 트리에서 split(5)=4가 됩니다. 왼쪽 서브트리 리프 4개, 오른쪽 리프 1개로 구성됩니다. 이 경우 오른쪽 서브트리의 루트는 무엇인가요?<br>② 리프 접두사 <code>0x00</code>과 내부 노드 접두사 <code>0x01</code>을 없애면 어떤 공격이 가능해지는지 설명해 보세요.<br>③ Roots 구조체가 피크 목록만 유지하면서도 현재 루트를 O(log n) 공간·시간에 계산할 수 있는 이유는 무엇인가요?</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="19-hash-sha256.html"><span class="dir">← 이전</span><span class="t">19 · 해시 함수와 SHA-256: 디지털 지문</span></a><a class="next" href="21-proofs.html"><span class="dir">다음 →</span><span class="t">21 · 포함 증명·일관성 증명</span></a></div>
+</div>
+</main>
+</div>
+<script src="../assets/textbook.js"></script>
+</body>
+</html>

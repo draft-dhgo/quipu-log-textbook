@@ -1,0 +1,153 @@
+<article>
+
+<p class="lead">It's time to close out Part 5. We've covered SHA-256, Merkle trees, inclusion and consistency proofs, and checkpoints with external anchoring. Now let's step back and ask: what does all of this <em>actually</em> stop — and what does it <em>not</em> stop? In security design, knowing precisely what you <em>can't</em> prevent is just as important as knowing what you can.</p>
+
+<div class="callout"><span class="lab">In one sentence</span><p>Quipu-Log is a tamper-evident system, not a tamper-proof one. That distinction defines the entire design.</p></div>
+
+<h2>tamper-proof vs tamper-evident: the decisive difference</h2>
+
+<p>Security systems fall into two philosophies.</p>
+
+<table>
+  <tr><th></th><th>tamper-proof (prevent)</th><th>tamper-evident (detect)</th></tr>
+  <tr><td>Goal</td><td>Make tampering impossible</td><td>Make tampering always detectable</td></tr>
+  <tr><td>Examples</td><td>HSM chipsets, physical locks</td><td>tamper-evident seals, Merkle trees</td></tr>
+  <tr><td>Against disk access</td><td>Requires hardware</td><td>Detected via external anchor</td></tr>
+  <tr><td>Quipu-Log's approach</td><td>❌ (beyond a software library)</td><td>✅ (the design goal)</td></tr>
+</table>
+
+<p>Achieving tamper-proof guarantees for an audit log through software alone is not possible. As long as a file lives on disk, someone with root access can always edit it. Quipu-Log's goal is to make that edit <strong>impossible to hide</strong>.</p>
+
+<div class="callout analogy"><span class="lab">Analogy</span><p>Think of a tamper-evident seal on a box. The seal doesn't lock the box — it doesn't stop you from opening it. But peel it off and reapply it, and it leaves a mark. The moment an auditor sees "this seal was broken," they know something is wrong. Quipu-Log's Merkle tree + external anchor plays exactly that role.</p></div>
+
+<h2>Threat model: who can do what</h2>
+
+<figure>
+<svg viewBox="0 0 740 340" role="img" aria-label="Threat model: Quipu-Log coverage by attacker type">
+  <defs>
+    <marker id="arr23" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .t23{fill:#e6e8ee;font:600 13px -apple-system,sans-serif}
+    .s23{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .ok23{fill:#16241d;stroke:#8be9c0;stroke-width:1.5;rx:6}
+    .no23{fill:#241616;stroke:#ff8b8b;stroke-width:1.5;rx:6}
+    .partial23{fill:#241f12;stroke:#ffd479;stroke-width:1.5;rx:6}
+  </style>
+
+  <!-- Header -->
+  <rect x="10" y="10" width="720" height="32" fill="#161922" stroke="#2a2f3d" rx="4"/>
+  <text x="190" y="30" class="t23" fill="#9aa3b2">Attacker type</text>
+  <text x="410" y="30" class="t23" fill="#9aa3b2">Capability</text>
+  <text x="590" y="30" class="t23" fill="#9aa3b2">Quipu-Log response</text>
+
+  <!-- Row 1: network eavesdropper -->
+  <rect x="10" y="54" width="380" height="56" class="ok23" rx="6"/>
+  <text x="26" y="74" class="t23">Network packet eavesdropper</text>
+  <text x="26" y="92" class="s23">Captures packets below TLS</text>
+  <rect x="400" y="54" width="330" height="56" class="ok23" rx="6"/>
+  <text x="416" y="74" class="t23" fill="#8be9c0">✅ TLS terminated in-process</text>
+  <text x="416" y="92" class="s23">within transport scope</text>
+
+  <!-- Row 2: API-level attacker -->
+  <rect x="10" y="122" width="380" height="56" class="ok23" rx="6"/>
+  <text x="26" y="142" class="t23">API-level attacker</text>
+  <text x="26" y="160" class="s23">Stolen auth token, attempts to forge records</text>
+  <rect x="400" y="122" width="330" height="56" class="ok23" rx="6"/>
+  <text x="416" y="142" class="t23" fill="#8be9c0">✅ RBAC, Merkle tree</text>
+  <text x="416" y="160" class="s23">Forged records cannot enter the tree</text>
+
+  <!-- Row 3: disk-access attacker (no key) -->
+  <rect x="10" y="190" width="380" height="70" class="partial23" rx="6"/>
+  <text x="26" y="210" class="t23">Disk-access attacker (no private key)</text>
+  <text x="26" y="228" class="s23">Direct file editing, segment deletion</text>
+  <text x="26" y="248" class="s23">Attempts to replace spine + checkpoint</text>
+  <rect x="400" y="190" width="330" height="70" class="partial23" rx="6"/>
+  <text x="416" y="210" class="t23" fill="#ffd479">⚠️ Detected via checkpoint + external anchor</text>
+  <text x="416" y="228" class="s23">Cannot re-sign → signature mismatch</text>
+  <text x="416" y="248" class="s23">Consistency proof against anchored root fails</text>
+
+  <!-- Row 4: key-holding insider -->
+  <rect x="10" y="272" width="380" height="56" class="no23" rx="6"/>
+  <text x="26" y="292" class="t23">Key-holding insider</text>
+  <text x="26" y="310" class="s23">Disk access + RSA private key</text>
+  <rect x="400" y="272" width="330" height="56" class="no23" rx="6"/>
+  <text x="416" y="292" class="t23" fill="#ff8b8b">❌ Out of scope (cannot prevent)</text>
+  <text x="416" y="310" class="s23">Can rewrite and re-sign → only external anchor remains</text>
+</svg>
+<figcaption>Quipu-Log coverage by attacker type. A key-holding insider cannot be stopped at the software level — the external anchor becomes the last line of defense.</figcaption>
+</figure>
+
+<h2>What each layer catches — and what it misses</h2>
+
+<p>Let's walk through the three-layer defense in order.</p>
+
+<p><strong>Layer 1 — Merkle spine (direct verification):</strong></p>
+<ul>
+  <li>Catches: in-place record edits, segment file substitution, leaf reordering</li>
+  <li>Misses: rewriting the spine file itself along with the segments</li>
+</ul>
+
+<p><strong>Layer 2 — Signed checkpoints:</strong></p>
+<ul>
+  <li>Catches: tail truncation (tree_size decrease), full rewrite without the private key (signature mismatch)</li>
+  <li>Misses: deleting the checkpoint file and re-signing (if the attacker has the key), full rewrite + re-sign by an insider</li>
+</ul>
+
+<p><strong>Layer 3 — External anchor:</strong></p>
+<ul>
+  <li>Catches: even a key-holding insider's full rewrite — the consistency proof against the anchored past root fails</li>
+  <li>Misses: compromise of the external anchor system itself (a different trust domain's problem)</li>
+</ul>
+
+<h2>Blast radius: the scope of damage before detection</h2>
+
+<p>In security, <strong>blast radius</strong> means "how far does the damage spread if an attack succeeds?" In Quipu-Log:</p>
+
+<ul>
+  <li><strong>Single record edit</strong>: detected immediately on the next <code>verify_integrity()</code> run. Blast radius is that one record.</li>
+  <li><strong>Segment substitution</strong>: inconsistency surfaces at the next segment seal checkpoint. Blast radius is from the last checkpoint to the current segment.</li>
+  <li><strong>Full rewrite</strong>: detected when the anchor is checked. The time until detection is the blast radius. The shorter the anchor interval, the smaller the blast radius.</li>
+</ul>
+
+<div class="callout key"><span class="lab">Security note</span><p>Two levers control blast radius: (1) Checkpoint frequency — sealing segments more often creates checkpoints more often. (2) External anchor verification frequency — if the anchor recipient runs consistency proofs on a regular schedule, the time to detecting a full rewrite is minimized. How often you run audits is an operational parameter.</p></div>
+
+<h2>Out of scope: deliberate design boundaries</h2>
+
+<p>SECURITY.md is candid about this. The following are intentionally out of scope:</p>
+
+<p><strong>Availability is not Quipu-Log's responsibility.</strong> If the single-writer daemon goes down, logging stops. This is a design decision, not a vulnerability — availability is the client's concern (<code>quipu-client</code>'s spool and retransmission). Covered in Ch. 33.</p>
+
+<p><strong>Real-time blocking is not Quipu-Log's role.</strong> An audit log records things that already happened. Even if a malicious action makes it into the log, Quipu-Log does not block that action in real time. Real-time blocking belongs to application-level access controls.</p>
+
+<p><strong>Physical access and token theft are separate problems.</strong> SECURITY.md: "Out of scope: denial of service from an authenticated admin token, physical access to key files." If key files are stolen, the external anchor becomes the last line of defense.</p>
+
+<p><strong>Low-entropy field vulnerability under SHA-256 is a known trade-off.</strong> A field protected by SHA-256 (e.g., an SSN) can be brute-forced — an attacker could hash every possible value and compare. This is a known design limitation, and HMAC protection addresses it. Covered from Ch. 24 onward.</p>
+
+<h2>Summary: threat model on one page</h2>
+
+<table>
+  <tr><th>Attack scenario</th><th>Detection method</th><th>Prerequisite</th></tr>
+  <tr><td>In-place record edit</td><td>Merkle spine root mismatch</td><td>—</td></tr>
+  <tr><td>Full segment file substitution</td><td>Merkle spine root mismatch</td><td>—</td></tr>
+  <tr><td>Tail segment deletion</td><td>Checkpoint tree_size &gt; current size</td><td>Checkpoint exists</td></tr>
+  <tr><td>Full rewrite without key</td><td>Checkpoint signature mismatch</td><td>Private key off data node</td></tr>
+  <tr><td>Full rewrite + re-sign with key</td><td>External anchor consistency proof fails</td><td>External anchor in a different domain</td></tr>
+  <tr><td>Availability attack (service disruption)</td><td>Out of scope</td><td>Client spool handles this</td></tr>
+  <tr><td>Real-time malicious action blocking</td><td>Out of scope</td><td>App-level access controls handle this</td></tr>
+</table>
+
+<h2>Recap</h2>
+
+<ul>
+  <li>Quipu-Log is <strong>tamper-evident</strong> (makes tampering detectable). tamper-proof (preventing tampering) is not achievable at the software level.</li>
+  <li>Three layers (spine, checkpoint, external anchor) each cover a different attacker model.</li>
+  <li>Availability, real-time blocking, and physical access are out of scope — they are intentional design boundaries, not security vulnerabilities.</li>
+  <li>Blast radius is tuned by the anchor interval and checkpoint frequency.</li>
+</ul>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① Explain "tamper-evident, not tamper-proof" with your own analogy — something other than the tamper-evident seal.<br>② A key-holding insider rewrites the log. List three conditions that must all be in place for this attack to be detected.<br>③ You receive a request to "add a feature to Quipu-Log that blocks malicious API calls in real time." Explain why this request is outside Quipu-Log's design scope and which layer it properly belongs to.</p></div>
+
+</article>

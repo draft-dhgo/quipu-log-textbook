@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>29 · 비동기 파이프라인: 논블로킹 emit과 백프레셔 — Quipu-Log 교과서</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ 목차</button><b>Quipu-Log 교과서</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn" href="../29-async-pipeline.html">EN</a><a class="langbtn active" href="29-async-pipeline.html">한국어</a></div>
+<a class="home" href="index.html">Quipu-Log 교과서</a>
+<div class="sub">파일시스템만으로 짓는 저장 엔진과 변조-탐지 감사 로그 — 밑바닥부터</div>
+<div class="part">파트 1 · 출발점: DB 없이, 파일로</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>감사 로그란, 그리고 왜 &#x27;DB 없이 파일로&#x27;인가</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>Quipu-Log 지도와 DB↔파일시스템 대응표</a>
+<div class="part">파트 2 · 파일시스템 기본기</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>파일시스템의 기본: 파일·디렉토리·inode·디스크립터</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>읽고 쓰기, 그리고 rename의 원자성</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>데이터는 언제 진짜 디스크에 남나: page cache와 fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>std::fs 도구상자: Rust로 파일 다루기</a>
+<div class="part">파트 3 · 저장 엔진의 심장: append-only 로그</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>append-only 로그 = WAL이 곧 데이터베이스</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>세그먼트 파일과 롤오버</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>레코드 프레이밍: 길이·CRC32·magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>직렬화: 구조체를 바이트로</a>
+<div class="part">파트 4 · DB가 공짜로 주던 보장을 파일로 재현</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>내구성: fsync 정책과 group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>원자성과 크래시 복구: torn write와 꼬리 탐지</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>동시성 제어 ①: single-writer와 파일 락</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>동시성 제어 ②: 읽기 스냅샷과 MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>인덱싱: 인메모리 인덱스 + 디스크 토큰</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>쿼리 실행: 세그먼트 스캔과 커서 페이지네이션</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>삭제와 보존: 세그먼트 unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>저장소 레이아웃과 포맷 버저닝</a>
+<div class="part">파트 5 · 무결성: 고치면 티가 나게 (보안 ①)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>해시 함수와 SHA-256: 디지털 지문</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>머클 히스토리 트리: 로그를 32바이트로 커밋</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>포함 증명·일관성 증명</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>체크포인트와 외부 앵커링</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>tamper-evident vs tamper-proof, 그리고 위협 모델</a>
+<div class="part">파트 6 · 기밀성: 비밀을 지키면서 검색하기 (보안 ②)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>필드 보호 4단계: 평문/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>대칭·비대칭·하이브리드 암호와 AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>블라인드 인덱스: 평문 없이 검색</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>쓰기 전용 배포: 개인키 없는 서버</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>키 관리: 키링·버저닝·로테이션 vs 리키</a>
+<div class="part">파트 7 · 쓰기·읽기 경로</div>
+<a class="lnk active" href="29-async-pipeline.html"><span class="n">29</span>비동기 파이프라인: 논블로킹 emit과 백프레셔</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>신뢰성: 재시도·백오프·DLQ·멱등성</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>tower 미들웨어: HTTP 요청 자동 기록</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>권한(RBAC)·필터·메타 감사</a>
+<div class="part">파트 8 · 분산·운영·확장</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>단일 장애점과 가용성: 클라이언트 스풀</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>수평 확장: 샤딩·일관성 해싱·읽기 복제</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>서버·클라이언트·MCP·관측성</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">파트 7 · 쓰기·읽기 경로</span><h1><span class="chno">29</span> · 비동기 파이프라인: 논블로킹 emit과 백프레셔</h1></div><article>
+
+<p class="lead">HTTP 요청 하나를 처리하는 데 수십 마이크로초가 걸린다면, 감사 로그를 디스크에 쓰는 데 수백 마이크로초를 허용할 수는 없습니다. 이 챕터에서는 Quipu-Log가 어떻게 <code>emit</code>을 <strong>"큐에 넣고 즉시 반환"</strong>하는 논블로킹 경로로 만드는지 살펴봅니다.</p>
+
+<div class="callout"><span class="lab">한 문장 요약</span><p><code>emit</code>은 바운디드 채널에 이벤트를 밀어 넣고 즉시 돌아옵니다. 실제 디스크 쓰기는 전용 writer 스레드가 맡습니다.</p></div>
+
+<h2>프로듀서-컨슈머 패턴</h2>
+
+<p>당신이 아는 큐(Queue)와 완전히 같은 구조입니다. 요청을 처리하는 <strong>프로듀서</strong>(앱 스레드들)와, 파일에 쓰는 <strong>컨슈머</strong>(writer 스레드) 사이에 채널 하나가 놓입니다. 프로듀서는 이벤트를 채널에 넣는 것으로 책임이 끝나고, 컨슈머는 채널에서 꺼내 순차적으로 디스크에 씁니다.</p>
+
+<p>Rust 표준 라이브러리의 <code>sync_channel</code>이 이 채널입니다. <strong>바운디드(bounded)</strong>라는 말은 채널에 들어갈 수 있는 이벤트 수에 상한(기본값 4096)이 있다는 뜻입니다. 상한이 없으면 메모리를 무제한으로 먹게 되니까요.</p>
+
+<figure>
+<svg viewBox="0 0 680 260" role="img" aria-label="AuditPipeline 큐 흐름: 앱 스레드들이 바운디드 채널에 emit하고, 전용 writer 스레드가 채널에서 꺼내 AuditStore에 씀">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .lbl{fill:#e6e8ee;font:600 13px -apple-system,sans-serif}
+    .sub{fill:#9aa3b2;font:12px -apple-system,sans-serif}
+    .box{fill:#161922;stroke:#2a2f3d;stroke-width:1.5}
+    .thr{fill:#16241d;stroke:#2c4a3a;stroke-width:1.5}
+    .ch{fill:#241f12;stroke:#4a3f1f;stroke-width:1.5}
+    .stor{fill:#1a1228;stroke:#3d2c5a;stroke-width:1.5}
+    .arr{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#arr)}
+    .hlline{stroke:#7aa2ff;stroke-width:2;marker-end:url(#arr)}
+  </style>
+
+  <!-- App threads (producers) -->
+  <rect x="20" y="30" width="130" height="50" rx="6" class="thr"/>
+  <text x="85" y="52" class="lbl" text-anchor="middle">요청 스레드 A</text>
+  <text x="85" y="70" class="sub" text-anchor="middle">handle.emit()</text>
+
+  <rect x="20" y="100" width="130" height="50" rx="6" class="thr"/>
+  <text x="85" y="122" class="lbl" text-anchor="middle">요청 스레드 B</text>
+  <text x="85" y="140" class="sub" text-anchor="middle">handle.emit()</text>
+
+  <rect x="20" y="170" width="130" height="50" rx="6" class="thr"/>
+  <text x="85" y="192" class="lbl" text-anchor="middle">요청 스레드 C</text>
+  <text x="85" y="210" class="sub" text-anchor="middle">handle.emit()</text>
+
+  <!-- Bounded channel -->
+  <rect x="200" y="50" width="160" height="155" rx="6" class="ch"/>
+  <text x="280" y="74" class="lbl" text-anchor="middle" fill="#ffd479">바운디드 채널</text>
+  <text x="280" y="92" class="sub" text-anchor="middle">capacity: 4096</text>
+  <rect x="220" y="102" width="120" height="18" rx="3" fill="#0b0d12"/>
+  <rect x="220" y="126" width="120" height="18" rx="3" fill="#0b0d12"/>
+  <rect x="220" y="150" width="120" height="18" rx="3" fill="#0b0d12"/>
+  <rect x="220" y="174" width="80" height="18" rx="3" fill="#0b0d12"/>
+  <text x="280" y="207" class="sub" text-anchor="middle">↑ try_send</text>
+
+  <!-- Writer thread (consumer) -->
+  <rect x="420" y="70" width="120" height="60" rx="6" fill="#1a1e2e" stroke="#3d5a8a" stroke-width="1.5"/>
+  <text x="480" y="96" class="lbl" text-anchor="middle" fill="#7aa2ff">writer 스레드</text>
+  <text x="480" y="116" class="sub" text-anchor="middle">audit-writer</text>
+
+  <!-- AuditStore -->
+  <rect x="420" y="160" width="120" height="55" rx="6" class="stor"/>
+  <text x="480" y="185" class="lbl" text-anchor="middle" fill="#c792ea">AuditStore</text>
+  <text x="480" y="203" class="sub" text-anchor="middle">디스크 쓰기</text>
+
+  <!-- Arrows: producers → channel -->
+  <line x1="150" y1="55" x2="198" y2="105" class="arr"/>
+  <line x1="150" y1="125" x2="198" y2="140" class="arr"/>
+  <line x1="150" y1="195" x2="198" y2="175" class="arr"/>
+
+  <!-- channel → writer -->
+  <line x1="360" y1="128" x2="418" y2="100" class="hlline"/>
+
+  <!-- writer → store -->
+  <line x1="480" y1="130" x2="480" y2="158" class="arr"/>
+
+  <!-- QueueFull label -->
+  <text x="340" y="240" class="sub" fill="#ff8b8b">← 큐가 꽉 차면 QueueFull 반환</text>
+</svg>
+<figcaption>프로듀서(요청 스레드들)는 채널에 넣고 즉시 반환한다. 전용 writer 스레드만 AuditStore를 건드린다.</figcaption>
+</figure>
+
+<h2>핵심 코드: emit이 하는 일</h2>
+
+<p><code>AuditHandle</code>은 앱 코드가 직접 쥐는 클론 가능한 핸들입니다. <code>emit_unchecked</code>를 보면 실제로 어떻게 짧게 끝나는지 확인할 수 있습니다.</p>
+
+<pre><span class="filename">crates/quipu-middleware/src/pipeline.rs</span><code><span class="kw">pub fn</span> <span class="fn">emit_unchecked</span>(&amp;self, event: AuditEvent) -&gt; Result&lt;(), MiddlewareError&gt; {
+    <span class="dim">if self.reject_emit_when_disk_full &amp;&amp; self.health.disk_full() { ... }</span>
+    self.metrics.queue_inc();
+    <span class="hl">match self.tx.try_send(Command::Emit(Box::new(event))) {</span>
+<span class="hl">        Ok(()) =&gt; Ok(()),</span>
+<span class="hl">        Err(TrySendError::Full(Command::Emit(ev))) =&gt; {</span>
+            self.metrics.rejected_queue_full();
+            Err(MiddlewareError::QueueFull(ev))
+        }
+        <span class="dim">Err(_) =&gt; Err(MiddlewareError::WorkerGone),</span>
+    }
+}</code></pre>
+
+<p><code>try_send</code>는 채널이 꽉 찼을 때 블로킹하지 않고 즉시 <code>Err</code>를 돌려줍니다. 그러면 <code>QueueFull</code> 에러가 나고, 이벤트는 호출자에게 다시 돌아갑니다(호출자가 버리거나 별도 폴백을 쓸 수 있게). 이것이 <strong>백프레셔(backpressure)</strong> — "나 지금 너무 바빠, 더 이상 받을 수 없어"를 알려주는 메커니즘입니다.</p>
+
+<div class="callout analogy"><span class="lab">비유</span><p>레스토랑 대기표 번호를 받는 것을 생각해 보세요. 손님(프로듀서)은 번호를 받는 순간 기다림 없이 자리를 찾아 앉고, 주방(writer 스레드)이 순서대로 처리합니다. 대기표가 다 떨어지면(큐 가득) 더 이상 발급하지 않는 것이 QueueFull입니다.</p></div>
+
+<h2>AuditPipeline과 AuditHandle의 관계</h2>
+
+<p><code>AuditPipeline</code>은 writer 스레드를 소유합니다. 서버가 살아 있는 동안 한 개만 존재하며, 종료 시 <code>shutdown()</code>을 불러 큐에 남은 이벤트를 모두 비우고 스레드를 정리합니다. <code>AuditHandle</code>은 파이프라인에서 <code>handle()</code>로 얻는 경량 클론입니다. <code>Arc&lt;SyncSender&gt;</code>를 감싸고 있어서 복사 비용이 거의 없습니다. 필요한 모든 곳에 복사해서 전달하면 됩니다.</p>
+
+<pre><span class="filename">crates/quipu-middleware/src/pipeline.rs</span><code><span class="dim">// 파이프라인 시작 (서버 초기화 때 한 번)</span>
+<span class="kw">let</span> pipeline = <span class="ty">AuditPipeline</span>::<span class="fn">start</span>(store, root, permissions, cfg, fallback)?;
+
+<span class="hl">let handle = pipeline.handle(); // 클론 가능한 AuditHandle</span>
+<span class="dim">// handle을 axum State, Arc 등으로 어디든 전달</span>
+handle.<span class="fn">emit</span>(&amp;role, event)?;   <span class="com">// 논블로킹</span></code></pre>
+
+<div class="callout why"><span class="lab">왜 이렇게?</span><p>quipu-core의 <code>AuditStore</code>는 단일 writer 원칙(<span class="pill">13장</span>)을 따릅니다. 멀티스레드 서버에서 여러 요청 스레드가 직접 <code>AuditStore</code>를 호출하면 락 경합 또는 정합성 문제가 생깁니다. 채널로 단일 스레드에 직렬화하면 스토어는 단일 writer 제약을 그대로 유지하면서 앱은 완전 논블로킹이 됩니다.</p></div>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① <code>try_send</code>가 아니라 <code>send</code>(블로킹 전송)를 썼다면 어떤 문제가 생길까요?<br>② <code>QueueFull</code> 에러 시 이벤트가 호출자에게 돌아오는 이유는 무엇인가요? 단순히 버리지 않는 이유는?<br>③ <code>AuditHandle</code>이 <code>Clone</code>을 구현하도록 설계된 이유는?</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="28-key-management.html"><span class="dir">← 이전</span><span class="t">28 · 키 관리: 키링·버저닝·로테이션 vs 리키</span></a><a class="next" href="30-reliability-dlq.html"><span class="dir">다음 →</span><span class="t">30 · 신뢰성: 재시도·백오프·DLQ·멱등성</span></a></div>
+</div>
+</main>
+</div>
+<script src="../assets/textbook.js"></script>
+</body>
+</html>

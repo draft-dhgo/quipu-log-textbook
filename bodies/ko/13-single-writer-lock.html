@@ -1,0 +1,115 @@
+<article>
+
+<p class="lead">두 프로그램이 같은 파일에 동시에 쓰면 어떻게 될까요? DB 엔진에는 이것을 막는 락 매니저가 있습니다. Quipu-Log는 DB가 없으니 락 매니저도 없습니다. 대신 OS 파일 락 하나로 "이 디렉토리는 나 하나만"을 보장합니다. 그리고 그 단순한 보장이 변조 탐지까지 단순하게 만들어 줍니다.</p>
+
+<div class="callout"><span class="lab">한 문장 요약</span><p>Quipu-Log는 루트 디렉토리에 <code>LOCK</code> 파일 하나를 두고 <code>File::try_lock()</code>을 호출한다. 두 번째 프로세스가 같은 루트를 열려 하면 즉시 실패한다 — single-writer가 보장된다.</p></div>
+
+<h2>당신이 아는 것: DB의 락 매니저</h2>
+
+<p>관계형 DB는 행 단위(row-level lock), 페이지 단위, 테이블 단위 락을 관리하는 정교한 락 매니저를 갖고 있습니다. 여러 트랜잭션이 같은 데이터에 접근할 때 충돌을 조율하고, 데드락을 감지하고, 대기 큐를 관리합니다. 복잡하지만 그 덕분에 수많은 동시 쓰기를 안전하게 허용합니다.</p>
+
+<p>Quipu-Log는 이 중 아무것도 구현하지 않습니다. 대신 훨씬 단순한 원칙을 택했습니다: <strong>"기록자는 한 번에 하나만 허용한다."</strong></p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ 파일시스템</span><p><strong>DB에서는</strong> 행 단위 락 매니저가 여러 쓰기 세션이 충돌하지 않게 중재한다. <strong>Quipu-Log에서는</strong> OS 파일 락 하나가 "루트 디렉토리 = 프로세스 하나"를 보장한다. 복잡한 중재 대신 처음부터 둘이 못 열게 막는다.</p></div>
+
+<h2>advisory lock: OS가 주는 열쇠</h2>
+
+<p>OS는 파일에 <strong>advisory lock</strong>(권고적 잠금)을 걸 수 있는 시스템 콜을 제공합니다. "Advisory"라는 건 OS가 강제로 막는 게 아니라 — 다른 프로세스가 락 확인 없이 직접 파일을 열면 OS는 막지 못합니다 — 대신 <em>락을 얻으려는 시도 사이에서</em> 충돌을 감지합니다. 협력하는 프로세스들끼리의 약속인 셈입니다.</p>
+
+<p>Rust 1.89부터 <code>std::fs::File</code>에 <code>try_lock()</code>과 <code>try_lock_shared()</code>가 안정화됐습니다. 외부 크레이트 없이 표준 라이브러리만으로 파일 락을 쓸 수 있게 됐습니다.</p>
+
+<pre><span class="filename">Cargo.toml (workspace)</span><code><span class="com"># MSRV floor: the store guards its root with `std::fs::File::try_lock` and</span>
+<span class="com"># matches on `std::fs::TryLockError`, both stabilized in Rust 1.89.</span>
+<span class="hl">rust-version = <span class="str">"1.89"</span></span></code></pre>
+
+<p>MSRV(Minimum Supported Rust Version)가 1.89인 이유가 바로 이것입니다. <code>try_lock</code>을 쓰기 위해서입니다.</p>
+
+<h2>코드로 보는 루트 락</h2>
+
+<p><code>AuditStore::open()</code>이 호출될 때, 가장 먼저 하는 일이 <code>LOCK</code> 파일 락 획득입니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs — AuditStore::open()</span><code><span class="kw">let</span> lock = <span class="ty">std::fs</span>::<span class="ty">OpenOptions</span>::new()
+    .create(<span class="kw">true</span>)
+    .truncate(<span class="kw">false</span>)
+    .write(<span class="kw">true</span>)
+    .open(cfg.root.join(<span class="str">"LOCK"</span>))?;
+
+<span class="hl">lock.try_lock().map_err(|e| match e {
+    std::fs::TryLockError::WouldBlock =&gt;
+        Error::Locked(cfg.root.display().to_string()),
+    std::fs::TryLockError::Error(e) =&gt; Error::Io(e),
+})?;</span></code></pre>
+
+<p>락을 얻으면 <code>_lock: std::fs::File</code> 필드로 저장합니다. <code>AuditStore</code>가 살아 있는 동안 이 파일 핸들을 들고 있습니다. 두 번째 프로세스(혹은 스레드)가 같은 루트로 <code>AuditStore::open()</code>을 부르면 <code>try_lock()</code>이 <code>WouldBlock</code>을 돌려주고, 코드는 이것을 <code>Error::Locked</code>로 변환합니다. "이 루트는 다른 프로세스가 쓰고 있다"는 뜻입니다.</p>
+
+<p>락은 프로세스가 죽거나 <code>AuditStore</code>가 드롭될 때 자동으로 해제됩니다. Rust의 Drop 보장 덕분에 별도의 "락 해제" 코드를 쓸 필요가 없습니다.</p>
+
+<figure>
+<svg viewBox="0 0 680 240" role="img" aria-label="두 프로세스가 같은 루트를 열려 할 때의 동작">
+  <defs>
+    <marker id="arr13ok" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#8be9c0"/>
+    </marker>
+    <marker id="arr13err" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#ff8b8b"/>
+    </marker>
+  </defs>
+  <!-- 프로세스 A -->
+  <rect x="20" y="40" width="160" height="60" rx="8" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="100" y="65" text-anchor="middle" fill="#e6e8ee" font-size="13" font-family="-apple-system,sans-serif" font-weight="600">프로세스 A</text>
+  <text x="100" y="85" text-anchor="middle" fill="#8be9c0" font-size="11" font-family="-apple-system,sans-serif">AuditStore::open() → OK</text>
+  <!-- LOCK 파일 -->
+  <rect x="260" y="80" width="160" height="60" rx="8" fill="#161922" stroke="#7aa2ff" stroke-width="1.5"/>
+  <text x="340" y="105" text-anchor="middle" fill="#7aa2ff" font-size="13" font-family="-apple-system,sans-serif" font-weight="600">root/LOCK</text>
+  <text x="340" y="125" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">locked by A</text>
+  <!-- 화살표 A → LOCK -->
+  <line x1="180" y1="80" x2="258" y2="110" stroke="#8be9c0" stroke-width="1.5" marker-end="url(#arr13ok)"/>
+  <text x="208" y="88" fill="#8be9c0" font-size="10" font-family="-apple-system,sans-serif">try_lock() → OK</text>
+  <!-- 프로세스 B -->
+  <rect x="20" y="150" width="160" height="60" rx="8" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="100" y="175" text-anchor="middle" fill="#e6e8ee" font-size="13" font-family="-apple-system,sans-serif" font-weight="600">프로세스 B</text>
+  <text x="100" y="195" text-anchor="middle" fill="#ff8b8b" font-size="11" font-family="-apple-system,sans-serif">Error::Locked ← 즉시 실패</text>
+  <!-- 화살표 B → LOCK -->
+  <line x1="180" y1="175" x2="258" y2="130" stroke="#ff8b8b" stroke-width="1.5" marker-end="url(#arr13err)"/>
+  <text x="200" y="162" fill="#ff8b8b" font-size="10" font-family="-apple-system,sans-serif">try_lock() → WouldBlock</text>
+  <!-- 루트 디렉토리 -->
+  <rect x="500" y="60" width="160" height="100" rx="8" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="580" y="90" text-anchor="middle" fill="#e6e8ee" font-size="12" font-family="-apple-system,sans-serif" font-weight="600">root/</text>
+  <text x="580" y="110" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">├── LOCK</text>
+  <text x="580" y="126" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">├── logs/</text>
+  <text x="580" y="142" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">└── registry/</text>
+  <line x1="420" y1="110" x2="498" y2="110" stroke="#2a2f3d" stroke-width="1" stroke-dasharray="4"/>
+</svg>
+<figcaption>프로세스 A가 LOCK 파일을 잡고 있으면 프로세스 B의 try_lock()은 WouldBlock을 돌려주고 즉시 실패한다. 대기하지 않는다.</figcaption>
+</figure>
+
+<h2>왜 single-writer인가 — 복잡성 vs 단순성</h2>
+
+<p>여러 프로세스가 동시에 쓸 수 있게 하려면 무엇이 필요할까요? 파일 레벨에서 write가 겹치지 않도록 세그먼트별 락이 필요하고, 인메모리 인덱스가 여러 프로세스에서 읽히므로 공유 메모리나 메시지 패싱이 필요하고, 각 프로세스가 각자의 BufWriter를 갖고 있으니 버퍼가 섞이지 않도록 추가 조율이 필요합니다. 결국 분산 시스템의 복잡성이 들어옵니다.</p>
+
+<p>Quipu-Log는 이 복잡성을 원하지 않습니다. 대신 파이프라인 모델을 택합니다. 복수의 스레드/요청이 이벤트를 <em>emit</em>하면, 그것이 채널을 타고 전용 <strong>writer 스레드</strong> 하나로 모입니다. 채널을 통해 쓰기가 직렬화됩니다. 여러 스레드가 동시에 파일을 건드릴 일이 없습니다. <span class="pill">29장 비동기 파이프라인</span></p>
+
+<div class="callout why"><span class="lab">왜 이렇게?</span><p>단일 writer는 부채를 줄인다. 파일 락 하나로 "두 프로세스 동시 열기"를 차단하고, 채널로 "두 스레드 동시 쓰기"를 차단한다. 락 매니저, 데드락 감지, 충돌 해소 코드가 없다. 감사 로그의 특성(이벤트가 단방향으로 흘러들어온다)과 이 모델이 딱 맞는다.</p></div>
+
+<h2>단일 기록자가 변조 탐지를 단순하게 만든다</h2>
+
+<p>single-writer는 성능·단순성 이유만이 아닙니다. 보안적으로도 중요합니다.</p>
+
+<p>Quipu-Log는 모든 레코드를 머클 트리에 커밋합니다 <span class="pill">20장 머클 트리</span>. "레코드 N번은 이 해시값을 가진다"는 약속이 트리에 들어갑니다. 이 약속이 깨지면 — 즉 디스크의 레코드를 누군가 몰래 고치면 — 머클 루트가 달라져 탐지됩니다.</p>
+
+<p>그런데 기록자가 여럿이라면 어떻게 될까요? 여러 프로세스가 동시에 레코드를 append하면 머클 트리에 leaf가 쌓이는 순서가 불명확해집니다. 어느 프로세스가 "내가 N번째 leaf를 썼다"고 주장해야 할지 정하기 어렵고, 검증도 어렵습니다. 반면 단일 writer가 보장되면 "N번째 append = N번째 leaf"가 명확합니다. 검증 로직이 단순해지고, 순서 보장도 쉽습니다.</p>
+
+<div class="callout key"><span class="lab">보안 포인트</span><p>advisory lock은 <em>협력하는</em> 프로세스들 사이에서만 작동한다. root 디렉토리에 직접 접근할 수 있는 공격자(디스크 마운트, root 권한)는 <code>LOCK</code> 파일을 무시하고 파일을 수정할 수 있다. 하지만 그런 공격자는 파일 시스템 자체를 다 건드릴 수 있으니, 락의 역할은 "실수 또는 버그로 인한 동시 열기"를 막는 것이지 악의적 침입을 막는 것이 아니다. 변조 탐지는 머클 트리(파트 5)의 역할이다.</p></div>
+
+<h2>정리</h2>
+<ul>
+  <li>DB의 락 매니저 대신, Quipu-Log는 OS advisory lock 하나(<code>File::try_lock()</code>)로 "루트 디렉토리 = 프로세스 하나"를 보장한다.</li>
+  <li><code>try_lock()</code>은 차단(block)하지 않는다. 이미 잠겨 있으면 즉시 <code>WouldBlock</code>을 반환하고 <code>Error::Locked</code>로 변환된다.</li>
+  <li>Rust 1.89에서 <code>File::try_lock()</code>이 안정화됐다. 이것이 MSRV 1.89의 이유다.</li>
+  <li>single-writer는 머클 트리의 leaf 순서를 명확하게 하여 변조 탐지 로직을 단순하게 만든다.</li>
+  <li>advisory lock은 협력 프로세스 간의 약속이다. 악의적 침입 방어는 머클 트리의 역할이다.</li>
+</ul>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① <code>try_lock()</code>과 <code>lock()</code>(블로킹)의 차이는 무엇인가요? Quipu-Log가 블로킹 버전 대신 <code>try_lock()</code>을 쓰는 이유를 추론해 보세요.<br>② single-writer 원칙이 머클 트리 검증을 왜 단순하게 만드는지 설명해 보세요.<br>③ 두 프로세스가 같은 루트를 동시에 여는 것을 허용했다면, 인메모리 인덱스에는 어떤 문제가 생길까요?</p></div>
+
+</article>

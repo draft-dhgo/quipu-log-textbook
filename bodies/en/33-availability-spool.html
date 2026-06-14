@@ -1,0 +1,167 @@
+<article>
+
+<p class="lead">The Quipu-Log server is a single process. That simplicity is what lets a single file lock and an unbroken hash chain per table make tamper-evidence straightforward. But there is a price — what happens to audit records while the daemon is down? This chapter covers the design that solves that "single point of failure" problem, not on the server side, but on <strong>the client side</strong>.</p>
+
+<div class="callout"><span class="lab">In one sentence</span><p>To avoid losing audit records when the daemon goes down, rather than complicating the server, <em>the client holds them on disk and retransmits later</em>. "Lost during downtime" becomes "delayed during downtime."</p></div>
+
+<h2>The fate of a single writer: SPOF</h2>
+
+<p>As covered in <span class="pill">Ch. 13 single-writer</span>, the Quipu-Log store places a file lock on the store root directory and allows exactly one process to write. That simplicity is what makes tamper detection possible — if multiple nodes were writing to the same chain simultaneously, you'd need consensus to know who's authoritative, and the moment a bug slips into that consensus logic, "not tampered" weakens to "probably not tampered."</p>
+
+<p>But a single process = a <strong>single point of failure (SPOF)</strong>. Daemon restarts, deployments, crashes — during any of these brief windows, what are the services sending audit events supposed to do?</p>
+
+<div class="callout why"><span class="lab">Why this design?</span><p>The server-side solution would be to elect a leader across multiple nodes using a consensus protocol like Raft. But that requires distributed consensus over the chain head, making the audit integrity guarantee far more complex. Quipu-Log chose the opposite direction — keep the server simple and shift the availability burden to the <strong>client</strong>. The client-side solution only needs a single local file.</p></div>
+
+<h2>Three weapons: idempotent key · backoff · spool</h2>
+
+<p>The <code>quipu-client</code> crate is the reference implementation for this client-side durability. It has three layers.</p>
+
+<figure>
+<svg viewBox="0 0 700 340" role="img" aria-label="Three layers of quipu-client: idempotent key → backoff retry → disk spool">
+  <defs>
+    <marker id="arr33" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+    <marker id="arrb" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#8be9c0"/>
+    </marker>
+    <marker id="arrr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#ffd479"/>
+    </marker>
+  </defs>
+  <style>
+    .t33{fill:#e6e8ee;font:13px -apple-system,sans-serif}
+    .s33{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .bx{fill:#161922;stroke:#2a2f3d;stroke-width:1.5;rx:6}
+  </style>
+
+  <!-- Service -->
+  <rect x="10" y="130" width="120" height="48" class="bx" rx="6"/>
+  <text x="70" y="150" class="t33" text-anchor="middle">Service</text>
+  <text x="70" y="166" class="s33" text-anchor="middle">emit(event)</text>
+
+  <!-- Idempotent key -->
+  <rect x="170" y="60" width="160" height="60" rx="6" fill="#161922" stroke="#7aa2ff" stroke-width="1.5"/>
+  <text x="250" y="84" class="t33" text-anchor="middle" fill="#7aa2ff">① Generate idempotent key</text>
+  <text x="250" y="102" class="s33" text-anchor="middle">new_idempotency_key()</text>
+  <text x="250" y="115" class="s33" text-anchor="middle">UUIDv4, one per event</text>
+
+  <!-- Backoff retry -->
+  <rect x="170" y="150" width="160" height="60" rx="6" fill="#161922" stroke="#8be9c0" stroke-width="1.5"/>
+  <text x="250" y="174" class="t33" text-anchor="middle" fill="#8be9c0">② Exponential backoff retry</text>
+  <text x="250" y="192" class="s33" text-anchor="middle">Backoff{base:100ms,</text>
+  <text x="250" y="205" class="s33" text-anchor="middle">max_retries:6, full jitter}</text>
+
+  <!-- Disk spool -->
+  <rect x="170" y="240" width="160" height="60" rx="6" fill="#161922" stroke="#ffd479" stroke-width="1.5"/>
+  <text x="250" y="264" class="t33" text-anchor="middle" fill="#ffd479">③ Disk spool</text>
+  <text x="250" y="282" class="s33" text-anchor="middle">Spool::append()+fsync</text>
+  <text x="250" y="295" class="s33" text-anchor="middle">→ drain_spool() replay</text>
+
+  <!-- Server -->
+  <rect x="390" y="130" width="140" height="48" rx="6" fill="#16241d" stroke="#8be9c0" stroke-width="1.5"/>
+  <text x="460" y="150" class="t33" text-anchor="middle">quipu-server</text>
+  <text x="460" y="166" class="s33" text-anchor="middle">POST /v1/logs</text>
+
+  <!-- Event → idempotent key -->
+  <line x1="130" y1="148" x2="170" y2="88" stroke="#9aa3b2" stroke-width="1.2" marker-end="url(#arr33)"/>
+  <!-- Idempotent key → backoff -->
+  <line x1="250" y1="120" x2="250" y2="150" stroke="#9aa3b2" stroke-width="1.2" marker-end="url(#arr33)"/>
+  <!-- Backoff success → server -->
+  <line x1="330" y1="175" x2="390" y2="155" stroke="#8be9c0" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrb)"/>
+  <text x="350" y="162" class="s33" fill="#8be9c0">success</text>
+  <!-- Backoff exhausted → spool -->
+  <line x1="250" y1="210" x2="250" y2="240" stroke="#ffd479" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrr)"/>
+  <text x="255" y="232" class="s33" fill="#ffd479">exhausted</text>
+  <!-- Spool → server (later) -->
+  <path d="M330,270 Q520,310 530,200 Q540,150 530,155" stroke="#ffd479" stroke-width="1.5" stroke-dasharray="4,3" fill="none" marker-end="url(#arrr)"/>
+  <text x="500" y="305" class="s33" fill="#ffd479">after server recovers</text>
+  <text x="500" y="318" class="s33" fill="#ffd479">drain_spool()</text>
+
+  <!-- occurred_at preservation note -->
+  <rect x="390" y="220" width="280" height="52" rx="6" fill="#0b0d12" stroke="#2a2f3d" stroke-width="1"/>
+  <text x="530" y="240" class="s33" text-anchor="middle" fill="#c792ea">💡 occurred_at preserved</text>
+  <text x="530" y="256" class="s33" text-anchor="middle">Even if it arrives late, the action timestamp</text>
+  <text x="530" y="269" class="s33" text-anchor="middle">is the value the client stamped at emit time</text>
+</svg>
+<figcaption>Three layers of client-side durability. If a retry succeeds, the spool is never opened. If retries are exhausted and the event lands in the spool, drain_spool() replays it after the server recovers.</figcaption>
+</figure>
+
+<h3>① Idempotent retransmission: retrying never double-records</h3>
+
+<p>If the server received a request but the connection dropped before the response arrived, the client has no way to know whether it succeeded or failed. Retrying naively can record the same event twice. <strong>Idempotency keys</strong> prevent this.</p>
+
+<pre><span class="filename">crates/quipu-client/src/retry.rs</span><code><span class="com">/// One UUIDv4 per event. The same key is reused for every retransmission.</span>
+<span class="kw">pub fn</span> <span class="fn">new_idempotency_key</span>() -&gt; <span class="ty">String</span> {
+    <span class="dim">let mut bytes = [0u8; 16];</span>
+    <span class="dim">rand::RngCore::fill_bytes(&amp;mut rand::thread_rng(), &amp;mut bytes);</span>
+    <span class="hl">// RFC 4122 version 4, variant 1 — the same key is reused across retries.</span>
+    bytes[6] = (bytes[6] &amp; 0x0f) | 0x40;
+    bytes[8] = (bytes[8] &amp; 0x3f) | 0x80;
+    <span class="dim">// ... hex encoding ...</span>
+}</code></pre>
+
+<p>The server keeps a sliding window of recently accepted keys in memory (65,536 by default). When the same key arrives again, it doesn't write anything — it responds with <code>"status":"duplicate"</code>. This way <strong>the client can retry freely, and the server filters out duplicates.</strong></p>
+
+<div class="callout warn"><span class="lab">Caution</span><p>The idempotency window lives in memory and disappears when the server restarts. A retransmission that straddles a restart can be recorded twice. However, both records will carry the same <code>occurred_at</code>, so the duplicate can be detected after the fact — this is a designed boundary, not a gap.</p></div>
+
+<h3>② Exponential backoff + full jitter: taming the thundering herd when the server comes back</h3>
+
+<p>When a server recovers from a failure, hundreds of waiting clients all try to reconnect at once. If they all retry on a fixed schedule, the next interval triggers another storm. <code>Backoff</code> solves this with <strong>full jitter</strong>.</p>
+
+<pre><span class="filename">crates/quipu-client/src/retry.rs</span><code><span class="kw">impl</span> <span class="ty">Backoff</span> {
+    <span class="kw">pub fn</span> <span class="fn">delay</span>(&amp;self, attempt: <span class="ty">u32</span>) -&gt; <span class="ty">Option</span>&lt;<span class="ty">Duration</span>&gt; {
+        <span class="dim">if attempt == 0 || attempt &gt; self.max_retries { return None; }</span>
+        let exp = self.base.as_secs_f64() * self.multiplier.powi((attempt - 1) as i32);
+        let capped = exp.min(self.max_delay.as_secs_f64());
+        <span class="hl">// Uniform random in [0, capped] — clients don't all pile in on the same tick.</span>
+        let jittered = rand::Rng::gen_range(&amp;mut rand::thread_rng(), 0.0..=capped);
+        Some(Duration::from_secs_f64(jittered))
+    }
+}</code></pre>
+
+<p>The defaults are: base 100 ms, multiplier 2.0, max delay 30 s, max retries 6. After all six attempts fail, the event passes to the next layer.</p>
+
+<h3>③ Disk spool: turning "lost" into "delayed"</h3>
+
+<p>If the server still isn't responding after all retries are exhausted, the event is written to a local disk file. That file is the <code>Spool</code>.</p>
+
+<pre><span class="filename">crates/quipu-client/src/spool.rs</span><code><span class="kw">impl</span> <span class="ty">Spool</span> {
+    <span class="kw">pub fn</span> <span class="fn">append</span>(&amp;mut self, record: &amp;<span class="ty">SpoolRecord</span>) -&gt; <span class="ty">io::Result</span>&lt;()&gt; {
+        <span class="dim">let payload = serde_json::to_vec(record)?;</span>
+        <span class="dim">let len = u32::try_from(payload.len())?;</span>
+        <span class="dim">let crc = crc32fast::hash(&amp;payload);</span>
+        <span class="hl">// [len][crc32][payload] frame — identical to quipu-core segment framing.</span>
+        self.file.write_all(&amp;frame)?;
+        <span class="hl">self.file.sync_data()?;  // fsync. This is the whole point of the spool.</span>
+        Ok(())
+    }
+}</code></pre>
+
+<p>The spool frame uses exactly the same <code>[len][crc32][payload]</code> structure as <span class="pill">Ch. 9 record framing</span>. A torn tail left by a crash is trimmed on open via CRC check. When the server recovers, <code>drain_spool()</code> retransmits records oldest-first, and only atomically renames away the ones that succeeded.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ Filesystem</span><p><strong>In a DB</strong>, the client library manages a connection pool and typically throws an exception when the connection drops. <strong>In Quipu-Log</strong>, the client directly implements the contract "events are never lost even if the server is gone" — by saving them to a local file and replaying later.</p></div>
+
+<h2>occurred_at: the record carries the time of the action, however late it arrives</h2>
+
+<p>Events replayed from the spool might reach the server minutes or hours late. But someone reading the server log cares about <strong>when the action actually happened</strong>, not when it arrived.</p>
+
+<p>That's what the <code>occurred_at</code> field is for. The client stamps "now" when it creates the event and sends it along; the server writes that value as-is into the log. However late the delivery, the timestamp in the log is the time of the original action. <strong>Latency is introduced, but the accuracy of the record is preserved.</strong></p>
+
+<h2>Cold standby vs. live failover</h2>
+
+<p>Even with clients buffering, if the server takes a long time to recover the spool keeps growing. <strong>Cold standby</strong> keeps that window short.</p>
+
+<table>
+  <tr><th>Approach</th><th>Description</th><th>Prerequisite</th></tr>
+  <tr><td><strong>Cold standby</strong></td><td>Keep a copy of the store root on another host ahead of time; when trouble strikes, start the daemon there</td><td>No 2nd writer — bring down the primary first, then start the standby</td></tr>
+  <tr><td><strong>Live failover (Raft etc.)</strong></td><td>Leader-follower replication, automatic leader election</td><td>Requires consensus over the chain head → outside Quipu-Log's scope</td></tr>
+</table>
+
+<p>The cold standby procedure is straightforward. Gracefully stop the primary with <code>SIGTERM</code> (or <code>POST /v1/admin/flush</code>) to stabilize the active segment, then copy the store root to the standby host. Sealed segments are immutable, so only the last active tail needs to be copied incrementally. Start the daemon on the standby — it acquires the lock, trims any torn tail, and is ready to serve.</p>
+
+<p>Restart speed is <strong>proportional to the active segment size</strong>. Keeping <code>max_segment_bytes</code> reasonably small makes both restarts and failovers faster — because, as covered in <span class="pill">Ch. 12 crash recovery</span>, sealed segments are not re-scanned on open.</p>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① Why is the idempotent key "one per event, identical across all retries"? What would happen if you generated a fresh key on every attempt?<br>② If there were no full jitter and clients retried on a fixed schedule, what would happen right after the server recovered?<br>③ Even with a spool in place, there are cases where true "zero loss" cannot be guaranteed. When? (Hint: think about where the spool file itself lives.)</p></div>
+
+</article>

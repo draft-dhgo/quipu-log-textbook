@@ -1,0 +1,135 @@
+<article>
+
+<p class="lead">When working with databases, files have always just been <em>there</em> — taken for granted. But to build a storage engine directly on files, the way Quipu-Log does, you first need to understand how the OS manages them. This chapter covers four fundamental concepts: files, directories, inodes, and file descriptors — illustrated through the actual directories and files that Quipu-Log creates.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ Filesystem</span><p>A database gives you a "table" abstraction. Underneath it, the OS manages files and directories. Quipu-Log works directly with that abstraction layer — <strong>instead of DB tables and rows, we handle OS files and bytes ourselves, and we're the ones who impose structure on top.</strong></p></div>
+
+<h2>What is a file: a named sequence of bytes</h2>
+
+<p>From the OS's perspective, a file is simple — <strong>a contiguous sequence of bytes.</strong> Just as a relational database offers the abstraction "table = a collection of rows," the filesystem offers "file = a collection of bytes." Imposing whatever structure we want on top of that is the programmer's job.</p>
+
+<p>Quipu-Log stacks records onto this byte sequence by wrapping them in a fixed-layout <strong>frame</strong>: length, checksum, timestamp, and body — written in that order. That's our way of "imposing structure." <span class="pill">Ch. 9</span> covers frame details.</p>
+
+<h2>inode: the file's true identity</h2>
+
+<p>A file has two faces: the <strong>name</strong> (path) we see, and the <strong>inode</strong> the OS maintains internally.</p>
+
+<p>An <strong>inode</strong> is the real metadata store for a file. It holds the file size, permissions, timestamps, and pointers to where the actual data lives on disk (block pointers). Crucially — <em>the inode does not store the filename.</em> Names are a separate concern, managed by directories.</p>
+
+<figure>
+<svg viewBox="0 0 680 250" role="img" aria-label="Relationship between filename, directory, inode, and data blocks">
+  <defs><marker id="ar3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/></marker></defs>
+  <style>
+    .l3{fill:#e6e8ee;font:600 13px -apple-system,sans-serif}
+    .s3{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .s3b{fill:#8be9c0;font:11px -apple-system,sans-serif}
+    .bx3{fill:#161922;stroke:#2a2f3d;stroke-width:1.5;rx:6}
+    .ar3{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#ar3)}
+  </style>
+
+  <!-- Directory -->
+  <rect x="20" y="40" width="180" height="150" rx="6" fill="#161922" stroke="#c792ea" stroke-width="1.5"/>
+  <text x="36" y="64" class="l3" fill="#c792ea">Directory (logs/)</text>
+  <text x="36" y="86" class="s3">name → inode number mapping</text>
+  <rect x="36" y="96" width="148" height="22" rx="3" fill="#0b0d12"/>
+  <text x="44" y="112" class="s3">"seg-0000000000.log" → 4829</text>
+  <rect x="36" y="124" width="148" height="22" rx="3" fill="#0b0d12"/>
+  <text x="44" y="140" class="s3">"seg-0000000001.log" → 4830</text>
+  <rect x="36" y="152" width="148" height="22" rx="3" fill="#0b0d12"/>
+  <text x="44" y="168" class="s3">"seg-0000000002.log" → 4831</text>
+
+  <!-- inode -->
+  <rect x="250" y="40" width="180" height="150" rx="6" fill="#161922" stroke="#7aa2ff" stroke-width="1.5"/>
+  <text x="266" y="64" class="l3" fill="#7aa2ff">inode #4829</text>
+  <text x="266" y="86" class="s3">size: 67,108,864 bytes</text>
+  <text x="266" y="106" class="s3">permissions: rw-r--r--</text>
+  <text x="266" y="126" class="s3">modified: 2026-06-14</text>
+  <text x="266" y="146" class="s3b">↓ data block pointers</text>
+  <text x="266" y="166" class="s3">blocks 1287, 1288, 1289...</text>
+
+  <!-- Data blocks -->
+  <rect x="480" y="40" width="180" height="150" rx="6" fill="#16241d" stroke="#8be9c0" stroke-width="1.5"/>
+  <text x="496" y="64" class="l3" fill="#8be9c0">Disk data blocks</text>
+  <rect x="496" y="76" width="148" height="16" rx="2" fill="#0b0d12"/>
+  <text x="502" y="88" class="s3">ALOG 0x02 [base_index]</text>
+  <rect x="496" y="98" width="148" height="16" rx="2" fill="#0b0d12"/>
+  <text x="502" y="110" class="s3">[len][crc][ts][payload...]</text>
+  <rect x="496" y="120" width="148" height="16" rx="2" fill="#0b0d12"/>
+  <text x="502" y="132" class="s3">[len][crc][ts][payload...]</text>
+  <rect x="496" y="142" width="100" height="16" rx="2" fill="#0b0d12"/>
+  <text x="502" y="154" class="s3">[len][crc][ts]...</text>
+
+  <!-- arrows -->
+  <line x1="200" y1="107" x2="250" y2="107" class="ar3"/>
+  <line x1="430" y1="107" x2="480" y2="107" class="ar3"/>
+</svg>
+<figcaption>A directory is a mapping of names to inode numbers. The inode points to the actual data blocks. When a file is renamed, the inode stays the same.</figcaption>
+</figure>
+
+<p>Why does this structure matter? <strong>Because the name (path) and the data (inode) are separate, renaming a file leaves its data completely intact.</strong> We'll see how this property is exploited through the atomicity of <code>rename(2)</code> in <span class="pill">Ch. 4</span>.</p>
+
+<h2>Directories: name → inode mappings</h2>
+
+<p>A directory is a special kind of file. Instead of bytes, its contents are a <strong>list of "name → inode number" pairs.</strong> Quipu-Log's <code>logs/</code> directory looks like this (logically):</p>
+
+<pre><span class="filename">root/logs/ directory contents (logical representation)</span><code><span class="com">// "seg-0000000000.log" → inode 4829</span>
+<span class="com">// "seg-0000000001.log" → inode 4830</span>
+<span class="com">// "seg-0000000002.log" → inode 4831  ← currently being written</span></code></pre>
+
+<p>At startup, Quipu-Log reads this directory with <code>read_dir()</code> to build a list of segment numbers. The one with the highest number is the "active" segment currently being written to.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/table.rs</span><code><span class="kw">for</span> entry <span class="kw">in</span> std::fs::read_dir(dir)? {
+    <span class="kw">let</span> name = entry?.file_name();
+    <span class="kw">let</span> name = name.to_string_lossy();
+<span class="hl">    <span class="kw">if let</span> <span class="ty">Some</span>(num) = name
+        .strip_prefix(<span class="str">"seg-"</span>)
+        .and_then(|s| s.strip_suffix(<span class="str">".log"</span>))
+        .and_then(|s| s.parse::&lt;u64&gt;().ok())
+    {
+        seqs.push(num);
+    }</span>
+}</code></pre>
+
+<h2>File descriptors: handles for open files</h2>
+
+<p>When you open a file, the OS hands back a <strong>file descriptor (fd)</strong>. This is a handle that the OS uses to track "I'm reading this file starting from this position." It's just an integer, but internally it carries the current read/write offset, the open mode, a reference to the inode, and more.</p>
+
+<p>In Rust, <code>std::fs::File</code> is the type that wraps a file descriptor. When a <code>File</code> is dropped, it's automatically closed. Quipu-Log's <code>Segment</code> wraps that <code>File</code> inside a <code>BufWriter</code> — why is covered in <span class="pill">Ch. 5 (page cache and fsync)</span> and <span class="pill">Ch. 6 (the std::fs toolbox)</span>.</p>
+
+<div class="callout analogy"><span class="lab">Analogy</span><p>A file descriptor is like a library checkout card. Multiple people can borrow the same book (file) simultaneously, each maintaining their own bookmark position (offset) independently. The book's contents (inode → data), however, are shared.</p></div>
+
+<h2>Paths: hierarchical names</h2>
+
+<p>The way to reach a file in the OS is by its path. An absolute path (<code>/var/lib/myapp/audit/logs/seg-0000000000.log</code>) or a relative path both ultimately follow a chain of directory name→inode lookups to arrive at the inode.</p>
+
+<p>In Rust, <code>std::path::Path</code> and <code>PathBuf</code> handle paths. <code>Path</code> is a borrowed reference (like a slice), and <code>PathBuf</code> is the owned version (like a <code>String</code>). That's why the <code>root</code> field in Quipu-Log's <code>StoreConfig</code> is a <code>PathBuf</code>.</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs</span><code><span class="kw">pub struct</span> <span class="ty">StoreConfig</span> {
+<span class="hl">    <span class="kw">pub</span> root: <span class="ty">PathBuf</span>,</span>   <span class="com">// root directory path (owned)</span>
+    <span class="kw">pub</span> max_segment_bytes: <span class="ty">u64</span>,
+    <span class="kw">pub</span> sync_policy: <span class="ty">SyncPolicy</span>,
+    <span class="com">// ...</span>
+}</code></pre>
+
+<div class="callout dbfs"><span class="lab">DB ↔ Filesystem</span><p><strong>In a DB</strong>, a table name is a logical identifier — the DB engine decides which files it lives in and how. <strong>In the filesystem</strong>, you see that physical structure directly — directories, filenames, inodes. Quipu-Log's names like <code>logs/</code> and <code>registry/patient/</code> are our way of expressing DB table names directly as directory names.</p></div>
+
+<h2>The Quipu-Log store layout revisited</h2>
+
+<p>The directory structure from Ch. 1 looks different now that you know what's underneath.</p>
+
+<pre><span class="filename">Actual directory layout</span><code>root/
+  meta/                     <span class="com">← Table&lt;MetaEvent&gt; : schema definition log</span>
+    seg-0000000000.log      <span class="com">← inode: byte array, contains frames internally</span>
+    seg-0000000000.meta     <span class="com">← inode: JSON sidecar (time range, record count)</span>
+  logs/                     <span class="com">← Table&lt;AuditLog&gt;  : audit event log</span>
+    seg-0000000000.log
+    seg-0000000001.log      <span class="com">← active: currently being written</span>
+<span class="hl">  registry/patient/         <span class="com">← Table&lt;RegistryRecord&gt; : patient entity version history</span></span>
+    seg-0000000000.log
+  LOCK                      <span class="com">← lock-purpose file; doesn't need even 1 byte of content</span></code></pre>
+
+<p>Each <code>.log</code> file is one inode — a contiguous array of bytes. Quipu-Log layers a frame structure on top to read those bytes as meaningful records.</p>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① Using the inode structure, explain why renaming a file leaves its data intact.<br>② Why does Quipu-Log build a segment number list with <code>read_dir()</code> at startup? What is the equivalent operation in a DB?<br>③ Explain the difference between <code>Path</code> and <code>PathBuf</code> from a Rust perspective (use the <code>&amp;str</code> vs. <code>String</code> analogy).</p></div>
+
+</article>

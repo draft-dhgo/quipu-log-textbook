@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>18 · Store layout and format versioning — The Quipu-Log Book</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ Contents</button><b>The Quipu-Log Book</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn active" href="18-layout-versioning.html">EN</a><a class="langbtn" href="ko/18-layout-versioning.html">한국어</a></div>
+<a class="home" href="index.html">The Quipu-Log Book</a>
+<div class="sub">Storage engines and tamper-evident audit logs, built on nothing but the filesystem — explained from the ground up</div>
+<div class="part">Part 1 · Starting point: files, not a DB</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>What an audit log is, and why “files, no DB”</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>The map, and the DB↔filesystem correspondence</a>
+<div class="part">Part 2 · Filesystem basics</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>Filesystem basics: files, directories, inodes, descriptors</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>Reading &amp; writing, and the atomicity of rename</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>When data really hits disk: the page cache and fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>The std::fs toolbox: handling files in Rust</a>
+<div class="part">Part 3 · The heart of the engine: the append-only log</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>Append-only log = the WAL is the database</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>Segment files and rollover</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>Record framing: length, CRC32, magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>Serialization: turning structs into bytes</a>
+<div class="part">Part 4 · Re-creating what a DB gave you for free, on files</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>Durability: fsync policy and group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>Atomicity and crash recovery: torn writes and tail detection</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>Concurrency I: single-writer and the file lock</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>Concurrency II: read snapshots and MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>Indexing: in-memory index + on-disk tokens</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>Query execution: segment scans and cursor pagination</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>Deletion and retention: segment unlink vs DELETE</a>
+<a class="lnk active" href="18-layout-versioning.html"><span class="n">18</span>Store layout and format versioning</a>
+<div class="part">Part 5 · Integrity: making tampering evident (Security I)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>Hash functions and SHA-256: a digital fingerprint</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>The Merkle history tree: committing the log to 32 bytes</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>Inclusion proofs and consistency proofs</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>Checkpoints and external anchoring</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>Tamper-evident vs tamper-proof, and the threat model</a>
+<div class="part">Part 6 · Confidentiality: searching while keeping secrets (Security II)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>Field protection in four levels: plaintext/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>Symmetric, asymmetric, hybrid encryption and AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>Blind indexes: searching without plaintext</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>Write-only deployment: a server without the private key</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>Key management: keyring, versioning, rotation vs re-keying</a>
+<div class="part">Part 7 · The write &amp; read paths</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>The async pipeline: non-blocking emit and backpressure</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>Reliability: retries, backoff, DLQ, idempotency</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>The tower middleware: auto-recording HTTP requests</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>Permissions (RBAC), filters, and meta-audit</a>
+<div class="part">Part 8 · Distribution, operations, scaling</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>Single point of failure and availability: the client spool</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>Horizontal scaling: sharding, consistent hashing, read replicas</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>Server, client, MCP, and observability</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">Part 4 · Re-creating what a DB gave you for free, on files</span><h1><span class="chno">18</span> · Store layout and format versioning</h1></div><article>
+
+<p class="lead">"What format is this file, and what lives where?" In a DB, the system catalog (<code>pg_catalog</code>, <code>information_schema</code>) manages the location of tables, columns, and indexes. A storage engine built directly on files faces the same question. Quipu-Log's directory layout acts as the catalog, and the magic bytes plus <code>FORMAT_VERSION</code> handle format identification. The final story of this chapter is why the v1→v2 break happened.</p>
+
+<div class="callout"><span class="lab">In one sentence</span><p>The storage layout uses directory names as "table names," and the magic (<code>ALOG</code>) plus <code>FORMAT_VERSION</code> (2) in each segment header identify "what format this file is." A mismatch is rejected immediately — no mis-parsing.</p></div>
+
+<h2>What you already know: DB catalog and on-disk format version</h2>
+
+<p>Install PostgreSQL and initialize a cluster and you'll find a file called <code>PG_VERSION</code> containing the major version number ("16"). If a process from a different version tries to open that directory, it fails immediately. Individual data pages also carry a version number and magic value to confirm the page is actually in Postgres format — not a file from a different engine.</p>
+
+<p>The catalog (<code>pg_class</code>, <code>pg_attribute</code>) stores metadata about "what tables exist and what type and position each column has." You have to read the catalog before you can parse any data file.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ Filesystem</span><p><strong>DB catalog</strong>: dedicated system tables manage schemas, indexes, and file locations. <strong>Quipu-Log</strong>: the directory name itself is the "table name" — <code>logs/</code>, <code>registry/user/</code>, and so on. There is no separate catalog file; the OS filesystem directory structure is the catalog. Type schemas (what fields each entity has) are an exception — they are stored as an append-only log in the <code>meta/</code> table and replayed on restart.</p></div>
+
+<h2>Root directory layout</h2>
+
+<p>The comment in <code>AuditStore::open()</code> declares the layout.</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs</span><code><span class="com">/// root/</span>
+<span class="hl"><span class="com">///   meta/         type schemas + custom column registry (replayed on open)</span></span>
+<span class="hl"><span class="com">///   logs/         AuditLog rows</span></span>
+<span class="hl"><span class="com">///   relations/    log -> target-entity-version relations</span></span>
+<span class="hl"><span class="com">///   registry/&lt;t&gt;/ one versioned registry table per entity/actor type</span></span>
+<span class="com">///   access/       (optional) meta-audit table</span>
+<span class="com">///   checkpoints/  signed integrity checkpoints</span>
+<span class="com">///   LOCK          advisory OS lock file</span></code></pre>
+
+<p>Open one and you'll see exactly this.</p>
+
+<figure>
+<svg viewBox="0 0 720 320" role="img" aria-label="Quipu-Log storage directory layout">
+  <defs>
+    <marker id="arr18" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .t18{fill:#e6e8ee;font:600 13px -apple-system,sans-serif}
+    .s18{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .d18{fill:#161922;stroke:#2a2f3d;stroke-width:1.5;rx:6}
+    .dir18{fill:#1a2535;stroke:#7aa2ff;stroke-width:1.5;rx:4}
+    .file18{fill:#0b0d12;stroke:#2a2f3d;stroke-width:1;rx:3}
+    .lbl18a{fill:#7aa2ff;font:bold 12px monospace}
+    .lbl18b{fill:#8be9c0;font:11px monospace}
+    .lbl18c{fill:#ffd479;font:11px monospace}
+    .lbl18d{fill:#c792ea;font:11px monospace}
+    .ar18{stroke:#2a2f3d;stroke-width:1}
+  </style>
+
+  <rect x="10" y="10" width="700" height="295" class="d18"/>
+
+  <!-- root -->
+  <text x="20" y="36" class="lbl18a">root/</text>
+
+  <!-- LOCK -->
+  <line x1="30" y1="50" x2="30" y2="60" class="ar18"/>
+  <rect x="42" y="52" width="80" height="16" class="file18"/>
+  <text x="46" y="64" class="s18" fill="#ff8b8b">LOCK</text>
+  <text x="130" y="64" class="s18">advisory file lock (single-writer guarantee)</text>
+
+  <!-- meta/ -->
+  <line x1="30" y1="68" x2="30" y2="80" class="ar18"/>
+  <rect x="42" y="72" width="50" height="16" class="dir18"/>
+  <text x="46" y="84" class="lbl18a">meta/</text>
+  <text x="100" y="84" class="s18">type schemas + custom column definitions (replayed on open)</text>
+  <rect x="110" y="90" width="120" height="14" class="file18"/>
+  <text x="114" y="101" class="lbl18b">seg-0000000000.log</text>
+  <rect x="234" y="90" width="120" height="14" class="file18"/>
+  <text x="238" y="101" class="lbl18b">merkle.spine</text>
+
+  <!-- logs/ -->
+  <line x1="30" y1="106" x2="30" y2="118" class="ar18"/>
+  <rect x="42" y="110" width="46" height="16" class="dir18"/>
+  <text x="46" y="122" class="lbl18a">logs/</text>
+  <text x="96" y="122" class="s18">AuditLog rows — the body of the log, subject to retention</text>
+  <rect x="110" y="128" width="120" height="14" class="file18"/>
+  <text x="114" y="139" class="lbl18b">seg-0000000000.log</text>
+  <rect x="234" y="128" width="120" height="14" class="file18"/>
+  <text x="238" y="139" class="lbl18c">seg-0000000000.meta</text>
+  <rect x="358" y="128" width="120" height="14" class="file18"/>
+  <text x="362" y="139" class="lbl18b">seg-0000000001.log</text>
+  <text x="484" y="139" class="s18">...</text>
+  <rect x="502" y="128" width="80" height="14" class="file18"/>
+  <text x="506" y="139" class="lbl18b">merkle.spine</text>
+
+  <!-- relations/ -->
+  <line x1="30" y1="145" x2="30" y2="158" class="ar18"/>
+  <rect x="42" y="150" width="80" height="16" class="dir18"/>
+  <text x="46" y="162" class="lbl18a">relations/</text>
+  <text x="130" y="162" class="s18">log_id → target entity version uid mappings</text>
+
+  <!-- registry/ -->
+  <line x1="30" y1="168" x2="30" y2="180" class="ar18"/>
+  <rect x="42" y="172" width="72" height="16" class="dir18"/>
+  <text x="46" y="184" class="lbl18a">registry/</text>
+  <text x="122" y="184" class="s18">subdirectory per entity type (not subject to retention)</text>
+  <rect x="110" y="190" width="60" height="16" class="dir18"/>
+  <text x="114" y="202" class="lbl18d">user/</text>
+  <rect x="174" y="190" width="60" height="16" class="dir18"/>
+  <text x="178" y="202" class="lbl18d">document/</text>
+  <text x="238" y="202" class="s18">independent append-only log per type</text>
+
+  <!-- access/, checkpoints/ -->
+  <line x1="30" y1="208" x2="30" y2="220" class="ar18"/>
+  <rect x="42" y="212" width="64" height="16" class="dir18"/>
+  <text x="46" y="224" class="lbl18a">access/</text>
+  <text x="114" y="224" class="s18">(opt-in) meta-audit — who queried when</text>
+
+  <line x1="30" y1="228" x2="30" y2="240" class="ar18"/>
+  <rect x="42" y="232" width="98" height="16" class="dir18"/>
+  <text x="46" y="244" class="lbl18a">checkpoints/</text>
+  <text x="148" y="244" class="s18">list of signed integrity checkpoints</text>
+
+  <!-- legend -->
+  <rect x="10" y="264" width="700" height="36" rx="4" fill="#111418"/>
+  <rect x="20" y="272" width="12" height="12" rx="2" fill="#7aa2ff" opacity="0.5"/>
+  <text x="36" y="282" class="s18" fill="#7aa2ff">directory</text>
+  <rect x="110" y="272" width="12" height="12" rx="2" fill="#8be9c0" opacity="0.4"/>
+  <text x="126" y="282" class="s18" fill="#8be9c0">.log segment</text>
+  <rect x="230" y="272" width="12" height="12" rx="2" fill="#ffd479" opacity="0.4"/>
+  <text x="246" y="282" class="s18" fill="#ffd479">.meta sidecar (hint; recoverable if missing)</text>
+  <rect x="460" y="272" width="12" height="12" rx="2" fill="#c792ea" opacity="0.4"/>
+  <text x="476" y="282" class="s18" fill="#c792ea">per-type subdirectory</text>
+</svg>
+<figcaption>The root directory layout. Directory names are "table names." meta/, logs/, and relations/ are the three core tables; registry/&lt;type&gt;/ is the per-type registry.</figcaption>
+</figure>
+
+<p>A key property of this layout is that it is <strong>self-describing</strong>. Open a directory, run <code>ls registry/</code>, and you immediately know what entity types are registered. Replay <code>meta/</code> and you have the schema for each type. No separate catalog file needed — the directory structure itself is the catalog.</p>
+
+<h2>magic + FORMAT_VERSION: file identification</h2>
+
+<p>Every segment file begins with a 14-byte header.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs</span><code><span class="com">/// Segment file header: magic + format version + base index.</span>
+<span class="hl"><span class="kw">pub const</span> MAGIC: [<span class="ty">u8</span>; 4] = *<span class="str">b"ALOG"</span>;     // magic — "this file is a Quipu-Log segment"</span>
+<span class="hl"><span class="kw">pub const</span> FORMAT_VERSION: <span class="ty">u8</span> = 2;         // current format version</span>
+<span class="kw">pub const</span> SEGMENT_HEADER: <span class="ty">usize</span> = MAGIC.len() + 1 + 8;
+<span class="dim">//                                     ^4      ^1  ^8(base_index)  = 13 bytes</span></code></pre>
+
+<p>When parsing the header, if the magic is not "ALOG" or the <code>FORMAT_VERSION</code> is not 2, an error is returned immediately. That is the mechanism that guarantees "no mis-parsing — rejected at once."</p>
+
+<div class="callout analogy"><span class="lab">Analogy</span><p>Imagine a letter envelope stamped with "Domestic Mail" and the expected postcode format. Before opening the envelope, the postal worker checks "is this domestic or international?" and returns it to sender if the format doesn't match. Magic and version play exactly that role — "can this file be opened?" is checked before reading the contents.</p></div>
+
+<h2>base_index: the absolute coordinate baked into the segment header</h2>
+
+<p>The <code>base_index</code> (8 bytes) in the header is the position of this segment's first record in the overall Merkle tree — which leaf number it corresponds to. The critical point is that this value is written once when the segment is created and never changes afterward.</p>
+
+<p>Why bake it into the header? When retention deletes leading segments, you'd otherwise have to track "what overall position this segment's records start at" with a separate counter. Persisting that counter in a separate file means a crash between "counter update" and "segment deletion" leaves an inconsistency. If the absolute index is in the segment header itself, every segment always knows "my records start at spine leaf base_index + offset" — no matter which preceding segments have been deleted, the spine index for surviving records is always accurate as <code>base_index + offset</code>.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — explanatory comment</span><code><span class="com">// `base_index` is the spine leaf index of this segment's first record —</span>
+<span class="com">// the count of all records appended to the table before this segment opened.</span>
+<span class="hl">// Storing it per-segment (not as a mutable counter) is what makes the mapping</span>
+<span class="hl">// crash-safe across a partial purge.</span></code></pre>
+
+<h2>Format evolution: v0 → v1 → v2 break</h2>
+
+<p>Quipu-Log's segment format has gone through three versions.</p>
+
+<table>
+  <tr><th>Version</th><th>Header layout</th><th>Change</th><th>Compatibility</th></tr>
+  <tr><td>v0</td><td>magic 4 + ver 1 + seed 8</td><td>initial format</td><td>—</td></tr>
+  <tr><td>v1</td><td>magic 4 + ver 1 + seed 8</td><td>added 32-byte chain-hash per frame</td><td>incompatible with v0</td></tr>
+  <tr><td><strong>v2</strong></td><td>magic 4 + ver 1 + <strong>base_index 8</strong></td><td>removed chain-hash, moved tamper-evidence to Merkle spine; seed slot replaced by base_index</td><td><strong>incompatible with v1</strong></td></tr>
+</table>
+
+<p>In v1, each frame carried a 32-byte "chain hash" incorporating the previous record's hash. Intuitively tamper-evident — but it had a problem: when retention deleted leading records, the chain broke and verification became impossible. Tamper-evidence that must survive retention requires a separate structure.</p>
+
+<p>v2 drops per-frame chain-hashes entirely and instead accumulates leaf hashes in a <strong>separate Merkle spine file</strong> (<code>merkle.spine</code>) that retention never touches. The segment file is responsible only for "fast sequential reads + CRC accidental-corruption detection"; integrity is the spine's job. This separation means "even if a segment is deleted, the root hash and inclusion proofs remain valid."</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — explanatory comment</span><code><span class="com">// Format v2 dropped the per-record hash chain entirely</span>
+<span class="com">// (no header seed, no per-frame chain hash).</span>
+<span class="hl">// Tamper-evidence now lives in the retention-independent Merkle spine;</span>
+<span class="hl">// a segment carries only payloads plus a CRC for accidental-corruption detection.</span></code></pre>
+
+<div class="callout warn"><span class="lab">Caution</span><p>Opening a v1 store with a v2 binary is rejected immediately — there is no migration tool, so a re-export is required. This is intentional. At the pre-1.0 stage, while real-world data is limited, accepting a format break costs little. Once broader adoption happens, a migration path will be provided.</p></div>
+
+<h2>Sidecars: adding metadata without a format break</h2>
+
+<p>There is a way to add metadata without touching the segment header — a <strong>sidecar file</strong>. <code>seg-0000000000.meta</code> holds the min/max timestamps, record count, and base_index for its segment.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/table.rs</span><code><span class="kw">struct</span> <span class="ty">SegmentMeta</span> {
+<span class="hl">    min_timestamp: <span class="ty">u64</span>,   <span class="com">// minimum timestamp of records in the segment</span></span>
+<span class="hl">    max_timestamp: <span class="ty">u64</span>,   <span class="com">// maximum timestamp (used for retention + pruning)</span></span>
+    records:       <span class="ty">u64</span>,
+    base_index:    <span class="ty">u64</span>,
+}</code></pre>
+
+<p>The essential property of a sidecar is that it is <strong>hint-only</strong>. If it is missing or corrupted, the segment can be rebuilt by skimming it from the start. Merkle verification never consults the sidecar, so even if a sidecar is tampered with, the integrity evidence is unaffected. This is what made it possible to add new metadata without bumping <code>FORMAT_VERSION</code> and breaking existing segments.</p>
+
+<div class="callout why"><span class="lab">Why this design?</span><p>Extending the header requires bumping <code>FORMAT_VERSION</code>, which breaks compatibility with existing segments. A sidecar is "optional" — the code never assumes it is present. The principle: information that can be recomputed (like min/max timestamps) goes in the sidecar; information that cannot be recomputed (like base_index) goes in the header. This rule is how new features can be added without format breaks.</p></div>
+
+<h2>Recap</h2>
+
+<ul>
+  <li>Quipu-Log's <strong>directory layout</strong> acts as the DB catalog. <code>meta/</code>: schema event log, <code>logs/</code>: log rows, <code>registry/&lt;type&gt;/</code>: registries, <code>relations/</code>: log-entity mappings.</li>
+  <li>The <strong>magic (<code>ALOG</code>) + FORMAT_VERSION (2)</strong> in each segment header handles file identification. A mismatch is rejected immediately.</li>
+  <li><strong>base_index</strong> is an absolute coordinate written once in the header at creation time — even after leading segments are deleted by retention, surviving records' spine indexes are always accurate.</li>
+  <li>v1 → v2 break: per-frame chain-hash removed; tamper-evidence responsibility transferred to the retention-safe, separate <code>merkle.spine</code>.</li>
+  <li><strong>Sidecars (.meta)</strong> are a pattern for adding recomputable metadata without bumping the format version — hint-only, so loss or tampering has no effect on integrity.</li>
+</ul>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① What do the DB catalog (pg_class, etc.) and Quipu-Log's layout have in common? In Quipu-Log, how do you find out what tables exist?<br>② Explain why <code>base_index</code> belongs in the segment header, by describing the problem with a "separate counter file" approach.<br>③ Explain why the v1→v2 format break was necessary from the perspective of "retention + integrity proof." What was the specific limitation of per-frame chain-hashes?</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="17-retention-delete.html"><span class="dir">← Prev</span><span class="t">17 · Deletion and retention: segment unlink vs DELETE</span></a><a class="next" href="19-hash-sha256.html"><span class="dir">Next →</span><span class="t">19 · Hash functions and SHA-256: a digital fingerprint</span></a></div>
+</div>
+</main>
+</div>
+<script src="assets/textbook.js"></script>
+</body>
+</html>

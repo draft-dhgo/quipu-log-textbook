@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>28 · Key management: keyring, versioning, rotation vs re-keying — The Quipu-Log Book</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ Contents</button><b>The Quipu-Log Book</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn active" href="28-key-management.html">EN</a><a class="langbtn" href="ko/28-key-management.html">한국어</a></div>
+<a class="home" href="index.html">The Quipu-Log Book</a>
+<div class="sub">Storage engines and tamper-evident audit logs, built on nothing but the filesystem — explained from the ground up</div>
+<div class="part">Part 1 · Starting point: files, not a DB</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>What an audit log is, and why “files, no DB”</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>The map, and the DB↔filesystem correspondence</a>
+<div class="part">Part 2 · Filesystem basics</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>Filesystem basics: files, directories, inodes, descriptors</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>Reading &amp; writing, and the atomicity of rename</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>When data really hits disk: the page cache and fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>The std::fs toolbox: handling files in Rust</a>
+<div class="part">Part 3 · The heart of the engine: the append-only log</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>Append-only log = the WAL is the database</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>Segment files and rollover</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>Record framing: length, CRC32, magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>Serialization: turning structs into bytes</a>
+<div class="part">Part 4 · Re-creating what a DB gave you for free, on files</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>Durability: fsync policy and group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>Atomicity and crash recovery: torn writes and tail detection</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>Concurrency I: single-writer and the file lock</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>Concurrency II: read snapshots and MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>Indexing: in-memory index + on-disk tokens</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>Query execution: segment scans and cursor pagination</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>Deletion and retention: segment unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>Store layout and format versioning</a>
+<div class="part">Part 5 · Integrity: making tampering evident (Security I)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>Hash functions and SHA-256: a digital fingerprint</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>The Merkle history tree: committing the log to 32 bytes</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>Inclusion proofs and consistency proofs</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>Checkpoints and external anchoring</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>Tamper-evident vs tamper-proof, and the threat model</a>
+<div class="part">Part 6 · Confidentiality: searching while keeping secrets (Security II)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>Field protection in four levels: plaintext/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>Symmetric, asymmetric, hybrid encryption and AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>Blind indexes: searching without plaintext</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>Write-only deployment: a server without the private key</a>
+<a class="lnk active" href="28-key-management.html"><span class="n">28</span>Key management: keyring, versioning, rotation vs re-keying</a>
+<div class="part">Part 7 · The write &amp; read paths</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>The async pipeline: non-blocking emit and backpressure</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>Reliability: retries, backoff, DLQ, idempotency</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>The tower middleware: auto-recording HTTP requests</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>Permissions (RBAC), filters, and meta-audit</a>
+<div class="part">Part 8 · Distribution, operations, scaling</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>Single point of failure and availability: the client spool</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>Horizontal scaling: sharding, consistent hashing, read replicas</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>Server, client, MCP, and observability</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">Part 6 · Confidentiality: searching while keeping secrets (Security II)</span><h1><span class="chno">28</span> · Key management: keyring, versioning, rotation vs re-keying</h1></div><article>
+
+<p class="lead">The moment you introduce encryption, a new responsibility appears: key management. Losing a key in an audit log is nothing like forgetting a database password. <strong>Lose the key and every past record protected by it becomes permanently unreadable.</strong> No escrow, no backdoor, no recovery path. This chapter covers the keyring versioning system and the two operational paths — key rotation and re-key.</p>
+
+<div class="callout"><span class="lab">In one sentence</span><p>Key rotation (adding a new key) is cheap and routine. Re-key (re-encrypting old → new after a leak) happens exactly once after a compromise — it's expensive and heavy. Don't confuse the two.</p></div>
+
+<h2>KeyRing: versioned key management</h2>
+
+<p><code>KeyRing</code> tracks RSA key pairs and HMAC keys by version number. The version is a <code>u32</code>, with 0 reserved as a "no key" sentinel — so real key versions start at 1.</p>
+
+<pre><span class="filename">crates/quipu-core/src/crypto.rs — KeyVersion, KEYLESS</span><code><span class="kw">pub type</span> <span class="ty">KeyVersion</span> = <span class="ty">u32</span>;
+<span class="hl"><span class="kw">pub const</span> <span class="ty">KEYLESS</span>: <span class="ty">KeyVersion</span> = 0; <span class="com">// sentinel for SHA-256-protected field digests</span></span>
+
+<span class="kw">pub struct</span> <span class="ty">KeyRing</span> {
+    rsa: <span class="ty">BTreeMap</span>&lt;<span class="ty">KeyVersion</span>, <span class="ty">RsaPair</span>&gt;,  <span class="com">// BTreeMap: versions in ascending order</span>
+    macs: <span class="ty">BTreeMap</span>&lt;<span class="ty">KeyVersion</span>, <span class="ty">Vec</span>&lt;u8&gt;&gt;,
+}
+<span class="com">// active key = highest version: BTreeMap::keys().next_back()</span></code></pre>
+
+<p>Every new record is written with the <strong>highest version (the active key)</strong>. Each stored record carries a <code>key_version</code> field that records which key was used to protect it. Reads look up that specific version from the keyring.</p>
+
+<figure>
+<svg viewBox="0 0 760 220" role="img" aria-label="Key version rotation timeline">
+  <defs>
+    <marker id="arr28" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .t28{fill:#e6e8ee;font:600 12px -apple-system,sans-serif}
+    .s28{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .bx28{rx:6;stroke-width:1.5}
+    .ln28{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#arr28)}
+  </style>
+
+  <!-- Timeline axis -->
+  <line x1="40" y1="100" x2="720" y2="100" class="ln28"/>
+  <text x="730" y="104" class="s28">time</text>
+
+  <!-- Version 1 era -->
+  <rect x="40" y="60" width="200" height="30" class="bx28" fill="#16241d" stroke="#8be9c0"/>
+  <text x="140" y="80" class="t28" text-anchor="middle" fill="#8be9c0">key v1 active (write + read)</text>
+
+  <!-- Rotation point -->
+  <line x1="240" y1="40" x2="240" y2="130" stroke="#ffd479" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="243" y="38" class="s28" fill="#ffd479">rotation</text>
+  <text x="243" y="52" class="s28" fill="#ffd479">(v2 added)</text>
+
+  <!-- Version 1 read-only -->
+  <rect x="240" y="60" width="230" height="30" class="bx28" fill="#161922" stroke="#2a2f3d"/>
+  <text x="355" y="80" class="t28" text-anchor="middle" fill="#9aa3b2">key v1 → read-only</text>
+
+  <!-- Version 2 active -->
+  <rect x="240" y="30" width="230" height="22" class="bx28" fill="#16241d" stroke="#8be9c0"/>
+  <text x="355" y="46" class="t28" text-anchor="middle" fill="#8be9c0">key v2 active (write + read)</text>
+
+  <!-- Second rotation -->
+  <line x1="470" y1="20" x2="470" y2="130" stroke="#ffd479" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="473" y="18" class="s28" fill="#ffd479">rotation</text>
+  <text x="473" y="32" class="s28" fill="#ffd479">(v3 added)</text>
+
+  <!-- v1, v2 read-only, v3 active -->
+  <rect x="470" y="60" width="240" height="30" class="bx28" fill="#161922" stroke="#2a2f3d"/>
+  <text x="590" y="80" class="t28" text-anchor="middle" fill="#9aa3b2">v1, v2 → read-only</text>
+
+  <rect x="470" y="20" width="240" height="22" class="bx28" fill="#16241d" stroke="#8be9c0"/>
+  <text x="590" y="36" class="t28" text-anchor="middle" fill="#8be9c0">key v3 active (write + read)</text>
+
+  <!-- Records on timeline -->
+  <rect x="60" y="110" width="80" height="35" class="bx28" fill="#0b0d12" stroke="#7aa2ff"/>
+  <text x="100" y="125" class="s28" text-anchor="middle" fill="#7aa2ff">record A</text>
+  <text x="100" y="140" class="s28" text-anchor="middle">key_v = 1</text>
+
+  <rect x="280" y="110" width="80" height="35" class="bx28" fill="#0b0d12" stroke="#7aa2ff"/>
+  <text x="320" y="125" class="s28" text-anchor="middle" fill="#7aa2ff">record B</text>
+  <text x="320" y="140" class="s28" text-anchor="middle">key_v = 2</text>
+
+  <rect x="520" y="110" width="80" height="35" class="bx28" fill="#0b0d12" stroke="#7aa2ff"/>
+  <text x="560" y="125" class="s28" text-anchor="middle" fill="#7aa2ff">record C</text>
+  <text x="560" y="140" class="s28" text-anchor="middle">key_v = 3</text>
+
+  <!-- Note -->
+  <text x="40" y="185" class="s28">* Reading record A (key_v=1): pull v1 key from KeyRing and decrypt. Old records remain readable after rotation.</text>
+  <text x="40" y="200" class="s28">* Rotation = add a new version only. Old keys are not deleted. All older records stay accessible without re-key.</text>
+</svg>
+<figcaption>Key rotation adds a new version. Older versions are kept for reads. Because each record stores key_version, the keyring always knows which key to use.</figcaption>
+</figure>
+
+<h2>Rotation — cheap and routine</h2>
+
+<p>Regular key cycling (rotation) is basic security hygiene. In Quipu-Log, rotation is straightforward: <strong>add a new key version to the KeyRing.</strong> Existing records don't need to be touched.</p>
+
+<pre><span class="filename">quipu-server config.json — switching to a versioned key list</span><code><span class="str">"keys"</span>: {
+    <span class="str">"hmac_keys"</span>: [
+        { <span class="str">"version"</span>: 1, <span class="str">"file"</span>: <span class="str">"/etc/quipu/hmac-v1.key"</span> },
+        <span class="hl">{ <span class="str">"version"</span>: 2, <span class="str">"file"</span>: <span class="str">"/etc/quipu/hmac-v2.key"</span> }</span>  <span class="com">// new active key</span>
+    ],
+    <span class="str">"rsa_keys"</span>: [
+        { <span class="str">"version"</span>: 1, <span class="str">"public_key_pem_file"</span>: <span class="str">"/etc/quipu/rsa-v1-pub.pem"</span> },
+        <span class="hl">{ <span class="str">"version"</span>: 2, <span class="str">"public_key_pem_file"</span>: <span class="str">"/etc/quipu/rsa-v2-pub.pem"</span> }</span>
+    ]
+}</code></pre>
+
+<p>After a server restart, v2 becomes the active key. New records are encrypted with v2. Old records made with v1 are still readable because v1 remains in the keyring. Simple.</p>
+
+<div class="callout why"><span class="lab">Why this design?</span><p>This is exactly why records carry a <code>key_version</code> field. The record itself tells you "this is which key was used when I was created," so the keyring can automatically select the right key even when multiple versions are loaded. Without versioning, there'd be no way to answer "which key made this?" and rotation would be impossible.</p></div>
+
+<h2>Re-key — the emergency response after a leak</h2>
+
+<p>Unlike routine rotation, re-key is the response to a key <em>compromise</em>. A leaked RSA private key can decrypt every ciphertext currently stored. Stopping that requires <em>re-encrypting stored records with a new key</em>.</p>
+
+<table>
+  <tr><th></th><th>Rotation</th><th>Re-key</th></tr>
+  <tr><td>When</td><td>regularly (quarterly, annually, etc.)</td><td>after a key compromise</td></tr>
+  <tr><td>What it does</td><td>adds a new key version</td><td>re-encrypts the entire registry</td></tr>
+  <tr><td>Cost</td><td>cheap (config change only)</td><td>expensive (read + write every record)</td></tr>
+  <tr><td>Downtime</td><td>none (restart only)</td><td>yes (offline, standalone run)</td></tr>
+  <tr><td>Result</td><td>only new records use the new key</td><td>all records use the new key</td></tr>
+</table>
+
+<p>The re-key pass is run with <code>quipu-server rekey config.json</code> (or the embedded <code>AuditStore::rekey()</code>). It is offline-only — the server must be down (the store lock prevents concurrent execution).</p>
+
+<h2>How RSA re-key actually works — rewrap</h2>
+
+<p>Re-keying an RSA field does not mean re-encrypting all the data from scratch. The AES ciphertext and nonce stay exactly as they are; only <strong>the RSA wrapping around the DEK (the AES key) is replaced</strong>. That's what <code>KeyRing::rewrap()</code> does.</p>
+
+<pre><span class="filename">crates/quipu-core/src/crypto.rs — KeyRing::rewrap</span><code><span class="kw">pub fn</span> <span class="fn">rewrap</span>(&amp;self, stored: &amp;<span class="ty">StoredValue</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">StoredValue</span>&gt; {
+    <span class="com">// 1. Decrypt the DEK using the old version's private key (unwrap)</span>
+    <span class="kw">let</span> dek = old.decrypt(<span class="ty">Oaep</span>::new::&lt;<span class="ty">Sha256</span>&gt;(), &amp;b64::decode(wrapped_key))?;
+    <span class="com">// 2. Re-encrypt the DEK with the active version's public key (re-wrap)</span>
+    <span class="kw">let</span> wrapped = self.rsa_public_of(active)?.encrypt(&amp;<span class="kw">mut</span> rand::thread_rng(),
+        <span class="ty">Oaep</span>::new::&lt;<span class="ty">Sha256</span>&gt;(), &amp;dek)?;
+    <span class="hl">// nonce and ciphertext are untouched — the DEK itself is unchanged, payload integrity preserved</span>
+    <span class="ty">Ok</span>(<span class="ty">StoredValue</span>::Rsa { key_version: active, wrapped_key: b64::encode(&amp;wrapped),
+        nonce: nonce.clone(), ciphertext: ciphertext.clone() })
+}</code></pre>
+
+<p>Because the AES ciphertext is never touched, <em>a power loss mid-re-key cannot corrupt the payload.</em> Only the re-wrapping of the DEK fails; any record that was already re-wrapped is immediately readable with the new key.</p>
+
+<h2>The integrity problem with re-key — RekeyEvent</h2>
+
+<p>Re-key rewrites the entire registry table. From the Merkle tree's perspective, that is indistinguishable from tampering — the whole tree changes. The mechanism that separates "legitimate rewrite" from "unauthorized tampering" is <code>RekeyEvent</code>.</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs — RekeyEvent</span><code><span class="kw">pub struct</span> <span class="ty">RekeyEvent</span> {
+    pub occurred_at: <span class="ty">u64</span>,
+    pub rsa_version: <span class="ty">KeyVersion</span>,
+    pub hmac_version: <span class="ty">KeyVersion</span>,
+    pub tables: <span class="ty">Vec</span>&lt;<span class="ty">RekeyedTable</span>&gt;,    <span class="com">// per-table old_root → new_root transition</span>
+    pub signing_key_version: <span class="ty">KeyVersion</span>,
+    <span class="hl">pub signature: <span class="ty">Vec</span>&lt;u8&gt;,           // RSA signature: proves the rewrite was audited</span>
+}</code></pre>
+
+<p>When the re-key pass finishes, this event is written to the meta table. <code>verify_integrity()</code> validates the signature and checks that each registry's current tree root is consistent with the signed new_root (a consistency proof). "Audited rewrite" and "silent tampering" are distinguishable.</p>
+
+<h2>HMAC fields cannot be re-keyed</h2>
+
+<p>There's one important constraint. Fields protected with HMAC or SHA-256 <strong>cannot be re-keyed.</strong> They are one-way — there is no path from a digest back to the original plaintext, and without the plaintext, a new digest under the new key cannot be computed.</p>
+
+<div class="callout warn"><span class="lab">Caution</span><p>If an HMAC key is leaked, every digest recorded before the leak is permanently exposed. An attacker who holds the key and the digests can mount a dictionary attack. HMAC keys must be guarded extremely carefully, and regular rotation is the only way to limit the damage window after a potential compromise. There is no safety net of "we can fix it if it leaks."</p></div>
+
+<h2>Key loss = permanent data loss</h2>
+
+<p>Quipu-Log has no key escrow, no master key, no recovery backdoor. This is a deliberate design choice — backdoors were eliminated to defend against a wider threat model that includes insider threats. The price is that <strong>losing an RSA private key means every record protected by that key is permanently undecryptable.</strong></p>
+
+<div class="callout key"><span class="lab">Security note</span><p><strong>Do not back up keys in the same location as the store.</strong> If an attacker seizes a store backup and finds a key backup in the same place, the encryption protection collapses completely. Back up keys on a separate, independent path from the store, and consider using an HSM (hardware security module) or KMS.</p></div>
+
+<h2>Signing key isolation</h2>
+
+<p>The RSA private key used for checkpoint signing should be kept separate from the key used for data encryption. If the signing key sits on the data node (the server running the store), an insider with disk access can use the signing key to forge checkpoints. Moving the signing key to a separate host or HSM closes that attack path.</p>
+
+<h2>Recap</h2>
+<ul>
+  <li><strong>KeyRing</strong>: manages RSA + HMAC keys by version number (u32). Highest version = active key, lower versions = for reading older records.</li>
+  <li><strong>Rotation</strong> (routine): add a new key version only. Existing records untouched. Cheap and zero-downtime.</li>
+  <li><strong>Re-key</strong> (after a compromise): re-wrap the DEK to re-protect RSA fields. Offline, expensive. Audited via RekeyEvent.</li>
+  <li><strong>HMAC fields cannot be re-keyed</strong> — one-way functions mean no path back to plaintext. A leaked HMAC key permanently exposes existing digests.</li>
+  <li><strong>Key loss = unrecoverable</strong> — no escrow. Key backups must be kept separate from the store.</li>
+</ul>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① Explain the difference between key rotation and re-key across three dimensions: when, what it does, and cost.<br>② Explain the mathematical reason why HMAC-protected fields cannot be re-keyed.<br>③ Why is it dangerous to store the RSA private key backup in the same location as the store backup?</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="27-write-only-deploy.html"><span class="dir">← Prev</span><span class="t">27 · Write-only deployment: a server without the private key</span></a><a class="next" href="29-async-pipeline.html"><span class="dir">Next →</span><span class="t">29 · The async pipeline: non-blocking emit and backpressure</span></a></div>
+</div>
+</main>
+</div>
+<script src="assets/textbook.js"></script>
+</body>
+</html>

@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>04 · Reading &amp; writing, and the atomicity of rename — The Quipu-Log Book</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ Contents</button><b>The Quipu-Log Book</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn active" href="04-read-write-rename.html">EN</a><a class="langbtn" href="ko/04-read-write-rename.html">한국어</a></div>
+<a class="home" href="index.html">The Quipu-Log Book</a>
+<div class="sub">Storage engines and tamper-evident audit logs, built on nothing but the filesystem — explained from the ground up</div>
+<div class="part">Part 1 · Starting point: files, not a DB</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>What an audit log is, and why “files, no DB”</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>The map, and the DB↔filesystem correspondence</a>
+<div class="part">Part 2 · Filesystem basics</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>Filesystem basics: files, directories, inodes, descriptors</a>
+<a class="lnk active" href="04-read-write-rename.html"><span class="n">04</span>Reading &amp; writing, and the atomicity of rename</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>When data really hits disk: the page cache and fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>The std::fs toolbox: handling files in Rust</a>
+<div class="part">Part 3 · The heart of the engine: the append-only log</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>Append-only log = the WAL is the database</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>Segment files and rollover</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>Record framing: length, CRC32, magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>Serialization: turning structs into bytes</a>
+<div class="part">Part 4 · Re-creating what a DB gave you for free, on files</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>Durability: fsync policy and group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>Atomicity and crash recovery: torn writes and tail detection</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>Concurrency I: single-writer and the file lock</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>Concurrency II: read snapshots and MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>Indexing: in-memory index + on-disk tokens</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>Query execution: segment scans and cursor pagination</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>Deletion and retention: segment unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>Store layout and format versioning</a>
+<div class="part">Part 5 · Integrity: making tampering evident (Security I)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>Hash functions and SHA-256: a digital fingerprint</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>The Merkle history tree: committing the log to 32 bytes</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>Inclusion proofs and consistency proofs</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>Checkpoints and external anchoring</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>Tamper-evident vs tamper-proof, and the threat model</a>
+<div class="part">Part 6 · Confidentiality: searching while keeping secrets (Security II)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>Field protection in four levels: plaintext/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>Symmetric, asymmetric, hybrid encryption and AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>Blind indexes: searching without plaintext</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>Write-only deployment: a server without the private key</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>Key management: keyring, versioning, rotation vs re-keying</a>
+<div class="part">Part 7 · The write &amp; read paths</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>The async pipeline: non-blocking emit and backpressure</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>Reliability: retries, backoff, DLQ, idempotency</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>The tower middleware: auto-recording HTTP requests</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>Permissions (RBAC), filters, and meta-audit</a>
+<div class="part">Part 8 · Distribution, operations, scaling</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>Single point of failure and availability: the client spool</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>Horizontal scaling: sharding, consistent hashing, read replicas</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>Server, client, MCP, and observability</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">Part 2 · Filesystem basics</span><h1><span class="chno">04</span> · Reading &amp; writing, and the atomicity of rename</h1></div><article>
+
+<p class="lead">Reading and writing files seems simple enough — "write some bytes, done," right? But "updating a file without corrupting it" is trickier than it looks. This chapter covers how Quipu-Log opens segments (OpenOptions) and the atomicity of <code>rename(2)</code> — the trick it uses for safe file replacement. What a DB engine handled for you, here you handle yourself.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ Filesystem</span><p><strong>A DB's atomic commit</strong> means "the transaction either commits, or it's as if nothing happened at all" — one of those two, never something in between. <strong>In Quipu-Log</strong>, when file-level atomicity is needed, we use <code>rename(2)</code>: write the new file in full under a temporary name, then swap it in with a single rename. "Only visible once it's completely finished" — that's the atomicity.</p></div>
+
+<h2>Opening files: the options in OpenOptions</h2>
+
+<p>In Rust, you specify <em>how</em> to open a file with <code>std::fs::OpenOptions</code>. Looking at the code that opens a Quipu-Log segment makes each option's purpose clear.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — Segment::open()</span><code><span class="kw">let</span> file = <span class="ty">OpenOptions</span>::new()
+<span class="hl">    .create(<span class="kw">true</span>)         <span class="com">// create it if it doesn't exist</span></span>
+<span class="hl">    .truncate(<span class="kw">false</span>)     <span class="com">// don't clear it if it does — preserve existing content!</span></span>
+    .read(<span class="kw">true</span>)          <span class="com">// readable too (needed during recovery)</span>
+    .write(<span class="kw">true</span>)         <span class="com">// writable</span>
+    .open(path)?;</code></pre>
+
+<p><code>truncate(false)</code> is the critical one. Opening with <code>truncate(true)</code> wipes the file's contents the moment it's opened. If this option were wrong when restarting a segment, every audit record accumulated so far would be gone. In an append-only store, <em>never</em> use <code>truncate(true)</code>.</p>
+
+<table>
+  <tr><th>OpenOptions flag</th><th>Meaning</th><th>In Quipu-Log</th></tr>
+  <tr><td><code>create(true)</code></td><td>Create the file if it doesn't exist</td><td>Used when creating the first segment</td></tr>
+  <tr><td><code>truncate(false)</code></td><td>Preserve the contents of an existing file</td><td>Mandatory — preserves existing log</td></tr>
+  <tr><td><code>truncate(true)</code></td><td>Wipe the file on open</td><td>Never use this</td></tr>
+  <tr><td><code>append(true)</code></td><td>Every write goes to the end</td><td>Used in test code</td></tr>
+  <tr><td><code>read(true)</code></td><td>Allow reading</td><td>skim (recovery) and snapshot reads</td></tr>
+  <tr><td><code>write(true)</code></td><td>Allow writing</td><td>append + set_len (recovery)</td></tr>
+</table>
+
+<h2>seek: reading and writing from anywhere in the file</h2>
+
+<p>A file descriptor remembers its "current position." <code>seek()</code> lets you change it. When Quipu-Log opens an existing segment, it seeks to the last known-valid position and starts appending from there.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — resuming an existing file</span><code><span class="kw">let mut</span> writer = <span class="ty">BufWriter</span>::with_capacity(<span class="num">256</span> * <span class="num">1024</span>, file);
+<span class="hl">writer.seek(<span class="ty">SeekFrom</span>::Start(s.valid_len))?;   <span class="com">// move to the last valid position</span></span>
+<span class="com">// subsequent appends start from here</span></code></pre>
+
+<p><code>SeekFrom::Start(n)</code> is n bytes from the start of the file. <code>SeekFrom::End(0)</code> is the end of the file. <code>SeekFrom::Current(n)</code> is ±n from the current position. Quipu-Log always uses <code>Start(valid_len)</code> — after a crash, the tail may be corrupt, so the valid end and the file size can differ.</p>
+
+<h2>Torn writes and tail truncation</h2>
+
+<p>What happens if the power dies mid-append? The last record is left half-written in the file. This is called a <strong>torn write</strong>.</p>
+
+<p>At startup, Quipu-Log scans the segment with <code>skim()</code> to find any frame with a broken CRC. Once it determines the last valid position (<code>valid_len</code>), it trims the file back to that point:</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — tail truncation</span><code><span class="kw">if</span> file.metadata()?.len() &gt; s.valid_len {
+<span class="hl">    file.set_len(s.valid_len)?;   <span class="com">// trim the broken tail</span></span>
+}
+<span class="kw">let mut</span> writer = <span class="ty">BufWriter</span>::with_capacity(<span class="num">256</span> * <span class="num">1024</span>, file);
+writer.seek(<span class="ty">SeekFrom</span>::Start(s.valid_len))?;</code></pre>
+
+<p><code>set_len(n)</code> sets the file size to exactly n bytes. Passing a value smaller than the current size truncates (trims); larger creates a hole (sparse space). In crash recovery, only the former is used.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ Filesystem</span><p><strong>DB WAL replay</strong> on restart reads the WAL after a power failure, applies only completed transactions, and ignores (undoes) anything incomplete. <strong>In Quipu-Log</strong>, skim marks everything up to the last CRC-passing frame as <code>valid_len</code> and truncates the rest — because it's append-only, there's nothing to undo, only redo, which makes this beautifully simple. <span class="pill">Ch. 12</span> goes into detail.</p></div>
+
+<h2>The atomicity of rename(2)</h2>
+
+<p>Now the key point of this chapter. There's a pattern for replacing a file safely — <strong>write the new content to a temp file, then swap it in with rename.</strong></p>
+
+<p>Why not overwrite in place? If you open the existing file, start writing new content, and the power dies, you're left with a half-written file. The rename pattern avoids that:</p>
+
+<ol>
+  <li>Write the new content <em>in full</em> to a temporary file (<code>target.rewrite</code>).</li>
+  <li>fsync the temporary file.</li>
+  <li><strong><code>rename(tmp, target)</code></strong> — on POSIX this operation is atomic. It either completes, or nothing happens at all. There is no intermediate state.</li>
+</ol>
+
+<figure>
+<svg viewBox="0 0 680 220" role="img" aria-label="Atomic file replacement pattern using rename">
+  <defs><marker id="ar4" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/></marker></defs>
+  <style>
+    .l4{fill:#e6e8ee;font:600 12px -apple-system,sans-serif}
+    .s4{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .bx4a{fill:#241f12;stroke:#ffd479;stroke-width:1.5;rx:5}
+    .bx4b{fill:#16241d;stroke:#8be9c0;stroke-width:1.5;rx:5}
+    .bx4c{fill:#1a2133;stroke:#7aa2ff;stroke-width:2;rx:5}
+    .ar4{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#ar4)}
+    .step{fill:#ffd479;font:700 11px -apple-system,sans-serif}
+  </style>
+
+  <!-- Step 1: write to temp file -->
+  <text x="20" y="28" class="step">① Write new content in full to temp file + fsync</text>
+  <rect x="20" y="38" width="200" height="50" rx="5" fill="#241f12" stroke="#ffd479" stroke-width="1.5"/>
+  <text x="36" y="60" class="l4" fill="#ffd479">registry.rewrite/</text>
+  <text x="36" y="76" class="s4">new content complete ✓</text>
+  <rect x="280" y="38" width="200" height="50" rx="5" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="296" y="60" class="l4">registry/patient/</text>
+  <text x="296" y="76" class="s4">existing content unchanged</text>
+
+  <!-- Step 2: rename -->
+  <text x="20" y="130" class="step">② rename(tmp, target) — atomic</text>
+  <rect x="20" y="140" width="200" height="50" rx="5" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="36" y="162" class="l4" fill="#9aa3b2">registry.pre-rewrite/</text>
+  <text x="36" y="178" class="s4">existing content (backup)</text>
+  <rect x="280" y="140" width="200" height="50" rx="5" fill="#16241d" stroke="#8be9c0" stroke-width="2"/>
+  <text x="296" y="162" class="l4" fill="#8be9c0">registry/patient/ ← new content</text>
+  <text x="296" y="178" class="s4">swapped in by rename ✓</text>
+
+  <line x1="550" y1="63" x2="600" y2="63" class="ar4"/>
+  <text x="610" y="58" class="s4">other</text>
+  <text x="610" y="74" class="s4">processes</text>
+  <text x="610" y="90" class="s4">only see the</text>
+  <text x="610" y="106" class="s4">new file here</text>
+</svg>
+<figcaption>The rename pattern: finish writing to a temp file, then swap it in atomically. If the power dies before the rename, the original file is still intact.</figcaption>
+</figure>
+
+<p>Quipu-Log uses this pattern when re-keying rewrites the entire table:</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/table.rs — rewrite_table()</span><code><span class="kw">let</span> tmp = dir.with_file_name(<span class="fn">format!</span>(<span class="str">"{name}.rewrite"</span>));
+<span class="kw">let</span> backup = dir.with_file_name(<span class="fn">format!</span>(<span class="str">"{name}.pre-rewrite"</span>));
+<span class="com">// ... write the new table in full to tmp ...</span>
+fresh.sync()?;          <span class="com">// fsync first</span>
+<span class="dim">drop(old); drop(fresh); <span class="com">// release handles</span></span>
+<span class="hl">std::fs::rename(dir, &amp;backup)?;   <span class="com">// existing → backup</span></span>
+<span class="hl">std::fs::rename(&amp;tmp, dir)?;      <span class="com">// new → canonical path</span></span>
+std::fs::remove_dir_all(&amp;backup)?; <span class="com">// delete backup</span></code></pre>
+
+<div class="callout warn"><span class="lab">Caution</span><p>The atomicity of <code>rename(2)</code> is only guaranteed <strong>within the same filesystem.</strong> If you create the temp file on a different partition and then rename it, the OS replaces it with a copy + delete, which is not atomic. This is why Quipu-Log's <code>rewrite_table</code> creates the temp directory as a <em>sibling</em> of the target directory (same parent = same filesystem).</p></div>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① What goes wrong if <code>OpenOptions::truncate(false)</code> is missing?<br>② In the rename pattern, why must you fsync the temp file <em>before</em> calling rename?<br>③ How does a torn write happen, and how does Quipu-Log detect and recover from it?</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="03-fs-basics.html"><span class="dir">← Prev</span><span class="t">03 · Filesystem basics: files, directories, inodes, descriptors</span></a><a class="next" href="05-durability-fsync.html"><span class="dir">Next →</span><span class="t">05 · When data really hits disk: the page cache and fsync</span></a></div>
+</div>
+</main>
+</div>
+<script src="assets/textbook.js"></script>
+</body>
+</html>

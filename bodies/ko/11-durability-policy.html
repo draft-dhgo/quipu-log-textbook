@@ -1,0 +1,159 @@
+<article>
+
+<p class="lead">데이터베이스를 쓴다면 "커밋하면 영원히 남는다"는 약속을 당연하게 여겼을 겁니다. 하지만 그 약속은 저절로 생기지 않습니다. DB 안에서는 누군가가 <code>fsync</code>를 적절한 때에 호출하고 있고, "언제 fsync할 것인가"를 놓고 내구성과 처리량 사이의 줄다리기가 벌어집니다. 이 챕터에서는 그 줄다리기를 Quipu-Log가 파일 레벨에서 어떻게 정책으로 드러내는지 배웁니다.</p>
+
+<div class="callout"><span class="lab">한 문장 요약</span><p><code>SyncPolicy</code>는 "얼마나 자주 fsync를 부를 것인가"를 코드로 표현한 내구성 정책이다. 안전을 택할수록 느려지고, 속도를 택할수록 정전 시 잃을 수 있는 창이 넓어진다.</p></div>
+
+<h2>당신이 아는 것: DB의 커밋 내구성</h2>
+
+<p>관계형 DB에서 <code>COMMIT</code>을 치면 DB는 WAL 레코드를 반드시 디스크에 내려보내고(fsync) 그 뒤에야 "성공"을 돌려줍니다. 이것이 ACID의 D(Durability)입니다. 그런데 트랜잭션마다 fsync를 부르면 느립니다. 디스크 하나의 fsync 레이턴시는 수백 μs ~ 수 ms, SSD도 수십 μs가 보통이니까요.</p>
+
+<p>그래서 고성능 DB들이 오래전부터 쓰는 기법이 <strong>group commit</strong>입니다. 여러 트랜잭션이 거의 동시에 커밋을 요청하면 그걸 한 묶음으로 모아 fsync 한 번에 처리합니다. "N개를 한꺼번에 내려쓰고, N개 모두에게 성공을 돌려준다." 처리량이 크게 올라가지만, 마지막 fsync 이후 커밋된 것들은 정전이 나면 같이 사라집니다.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ 파일시스템</span><p><strong>DB에서는</strong> commit durability·group commit이 엔진 내부에 숨겨져 있다. 개발자는 <code>innodb_flush_log_at_trx_commit</code>, PostgreSQL의 <code>synchronous_commit</code> 같은 파라미터로 제어할 뿐이다. <strong>Quipu-Log에서는</strong> 같은 결정을 <code>SyncPolicy</code> 열거형 하나로 코드에 직접 노출한다. "숨기지 않겠다"는 설계 선택이다.</p></div>
+
+<h2>두 개의 버퍼: BufWriter와 OS 페이지 캐시</h2>
+
+<p>fsync 정책을 이해하려면 "쓰기"가 사실 두 단계로 나뉜다는 걸 먼저 짚어야 합니다. <span class="pill">5장 page cache와 fsync</span>에서 자세히 다루지만, 여기서도 간단히 짚겠습니다.</p>
+
+<figure>
+<svg viewBox="0 0 700 220" role="img" aria-label="쓰기의 두 단계: BufWriter와 OS 페이지 캐시, 그리고 디스크">
+  <defs>
+    <marker id="arr11" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+    <marker id="arr11b" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#8be9c0"/>
+    </marker>
+    <marker id="arr11c" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#ffd479"/>
+    </marker>
+  </defs>
+  <!-- 박스 1: BufWriter -->
+  <rect x="30" y="60" width="160" height="80" rx="8" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="110" y="92" text-anchor="middle" fill="#e6e8ee" font-size="13" font-family="-apple-system,sans-serif" font-weight="600">BufWriter</text>
+  <text x="110" y="112" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">유저공간 256KB 버퍼</text>
+  <text x="110" y="128" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">Rust 프로세스 안</text>
+  <!-- 화살표 flush() -->
+  <line x1="190" y1="100" x2="258" y2="100" stroke="#8be9c0" stroke-width="1.5" marker-end="url(#arr11b)"/>
+  <text x="224" y="92" text-anchor="middle" fill="#8be9c0" font-size="11" font-family="-apple-system,sans-serif">flush()</text>
+  <!-- 박스 2: OS 페이지 캐시 -->
+  <rect x="260" y="60" width="160" height="80" rx="8" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="340" y="92" text-anchor="middle" fill="#e6e8ee" font-size="13" font-family="-apple-system,sans-serif" font-weight="600">OS 페이지 캐시</text>
+  <text x="340" y="112" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">커널 버퍼 (RAM)</text>
+  <text x="340" y="128" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">정전 시 유실 가능</text>
+  <!-- 화살표 fsync() -->
+  <line x1="420" y1="100" x2="488" y2="100" stroke="#ffd479" stroke-width="1.5" marker-end="url(#arr11c)"/>
+  <text x="454" y="92" text-anchor="middle" fill="#ffd479" font-size="11" font-family="-apple-system,sans-serif">fsync()</text>
+  <!-- 박스 3: 디스크 -->
+  <rect x="490" y="60" width="160" height="80" rx="8" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="570" y="92" text-anchor="middle" fill="#e6e8ee" font-size="13" font-family="-apple-system,sans-serif" font-weight="600">디스크 (영구)</text>
+  <text x="570" y="112" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">NVMe / SSD / HDD</text>
+  <text x="570" y="128" text-anchor="middle" fill="#8be9c0" font-size="11" font-family="-apple-system,sans-serif">정전 후에도 생존</text>
+  <!-- 정책 라벨 -->
+  <text x="350" y="190" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">OsManaged: flush만. EveryN: flush + 매N번마다 fsync. Always: 매번 fsync.</text>
+</svg>
+<figcaption>쓰기는 두 단계다. flush()는 유저공간 버퍼를 OS에 넘기고, fsync()는 OS가 디스크에 내려보내게 강제한다. 정전은 OS 캐시 이전을 지운다.</figcaption>
+</figure>
+
+<p>Quipu-Log의 세그먼트 파일 쓰기는 <code>BufWriter</code>를 사용합니다. 256KB 크기의 유저공간 버퍼를 두고, 버퍼가 차거나 명시적으로 <code>flush()</code>를 부를 때 OS 페이지 캐시에 넘깁니다. 거기서 한 번 더 <code>fsync</code>를 불러야 비로소 디스크에 보장됩니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs</span><code><span class="kw">pub fn</span> <span class="fn">flush</span>(&amp;<span class="kw">mut</span> self) -&gt; <span class="ty">Result</span>&lt;()&gt; {
+    <span class="hl">self.writer.flush()?;        <span class="com">// 유저공간 → OS 페이지 캐시</span></span>
+    <span class="ty">Ok</span>(())
+}
+
+<span class="kw">pub fn</span> <span class="fn">sync</span>(&amp;<span class="kw">mut</span> self) -&gt; <span class="ty">Result</span>&lt;()&gt; {
+    self.writer.flush()?;
+    <span class="hl">self.writer.get_ref().sync_data()?; <span class="com">// OS 캐시 → 디스크 (fdatasync)</span></span>
+    <span class="ty">Ok</span>(())
+}</code></pre>
+
+<h2>세 가지 정책: SyncPolicy</h2>
+
+<p>이 두 단계를 "언제 부를 것인가"를 결정하는 것이 <code>SyncPolicy</code>입니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs</span><code><span class="kw">pub enum</span> <span class="ty">SyncPolicy</span> {
+    <span class="hl">Always,</span>       <span class="com">// fsync after every append. Safest, slowest.</span>
+    <span class="hl">EveryN(u32),</span>  <span class="com">// fsync after every N appends; otherwise only flush.</span>
+    <span class="hl">OsManaged,</span>   <span class="com">// Never fsync explicitly; rely on the OS to write back. Fastest.</span>
+}</code></pre>
+
+<p>세 가지를 하나씩 뜯어봅시다.</p>
+
+<h3>Always — 매번 fsync</h3>
+
+<p>append를 할 때마다 <code>sync()</code>를 부릅니다. 정전이 일어나도 직전 append까지는 반드시 살아남습니다. 잃을 수 있는 창이 0에 가깝습니다. 대신 append마다 디스크 왕복이 생기므로, 초당 수백~수천 건 이상은 버텁니다.</p>
+
+<h3>EveryN(n) — N개마다 fsync (기본값: 64)</h3>
+
+<p>이것이 group commit입니다. N번 append 동안은 OS 캐시에만 남겨두고(<code>flush</code>만), N번째에 <code>sync()</code>로 한꺼번에 내립니다. 정전이 나면 마지막 fsync 이후 append된 것들(최대 N-1개)을 잃을 수 있습니다. 하지만 fsync 횟수가 N배 줄어드니 처리량도 N배 가까이 올라갑니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs — apply_sync_policy()</span><code><span class="kw">match</span> self.cfg.sync_policy {
+    <span class="ty">SyncPolicy</span>::Always =&gt; self.sync_all()?,
+    <span class="ty">SyncPolicy</span>::EveryN(n) =&gt; {
+        self.appends_since_sync += <span class="num">1</span>;
+        <span class="kw">if</span> self.appends_since_sync &gt;= n {
+            <span class="hl">self.sync_all()?;</span>   <span class="com">// N번째: fsync</span>
+        } <span class="kw">else</span> {
+            <span class="dim">self.logs.flush()?;</span>       <span class="com">// 그 외: flush만</span>
+            <span class="dim">self.relations.flush()?;</span>
+        }
+    }
+    <span class="ty">SyncPolicy</span>::OsManaged =&gt; {
+        self.logs.flush()?;
+        self.relations.flush()?;
+    }
+}</code></pre>
+
+<p><code>sync_all()</code>은 fsync 순서를 지킵니다. 레지스트리를 먼저, 그다음 로그 테이블을 내립니다. 이유는 코드 주석에 나와 있습니다: "로그 레코드가 디스크에 먼저 내려가 있는데 그것이 참조하는 레지스트리 버전은 없는 상황"이 생기면 안 되기 때문입니다.</p>
+
+<h3>OsManaged — fsync 하지 않음</h3>
+
+<p><code>flush()</code>만 불러 OS 캐시에 넘기고, 디스크 내려쓰기는 OS에 맡깁니다. 정전이 나면 OS 캐시에 있던 모든 데이터가 사라집니다. 그 대신 디스크 왕복이 없으니 가장 빠릅니다. "감사 로그를 잃어도 괜찮은" 개발/테스트 환경이나 배터리 백업 UPS가 있는 서버에 적합합니다.</p>
+
+<h2>성능 수치: 정책의 차이가 얼마나 큰가</h2>
+
+<p>README의 벤치마크 수치를 그대로 인용합니다 (Apple M4, NVMe SSD, rustc 1.96, release 빌드).</p>
+
+<table>
+  <tr>
+    <th>SyncPolicy</th>
+    <th>내구 처리량</th>
+    <th>잃을 수 있는 창</th>
+  </tr>
+  <tr>
+    <td><code>OsManaged</code></td>
+    <td>~56,000 events/s</td>
+    <td>OS 재시작 전까지 (무한)</td>
+  </tr>
+  <tr>
+    <td><code>EveryN(64)</code> (기본)</td>
+    <td>~4,800 events/s</td>
+    <td>최대 63개 이벤트</td>
+  </tr>
+  <tr>
+    <td><code>Always</code></td>
+    <td>(~수백~수천 events/s)</td>
+    <td>0 (직전 append까지 보장)</td>
+  </tr>
+</table>
+
+<p><code>EveryN(64)</code>가 기본값인 이유가 보입니다. <code>OsManaged</code>보다 12배 느리지만, 잃을 수 있는 창이 최대 63개 이벤트로 좁습니다. 감사 로그에서 이것이 실전의 최선에 가깝습니다. <code>Always</code>는 금융·의료처럼 단 하나도 잃어선 안 되는 환경에서 선택합니다.</p>
+
+<div class="callout analogy"><span class="lab">비유</span><p>음식 주문 메모장을 떠올리세요. <code>Always</code>는 주문 하나 받을 때마다 금고에 잠근다. <code>EveryN(64)</code>는 64개 모아서 한 번 잠근다. <code>OsManaged</code>는 메모장을 책상 위에 두고 퇴근할 때만 잠근다. 화재(정전)가 나면 금고 안 것만 남는다.</p></div>
+
+<div class="callout warn"><span class="lab">주의</span><p><code>OsManaged</code>는 "빠르지만 내구성 보장 없음"이다. 가상 머신이나 컨테이너 환경에서 호스트 중단이 잦다면 이 정책은 안전하지 않다. fsync 없이 빠른 처리량이 필요하다면 대신 배터리 백업 RAID 컨트롤러 뒤에서 <code>Always</code>를 쓰는 것이 더 정직한 선택이다.</p></div>
+
+<h2>정리</h2>
+
+<ul>
+  <li>DB의 commit durability·group commit과 똑같은 트레이드오프가 파일 레벨에서 <code>SyncPolicy</code>라는 이름으로 노출된다.</li>
+  <li><code>Always</code> = 매번 fsync (가장 안전, 가장 느림), <code>EveryN(n)</code> = group commit (기본, 균형), <code>OsManaged</code> = fsync 없음 (가장 빠름, 내구성 없음).</li>
+  <li>쓰기 경로는 BufWriter(유저버퍼) → <code>flush()</code>(OS 캐시) → <code>fsync()</code>(디스크) 순서다. 정책은 마지막 fsync 빈도를 조절한다.</li>
+  <li><code>sync_all()</code>은 레지스트리 → 로그 순서로 내려써, 크래시 후 "로그가 참조하는 레지스트리 레코드가 없는" 상황을 막는다.</li>
+</ul>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① <code>EveryN(64)</code>로 설정했을 때 정전이 나면 최대 몇 개의 이벤트를 잃을 수 있나요? 그리고 그게 감사 로그에서 수용 가능한 이유는?<br>② DB의 group commit과 <code>EveryN(n)</code>의 구조적 유사점을 한 문장으로 설명해 보세요.<br>③ <code>sync_all()</code>이 레지스트리를 먼저, 로그를 나중에 fsync하는 이유는 무엇인가요?</p></div>
+
+</article>

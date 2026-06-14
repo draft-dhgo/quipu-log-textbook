@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>03 · 파일시스템의 기본: 파일·디렉토리·inode·디스크립터 — Quipu-Log 교과서</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ 목차</button><b>Quipu-Log 교과서</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn" href="../03-fs-basics.html">EN</a><a class="langbtn active" href="03-fs-basics.html">한국어</a></div>
+<a class="home" href="index.html">Quipu-Log 교과서</a>
+<div class="sub">파일시스템만으로 짓는 저장 엔진과 변조-탐지 감사 로그 — 밑바닥부터</div>
+<div class="part">파트 1 · 출발점: DB 없이, 파일로</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>감사 로그란, 그리고 왜 &#x27;DB 없이 파일로&#x27;인가</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>Quipu-Log 지도와 DB↔파일시스템 대응표</a>
+<div class="part">파트 2 · 파일시스템 기본기</div>
+<a class="lnk active" href="03-fs-basics.html"><span class="n">03</span>파일시스템의 기본: 파일·디렉토리·inode·디스크립터</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>읽고 쓰기, 그리고 rename의 원자성</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>데이터는 언제 진짜 디스크에 남나: page cache와 fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>std::fs 도구상자: Rust로 파일 다루기</a>
+<div class="part">파트 3 · 저장 엔진의 심장: append-only 로그</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>append-only 로그 = WAL이 곧 데이터베이스</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>세그먼트 파일과 롤오버</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>레코드 프레이밍: 길이·CRC32·magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>직렬화: 구조체를 바이트로</a>
+<div class="part">파트 4 · DB가 공짜로 주던 보장을 파일로 재현</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>내구성: fsync 정책과 group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>원자성과 크래시 복구: torn write와 꼬리 탐지</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>동시성 제어 ①: single-writer와 파일 락</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>동시성 제어 ②: 읽기 스냅샷과 MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>인덱싱: 인메모리 인덱스 + 디스크 토큰</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>쿼리 실행: 세그먼트 스캔과 커서 페이지네이션</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>삭제와 보존: 세그먼트 unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>저장소 레이아웃과 포맷 버저닝</a>
+<div class="part">파트 5 · 무결성: 고치면 티가 나게 (보안 ①)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>해시 함수와 SHA-256: 디지털 지문</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>머클 히스토리 트리: 로그를 32바이트로 커밋</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>포함 증명·일관성 증명</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>체크포인트와 외부 앵커링</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>tamper-evident vs tamper-proof, 그리고 위협 모델</a>
+<div class="part">파트 6 · 기밀성: 비밀을 지키면서 검색하기 (보안 ②)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>필드 보호 4단계: 평문/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>대칭·비대칭·하이브리드 암호와 AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>블라인드 인덱스: 평문 없이 검색</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>쓰기 전용 배포: 개인키 없는 서버</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>키 관리: 키링·버저닝·로테이션 vs 리키</a>
+<div class="part">파트 7 · 쓰기·읽기 경로</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>비동기 파이프라인: 논블로킹 emit과 백프레셔</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>신뢰성: 재시도·백오프·DLQ·멱등성</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>tower 미들웨어: HTTP 요청 자동 기록</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>권한(RBAC)·필터·메타 감사</a>
+<div class="part">파트 8 · 분산·운영·확장</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>단일 장애점과 가용성: 클라이언트 스풀</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>수평 확장: 샤딩·일관성 해싱·읽기 복제</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>서버·클라이언트·MCP·관측성</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">파트 2 · 파일시스템 기본기</span><h1><span class="chno">03</span> · 파일시스템의 기본: 파일·디렉토리·inode·디스크립터</h1></div><article>
+
+<p class="lead">DB를 다루면서 "파일"은 당연히 있는 것으로 여겨왔을 겁니다. 그런데 Quipu-Log처럼 DB 엔진 없이 파일 위에서 직접 저장 엔진을 만들려면, OS가 파일을 어떻게 관리하는지부터 알아야 합니다. 이 챕터는 파일·디렉토리·inode·파일 디스크립터라는 네 가지 기본 개념을 다룹니다 — Quipu-Log 코드가 실제로 만드는 디렉토리와 파일을 보면서요.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ 파일시스템</span><p>DB는 "테이블"이라는 추상을 제공한다. 그 아래에는 OS가 관리하는 파일·디렉토리가 있다. Quipu-Log는 그 추상층을 직접 다룬다 — <strong>DB의 테이블/로우 대신, OS의 파일/바이트를 우리가 직접 다루고 그 위에 구조를 우리가 얹는다.</strong></p></div>
+
+<h2>파일이란 무엇인가: 이름 붙은 바이트 열</h2>
+
+<p>OS 관점에서 파일은 단순합니다 — <strong>연속된 바이트의 나열</strong>입니다. 관계형 DB가 "테이블 = 행들의 집합"이라는 추상을 제공하는 것처럼, 파일시스템은 "파일 = 바이트들의 집합"이라는 추상을 제공합니다. 그 위에 우리가 원하는 구조를 얹는 건 프로그래머의 몫입니다.</p>
+
+<p>Quipu-Log는 이 바이트 나열에 <strong>프레임(frame)</strong>이라는 고정 틀을 씌워 레코드를 쌓습니다. 길이·체크섬·타임스탬프·본문을 순서대로 쓰는 것이 우리가 "구조를 얹는" 방식입니다. <span class="pill">9장</span>에서 프레임 세부 사항을 자세히 다룹니다.</p>
+
+<h2>inode: 파일의 실제 정체</h2>
+
+<p>파일에는 두 가지 측면이 있습니다. 우리가 보는 <strong>이름</strong>(경로)과, OS 내부의 <strong>inode</strong>입니다.</p>
+
+<p><strong>inode</strong>는 파일의 실제 메타데이터 저장소입니다. 파일 크기, 권한, 타임스탬프, 그리고 실제 데이터가 디스크 어디에 있는지(블록 포인터)를 담습니다. 중요한 점은 — <em>inode에 파일 이름이 없습니다.</em> 이름은 디렉토리가 관리하는 별개의 것입니다.</p>
+
+<figure>
+<svg viewBox="0 0 680 250" role="img" aria-label="파일명, 디렉토리, inode, 데이터 블록의 관계">
+  <defs><marker id="ar3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/></marker></defs>
+  <style>
+    .l3{fill:#e6e8ee;font:600 13px -apple-system,sans-serif}
+    .s3{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .s3b{fill:#8be9c0;font:11px -apple-system,sans-serif}
+    .bx3{fill:#161922;stroke:#2a2f3d;stroke-width:1.5;rx:6}
+    .ar3{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#ar3)}
+  </style>
+
+  <!-- 디렉토리 -->
+  <rect x="20" y="40" width="180" height="150" rx="6" fill="#161922" stroke="#c792ea" stroke-width="1.5"/>
+  <text x="36" y="64" class="l3" fill="#c792ea">디렉토리 (logs/)</text>
+  <text x="36" y="86" class="s3">이름 → inode 번호 매핑</text>
+  <rect x="36" y="96" width="148" height="22" rx="3" fill="#0b0d12"/>
+  <text x="44" y="112" class="s3">"seg-0000000000.log" → 4829</text>
+  <rect x="36" y="124" width="148" height="22" rx="3" fill="#0b0d12"/>
+  <text x="44" y="140" class="s3">"seg-0000000001.log" → 4830</text>
+  <rect x="36" y="152" width="148" height="22" rx="3" fill="#0b0d12"/>
+  <text x="44" y="168" class="s3">"seg-0000000002.log" → 4831</text>
+
+  <!-- inode -->
+  <rect x="250" y="40" width="180" height="150" rx="6" fill="#161922" stroke="#7aa2ff" stroke-width="1.5"/>
+  <text x="266" y="64" class="l3" fill="#7aa2ff">inode #4829</text>
+  <text x="266" y="86" class="s3">크기: 67,108,864 bytes</text>
+  <text x="266" y="106" class="s3">권한: rw-r--r--</text>
+  <text x="266" y="126" class="s3">수정 시각: 2026-06-14</text>
+  <text x="266" y="146" class="s3b">↓ 데이터 블록 포인터</text>
+  <text x="266" y="166" class="s3">블록 1287, 1288, 1289...</text>
+
+  <!-- 데이터 블록 -->
+  <rect x="480" y="40" width="180" height="150" rx="6" fill="#16241d" stroke="#8be9c0" stroke-width="1.5"/>
+  <text x="496" y="64" class="l3" fill="#8be9c0">디스크 데이터 블록</text>
+  <rect x="496" y="76" width="148" height="16" rx="2" fill="#0b0d12"/>
+  <text x="502" y="88" class="s3">ALOG 0x02 [base_index]</text>
+  <rect x="496" y="98" width="148" height="16" rx="2" fill="#0b0d12"/>
+  <text x="502" y="110" class="s3">[len][crc][ts][payload...]</text>
+  <rect x="496" y="120" width="148" height="16" rx="2" fill="#0b0d12"/>
+  <text x="502" y="132" class="s3">[len][crc][ts][payload...]</text>
+  <rect x="496" y="142" width="100" height="16" rx="2" fill="#0b0d12"/>
+  <text x="502" y="154" class="s3">[len][crc][ts]...</text>
+
+  <!-- arrows -->
+  <line x1="200" y1="107" x2="250" y2="107" class="ar3"/>
+  <line x1="430" y1="107" x2="480" y2="107" class="ar3"/>
+</svg>
+<figcaption>디렉토리는 이름→inode 번호의 매핑이다. inode가 실제 데이터 블록을 가리킨다. 이름이 바뀌어도(rename) inode는 그대로다.</figcaption>
+</figure>
+
+<p>이 구조가 왜 중요한가? <strong>이름(경로)과 데이터(inode)가 분리되어 있기 때문에, 파일 이름을 바꿔도 데이터는 그대로입니다.</strong> 이 성질을 <code>rename(2)</code>의 원자성으로 활용하는 방법은 <span class="pill">4장</span>에서 봅니다.</p>
+
+<h2>디렉토리: 이름 → inode 매핑</h2>
+
+<p>디렉토리는 특별한 파일입니다. 내용물이 바이트가 아니라 <strong>"이름 → inode 번호"의 목록</strong>입니다. Quipu-Log의 <code>logs/</code> 디렉토리는 이렇게 생겼습니다 (논리적으로):</p>
+
+<pre><span class="filename">root/logs/ 디렉토리 내용 (논리적 표현)</span><code><span class="com">// "seg-0000000000.log" → inode 4829</span>
+<span class="com">// "seg-0000000001.log" → inode 4830</span>
+<span class="com">// "seg-0000000002.log" → inode 4831  ← 현재 쓰는 중</span></code></pre>
+
+<p>Quipu-Log 코드는 시작할 때 <code>read_dir()</code>로 이 디렉토리를 읽어서 세그먼트 번호 목록을 만듭니다. 숫자가 가장 큰 것이 현재 쓰는 중인 "active" 세그먼트입니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/table.rs</span><code><span class="kw">for</span> entry <span class="kw">in</span> std::fs::read_dir(dir)? {
+    <span class="kw">let</span> name = entry?.file_name();
+    <span class="kw">let</span> name = name.to_string_lossy();
+<span class="hl">    <span class="kw">if let</span> <span class="ty">Some</span>(num) = name
+        .strip_prefix(<span class="str">"seg-"</span>)
+        .and_then(|s| s.strip_suffix(<span class="str">".log"</span>))
+        .and_then(|s| s.parse::&lt;u64&gt;().ok())
+    {
+        seqs.push(num);
+    }</span>
+}</code></pre>
+
+<h2>파일 디스크립터: 열린 파일의 핸들</h2>
+
+<p>파일을 열면 OS는 <strong>파일 디스크립터(fd, file descriptor)</strong>를 돌려줍니다. 이것은 "나는 지금 이 파일을 이 위치부터 읽겠다"는 상태를 OS가 관리하는 핸들입니다. 정수 하나지만, 내부적으로는 현재 읽기/쓰기 위치(offset), 열기 모드, inode 참조 등을 담고 있습니다.</p>
+
+<p>Rust에서는 <code>std::fs::File</code>이 파일 디스크립터를 감싼 타입입니다. <code>File</code>이 drop되면 자동으로 닫힙니다. Quipu-Log의 <code>Segment</code>는 이 <code>File</code>을 <code>BufWriter</code>로 한 번 더 감쌉니다 — 그 이유는 <span class="pill">5장 page cache와 fsync</span>, <span class="pill">6장 std::fs 도구상자</span>에서 다룹니다.</p>
+
+<div class="callout analogy"><span class="lab">비유</span><p>파일 디스크립터는 도서관의 "대출 카드"와 비슷합니다. 같은 책(파일)을 여러 사람이 동시에 빌릴 수 있고, 각자 자기 책갈피 위치(offset)를 독립적으로 유지합니다. 다만 책 내용(inode → 데이터)은 공유됩니다.</p></div>
+
+<h2>경로: 계층적 이름</h2>
+
+<p>OS에서 파일에 접근하는 방법은 경로(path)입니다. 절대 경로(<code>/var/lib/myapp/audit/logs/seg-0000000000.log</code>)나 상대 경로 모두 결국 디렉토리들의 이름→inode 체인을 따라 inode에 도달합니다.</p>
+
+<p>Rust에서는 <code>std::path::Path</code>와 <code>PathBuf</code>가 경로를 다룹니다. <code>Path</code>는 빌린 참조(슬라이스처럼), <code>PathBuf</code>는 소유된 버전(String처럼)입니다. Quipu-Log에서 <code>StoreConfig</code>의 <code>root</code> 필드가 <code>PathBuf</code>인 것도 이 이유입니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs</span><code><span class="kw">pub struct</span> <span class="ty">StoreConfig</span> {
+<span class="hl">    <span class="kw">pub</span> root: <span class="ty">PathBuf</span>,</span>   <span class="com">// 루트 디렉토리 경로 (소유)</span>
+    <span class="kw">pub</span> max_segment_bytes: <span class="ty">u64</span>,
+    <span class="kw">pub</span> sync_policy: <span class="ty">SyncPolicy</span>,
+    <span class="com">// ...</span>
+}</code></pre>
+
+<div class="callout dbfs"><span class="lab">DB ↔ 파일시스템</span><p><strong>DB에서는</strong> 테이블 이름이 논리적 식별자다 — 물리적으로 어떤 파일에 어떻게 저장되는지는 DB 엔진이 관리한다. <strong>파일시스템에서는</strong> 그 물리적 구조를 직접 본다 — 디렉토리·파일 이름·inode. Quipu-Log의 <code>logs/</code>, <code>registry/patient/</code> 같은 이름들은 DB의 테이블명을 우리가 직접 디렉토리 이름으로 표현한 것이다.</p></div>
+
+<h2>실제 Quipu-Log 저장소 레이아웃 다시 보기</h2>
+
+<p>이제 1장의 디렉토리 구조를 다시 보면 다르게 읽힙니다.</p>
+
+<pre><span class="filename">실제 디렉토리 레이아웃</span><code>root/
+  meta/                     <span class="com">← Table&lt;MetaEvent&gt; : 스키마 정의 로그</span>
+    seg-0000000000.log      <span class="com">← inode: 바이트 배열, 내부는 프레임들</span>
+    seg-0000000000.meta     <span class="com">← inode: JSON 사이드카 (시간 범위, 레코드 수)</span>
+  logs/                     <span class="com">← Table&lt;AuditLog&gt;  : 감사 이벤트 로그</span>
+    seg-0000000000.log
+    seg-0000000001.log      <span class="com">← active: 현재 쓰는 중</span>
+<span class="hl">  registry/patient/         <span class="com">← Table&lt;RegistryRecord&gt; : patient 엔티티 버전 이력</span></span>
+    seg-0000000000.log
+  LOCK                      <span class="com">← 단 1바이트도 필요 없는 파일, 락 용도만</span></code></pre>
+
+<p>각 <code>.log</code> 파일은 inode 하나 — 연속된 바이트 배열입니다. Quipu-Log가 그 위에 프레임 구조를 얹어서 의미 있는 레코드들로 읽습니다.</p>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① 파일을 삭제하지 않고 이름만 바꿔도 데이터가 그대로인 이유는 inode 구조로 어떻게 설명할 수 있나요?<br>② Quipu-Log가 시작할 때 <code>read_dir()</code>로 세그먼트 번호 목록을 만드는 이유는 무엇인가요? DB에서 이에 해당하는 동작은?<br>③ <code>Path</code>와 <code>PathBuf</code>의 차이를 Rust 관점에서 설명해보세요 (<code>&amp;str</code>과 <code>String</code>에 비유해서).</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="02-map-and-db-fs-bridge.html"><span class="dir">← 이전</span><span class="t">02 · Quipu-Log 지도와 DB↔파일시스템 대응표</span></a><a class="next" href="04-read-write-rename.html"><span class="dir">다음 →</span><span class="t">04 · 읽고 쓰기, 그리고 rename의 원자성</span></a></div>
+</div>
+</main>
+</div>
+<script src="../assets/textbook.js"></script>
+</body>
+</html>

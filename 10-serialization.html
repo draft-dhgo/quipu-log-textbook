@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>10 · Serialization: turning structs into bytes — The Quipu-Log Book</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ Contents</button><b>The Quipu-Log Book</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn active" href="10-serialization.html">EN</a><a class="langbtn" href="ko/10-serialization.html">한국어</a></div>
+<a class="home" href="index.html">The Quipu-Log Book</a>
+<div class="sub">Storage engines and tamper-evident audit logs, built on nothing but the filesystem — explained from the ground up</div>
+<div class="part">Part 1 · Starting point: files, not a DB</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>What an audit log is, and why “files, no DB”</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>The map, and the DB↔filesystem correspondence</a>
+<div class="part">Part 2 · Filesystem basics</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>Filesystem basics: files, directories, inodes, descriptors</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>Reading &amp; writing, and the atomicity of rename</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>When data really hits disk: the page cache and fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>The std::fs toolbox: handling files in Rust</a>
+<div class="part">Part 3 · The heart of the engine: the append-only log</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>Append-only log = the WAL is the database</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>Segment files and rollover</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>Record framing: length, CRC32, magic/version</a>
+<a class="lnk active" href="10-serialization.html"><span class="n">10</span>Serialization: turning structs into bytes</a>
+<div class="part">Part 4 · Re-creating what a DB gave you for free, on files</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>Durability: fsync policy and group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>Atomicity and crash recovery: torn writes and tail detection</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>Concurrency I: single-writer and the file lock</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>Concurrency II: read snapshots and MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>Indexing: in-memory index + on-disk tokens</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>Query execution: segment scans and cursor pagination</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>Deletion and retention: segment unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>Store layout and format versioning</a>
+<div class="part">Part 5 · Integrity: making tampering evident (Security I)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>Hash functions and SHA-256: a digital fingerprint</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>The Merkle history tree: committing the log to 32 bytes</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>Inclusion proofs and consistency proofs</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>Checkpoints and external anchoring</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>Tamper-evident vs tamper-proof, and the threat model</a>
+<div class="part">Part 6 · Confidentiality: searching while keeping secrets (Security II)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>Field protection in four levels: plaintext/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>Symmetric, asymmetric, hybrid encryption and AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>Blind indexes: searching without plaintext</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>Write-only deployment: a server without the private key</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>Key management: keyring, versioning, rotation vs re-keying</a>
+<div class="part">Part 7 · The write &amp; read paths</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>The async pipeline: non-blocking emit and backpressure</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>Reliability: retries, backoff, DLQ, idempotency</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>The tower middleware: auto-recording HTTP requests</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>Permissions (RBAC), filters, and meta-audit</a>
+<div class="part">Part 8 · Distribution, operations, scaling</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>Single point of failure and availability: the client spool</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>Horizontal scaling: sharding, consistent hashing, read replicas</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>Server, client, MCP, and observability</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">Part 3 · The heart of the engine: the append-only log</span><h1><span class="chno">10</span> · Serialization: turning structs into bytes</h1></div><article>
+
+<p class="lead">If frames handle boundaries and integrity, what goes into the payload they carry? The job of turning a Rust struct into a byte array — <strong>serialization</strong> — is what this chapter is about. We'll cover which format to use and why not JSON, and then explain why a separate "canonical byte representation for hashing and index keys" is necessary.</p>
+
+<div class="callout"><span class="lab">In one sentence</span><p>Struct → bytes uses <strong>bincode</strong>; the canonical representation for hashing and index keys is managed separately via <strong><code>canonical_bytes()</code></strong>. The reason JSON-shaped values are stored wrapped in a <em>String</em> comes down to bincode's non-self-describing nature.</p></div>
+
+<h2>What you already know: per-type encoding in a DB</h2>
+
+<p>When a relational database executes <code>INSERT INTO logs (id, timestamp, message) VALUES (1, now(), 'hello')</code>, the engine encodes <code>INTEGER</code> as fixed bytes (4 bytes), <code>TIMESTAMP</code> in an internal time format, and <code>TEXT</code> as length + data — all written directly to a page. That encoding is buried inside the engine; you never have to think about it.</p>
+
+<p>We don't have a DB engine. <strong>We have to decide "struct → bytes" ourselves.</strong></p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ Filesystem</span><p><strong>In a DB</strong>, on-disk type encoding is baked into the engine (Postgres's heap tuple format, MySQL's InnoDB row format, etc.). <strong>In Quipu-Log</strong>, a serde + bincode combination converts Rust structs to bytes — this is the part we have to own when we're working with files instead of an engine.</p></div>
+
+<h2>Why bincode — comparison with JSON</h2>
+
+<p>JSON is the first thing that comes to mind for serialization. It's human-readable, familiar, and well-supported. Yet Quipu-Log uses bincode. Why?</p>
+
+<table>
+  <tr><th></th><th>JSON</th><th>bincode</th></tr>
+  <tr><td>Human-readable</td><td>Yes</td><td>No (binary)</td></tr>
+  <tr><td>Size</td><td>Large (field names repeated, quotes, commas)</td><td>Small (no field names, type-inferred)</td></tr>
+  <tr><td>Speed</td><td>Slow (parsing overhead)</td><td>Fast (close to memory layout)</td></tr>
+  <tr><td>Type information</td><td>Self-describing (key-value)</td><td>Non-self-describing (position-based)</td></tr>
+  <tr><td>serde integration</td><td>Yes</td><td>Yes</td></tr>
+</table>
+
+<p>Audit logs accumulate hundreds of thousands of records. If each record is 100 bytes smaller, the impact on disk usage and throughput is real and measurable. The downside of bincode (non-readability) isn't a big deal here — segment files aren't meant to be opened directly; you read them through the query API.</p>
+
+<div class="callout analogy"><span class="lab">Analogy</span><p>Think of shipping boxes. Labeling every item inside the box on the outside (JSON) is great for human inspection but wastes space. Putting items into numbered slots in a defined order (bincode) works because both sender and receiver have agreed "slot 3 always holds the timestamp" — no label needed.</p></div>
+
+<h2>serde: the glue layer</h2>
+
+<p>bincode itself doesn't know how to serialize any particular struct. That's serde's job. Attaching <code>#[derive(Serialize, Deserialize)]</code> causes the Rust compiler to auto-generate serialization and deserialization code. bincode uses that interface to write binary.</p>
+
+<pre><span class="filename">crates/quipu-core/src/model.rs</span><code><span class="dim">#[derive(Debug, Clone, Serialize, Deserialize)]</span>
+<span class="kw">pub struct</span> <span class="ty">AuditLog</span> {
+<span class="hl">    <span class="kw">pub</span> log_id: <span class="ty">Uid</span>,
+    <span class="kw">pub</span> timestamp: <span class="ty">u64</span>,
+    <span class="kw">pub</span> actor: <span class="ty">Uid</span>,
+    <span class="kw">pub</span> actor_type: <span class="ty">String</span>,
+    <span class="kw">pub</span> method: <span class="ty">String</span>,
+    <span class="kw">pub</span> url: <span class="ty">String</span>,
+    <span class="kw">pub</span> content: <span class="ty">Content</span>,
+    <span class="kw">pub</span> custom: <span class="ty">BTreeMap</span>&lt;<span class="ty">String</span>, <span class="ty">Value</span>&gt;,</span>
+}</code></pre>
+
+<p>Thanks to the derive macro, a single <code>bincode::serialize(&amp;log)</code> call yields a byte array. Going the other way, <code>bincode::deserialize(&amp;bytes)</code> reconstructs the struct. That's all the storage engine needs to do.</p>
+
+<h2>The non-self-describing trap: Json is stored as a String</h2>
+
+<p>bincode doesn't record field names — it relies on the struct definition's field order instead. That's the source of its size and speed advantage, but it comes with one trap.</p>
+
+<p><code>serde_json::Value</code> is a type that can be any JSON type. It might be <code>{"key": 1}</code>, or it might be <code>[1,2,3]</code>. Because bincode is non-self-describing, it can't decide at runtime "is what comes next an integer or an array?" — it uses the struct definition to decide. But the shape of <code>serde_json::Value</code> is only known at runtime.</p>
+
+<p>Quipu-Log's solution is elegant.</p>
+
+<pre><span class="filename">crates/quipu-core/src/model.rs</span><code><span class="dim">// Public type: callers pass Value::Json(serde_json::Value)</span>
+<span class="dim">#[serde(try_from = "ValueRepr", into = "ValueRepr")]</span>
+<span class="kw">pub enum</span> <span class="ty">Value</span> {
+    <span class="ty">Text</span>(<span class="ty">String</span>),
+    <span class="ty">Number</span>(<span class="ty">f64</span>),
+<span class="hl">    <span class="ty">Json</span>(<span class="ty">serde_json::Value</span>),</span>
+}
+
+<span class="com">// On-disk representation: Json is converted to a String for storage</span>
+<span class="kw">enum</span> <span class="ty">ValueRepr</span> {
+    <span class="ty">Text</span>(<span class="ty">String</span>),
+    <span class="ty">Number</span>(<span class="ty">f64</span>),
+<span class="hl">    <span class="ty">Json</span>(<span class="ty">String</span>), <span class="com">// &lt;-- String instead of serde_json::Value</span></span>
+}</code></pre>
+
+<p><code>serde(try_from, into)</code> separates the <strong>public type</strong> (<code>Value</code>) from the <strong>on-disk representation</strong> (<code>ValueRepr</code>). A JSON value is stringified with <code>.to_string()</code> before storage, then parsed back with <code>serde_json::from_str</code> on read. The part bincode struggles with is simplified down to a <code>String</code>.</p>
+
+<p>The same pattern applies to <code>Content</code> (the log body).</p>
+
+<h2>canonical_bytes: the canonical representation for hashing and index keys</h2>
+
+<p>Separate from storage serialization, there's a need for a "byte representation of a value for comparison or hashing." For example, when a field is protected by SHA-256, a query checks "SHA-256 of probe value == stored SHA-256." Both the probe value and the stored value must be converted to bytes by the same method to produce the same hash.</p>
+
+<p>Can we reuse the bincode serialization? There's a problem — bincode serializes the entire struct, but here we want to represent a <em>single field's value</em> as bytes. bincode is also sensitive to struct layout changes.</p>
+
+<p>So <code>Value</code> has a dedicated method.</p>
+
+<pre><span class="filename">crates/quipu-core/src/model.rs</span><code><span class="kw">impl</span> <span class="ty">Value</span> {
+    <span class="com">/// Canonical byte representation used for hashing and index keys.</span>
+    <span class="kw">pub fn</span> <span class="fn">canonical_bytes</span>(&amp;<span class="kw">self</span>) -&gt; <span class="ty">Vec</span>&lt;<span class="ty">u8</span>&gt; {
+<span class="hl">        match self {
+            <span class="ty">Value</span>::<span class="ty">Text</span>(s)   =&gt; s.as_bytes().to_vec(),
+            <span class="ty">Value</span>::<span class="ty">Number</span>(n) =&gt; format!(<span class="str">"{n}"</span>).into_bytes(),
+            <span class="ty">Value</span>::<span class="ty">Json</span>(v)   =&gt; v.to_string().into_bytes(),
+        }</span>
+    }
+}</code></pre>
+
+<p>Simple but important as a contract. A <code>Text</code> value of <code>"hello"</code> is always exactly 5 UTF-8 bytes; a <code>Number</code> of <code>42.0</code> is always the UTF-8 bytes of <code>"42"</code>. As long as that contract holds, searching a SHA-256-protected field works correctly. <span class="pill">Ch. 26, blind indexes</span> covers in detail how <code>canonical_bytes</code> feeds into token generation.</p>
+
+<figure>
+<svg viewBox="0 0 720 240" role="img" aria-label="Two serialization paths: bincode for storage vs canonical_bytes for hashing">
+  <defs>
+    <marker id="arr10" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+
+  <!-- Value struct -->
+  <rect x="260" y="20" width="200" height="60" rx="8" fill="#161922" stroke="#7aa2ff" stroke-width="2"/>
+  <text x="360" y="45" text-anchor="middle" fill="#7aa2ff" font-size="14" font-weight="600" font-family="-apple-system,sans-serif">Value</text>
+  <text x="360" y="65" text-anchor="middle" fill="#9aa3b2" font-size="12" font-family="-apple-system,sans-serif">Text / Number / Json</text>
+
+  <!-- Left path: bincode -->
+  <line x1="310" y1="80" x2="180" y2="130" stroke="#9aa3b2" stroke-width="1.5" marker-end="url(#arr10)"/>
+  <text x="215" y="115" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">bincode::serialize</text>
+
+  <rect x="60" y="132" width="240" height="70" rx="8" fill="#161922" stroke="#8be9c0" stroke-width="1.5"/>
+  <text x="180" y="155" text-anchor="middle" fill="#8be9c0" font-size="13" font-weight="600" font-family="-apple-system,sans-serif">On-disk storage (payload)</text>
+  <text x="180" y="175" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">via ValueRepr → Json as String</text>
+  <text x="180" y="192" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">packed into a segment frame</text>
+
+  <!-- Right path: canonical_bytes -->
+  <line x1="410" y1="80" x2="540" y2="130" stroke="#9aa3b2" stroke-width="1.5" marker-end="url(#arr10)"/>
+  <text x="488" y="115" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">canonical_bytes()</text>
+
+  <rect x="420" y="132" width="240" height="70" rx="8" fill="#161922" stroke="#ffd479" stroke-width="1.5"/>
+  <text x="540" y="155" text-anchor="middle" fill="#ffd479" font-size="13" font-weight="600" font-family="-apple-system,sans-serif">Hash / index key</text>
+  <text x="540" y="175" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">SHA-256 / HMAC / blind token</text>
+  <text x="540" y="192" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">normalized UTF-8 bytes</text>
+</svg>
+<figcaption>The same <code>Value</code> produces two distinct byte representations. Storage (bincode) and hashing/indexing (<code>canonical_bytes</code>) have different purposes, so they stay separate.</figcaption>
+</figure>
+
+<h2>StoredValue: the on-disk representation with protection applied</h2>
+
+<p>Registry fields can be stored as plaintext, a SHA-256 digest, an HMAC, or RSA ciphertext, depending on the schema. The type that holds all of these is <code>StoredValue</code>.</p>
+
+<pre><span class="filename">crates/quipu-core/src/model.rs</span><code><span class="kw">pub enum</span> <span class="ty">StoredValue</span> {
+<span class="hl">    <span class="ty">Plain</span>(<span class="ty">Value</span>),
+    <span class="ty">Sha256</span>(<span class="ty">String</span>),
+    <span class="ty">Hmac</span> { key_version: <span class="ty">u32</span>, digest: <span class="ty">String</span> },
+    <span class="ty">Rsa</span>  { key_version: <span class="ty">u32</span>, wrapped_key: <span class="ty">String</span>, nonce: <span class="ty">String</span>, ciphertext: <span class="ty">String</span> },</span>
+}</code></pre>
+
+<p>This also implements <code>Serialize + Deserialize</code>, so it gets stored in segments via bincode. Which protection scheme was used is encoded in the enum variant, so deserialization doesn't need to look up the schema separately. <span class="pill">Part 6, confidentiality</span> covers the cryptographic meaning of each variant in depth.</p>
+
+<h2>Format stability: what happens when you change a struct?</h2>
+
+<p>Bincode's non-self-describing nature is both a strength and a caution. Add a field to a struct, or reorder fields, and existing segments become undeserializable. That's one of the reasons Quipu-Log embeds <code>FORMAT_VERSION</code> in the segment header — when the format changes, the version is bumped to clearly mark older files as "unreadable." <span class="pill">Ch. 18, storage layout and format versioning</span></p>
+
+<div class="callout why"><span class="lab">Why this design?</span><p>Self-describing formats (MessagePack, CBOR) store field names alongside data, which allows partial deserialization even when the struct changes. Choosing bincode was a <em>size and speed first</em> decision. Audit logs are write-heavy with high record counts, so saving tens of bytes per record has a meaningful impact on total disk usage and throughput. Format stability is managed via <code>FORMAT_VERSION</code> — a deliberate acceptance of the trade-off.</p></div>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① What does it mean to say bincode is "non-self-describing"? How does that differ from JSON?<br>② Why isn't <code>Value::Json(serde_json::Value)</code> stored directly with bincode, but instead converted to a <code>String</code> first?<br>③ Do <code>canonical_bytes()</code> and <code>bincode::serialize</code> always produce the same bytes for the same value? Explain the difference in their purposes.</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="09-record-framing-crc.html"><span class="dir">← Prev</span><span class="t">09 · Record framing: length, CRC32, magic/version</span></a><a class="next" href="11-durability-policy.html"><span class="dir">Next →</span><span class="t">11 · Durability: fsync policy and group commit</span></a></div>
+</div>
+</main>
+</div>
+<script src="assets/textbook.js"></script>
+</body>
+</html>

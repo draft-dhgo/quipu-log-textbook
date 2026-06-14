@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>31 · The tower middleware: auto-recording HTTP requests — The Quipu-Log Book</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ Contents</button><b>The Quipu-Log Book</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn active" href="31-tower-middleware.html">EN</a><a class="langbtn" href="ko/31-tower-middleware.html">한국어</a></div>
+<a class="home" href="index.html">The Quipu-Log Book</a>
+<div class="sub">Storage engines and tamper-evident audit logs, built on nothing but the filesystem — explained from the ground up</div>
+<div class="part">Part 1 · Starting point: files, not a DB</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>What an audit log is, and why “files, no DB”</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>The map, and the DB↔filesystem correspondence</a>
+<div class="part">Part 2 · Filesystem basics</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>Filesystem basics: files, directories, inodes, descriptors</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>Reading &amp; writing, and the atomicity of rename</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>When data really hits disk: the page cache and fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>The std::fs toolbox: handling files in Rust</a>
+<div class="part">Part 3 · The heart of the engine: the append-only log</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>Append-only log = the WAL is the database</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>Segment files and rollover</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>Record framing: length, CRC32, magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>Serialization: turning structs into bytes</a>
+<div class="part">Part 4 · Re-creating what a DB gave you for free, on files</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>Durability: fsync policy and group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>Atomicity and crash recovery: torn writes and tail detection</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>Concurrency I: single-writer and the file lock</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>Concurrency II: read snapshots and MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>Indexing: in-memory index + on-disk tokens</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>Query execution: segment scans and cursor pagination</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>Deletion and retention: segment unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>Store layout and format versioning</a>
+<div class="part">Part 5 · Integrity: making tampering evident (Security I)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>Hash functions and SHA-256: a digital fingerprint</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>The Merkle history tree: committing the log to 32 bytes</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>Inclusion proofs and consistency proofs</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>Checkpoints and external anchoring</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>Tamper-evident vs tamper-proof, and the threat model</a>
+<div class="part">Part 6 · Confidentiality: searching while keeping secrets (Security II)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>Field protection in four levels: plaintext/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>Symmetric, asymmetric, hybrid encryption and AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>Blind indexes: searching without plaintext</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>Write-only deployment: a server without the private key</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>Key management: keyring, versioning, rotation vs re-keying</a>
+<div class="part">Part 7 · The write &amp; read paths</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>The async pipeline: non-blocking emit and backpressure</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>Reliability: retries, backoff, DLQ, idempotency</a>
+<a class="lnk active" href="31-tower-middleware.html"><span class="n">31</span>The tower middleware: auto-recording HTTP requests</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>Permissions (RBAC), filters, and meta-audit</a>
+<div class="part">Part 8 · Distribution, operations, scaling</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>Single point of failure and availability: the client spool</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>Horizontal scaling: sharding, consistent hashing, read replicas</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>Server, client, MCP, and observability</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">Part 7 · The write &amp; read paths</span><h1><span class="chno">31</span> · The tower middleware: auto-recording HTTP requests</h1></div><article>
+
+<p class="lead">What if you could audit every HTTP request automatically without touching a single line of service code? That's exactly what <code>AuditLayer</code> does — like Express middleware or a Spring interceptor, it wraps the actual handler and records events before and after the request arrives.</p>
+
+<div class="callout analogy"><span class="lab">Analogy</span><p>It sits in the same role as Express's <code>app.use(auditMiddleware)</code> or Spring's <code>HandlerInterceptor</code>. Auditing happens in the outer shell — business logic is never touched.</p></div>
+
+<h2>tower Layer = the decorator pattern</h2>
+
+<p>Rust's <code>tower</code> library abstracts middleware through the concept of a <strong>Layer</strong>. A Layer takes an inner service, wraps it, and returns a new service. Stack multiple layers and they nest like an onion.</p>
+
+<figure>
+<svg viewBox="0 0 500 240" role="img" aria-label="tower Layer wrapping: an HTTP request reaches the inner service through AuditLayer, and the audit event is emitted when the response comes back">
+  <defs>
+    <marker id="arr3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .l3{fill:#e6e8ee;font:600 12px -apple-system,sans-serif}
+    .s3{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .a3{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#arr3)}
+    .a3b{stroke:#7aa2ff;stroke-width:1.5;stroke-dasharray:4,3;marker-end:url(#arr3)}
+  </style>
+
+  <!-- outer AuditLayer shell -->
+  <rect x="20" y="20" width="460" height="200" rx="10" fill="#161922" stroke="#2a2f3d" stroke-width="2"/>
+  <text x="40" y="44" class="l3" fill="#ffd479">AuditLayer (tower Layer)</text>
+
+  <!-- inner service box -->
+  <rect x="180" y="80" width="140" height="80" rx="8" fill="#16241d" stroke="#2c4a3a" stroke-width="1.5"/>
+  <text x="250" y="116" class="l3" text-anchor="middle" fill="#8be9c0">inner service</text>
+  <text x="250" y="134" class="s3" text-anchor="middle">(axum router)</text>
+
+  <!-- pre-filter label -->
+  <text x="60" y="110" class="s3" fill="#c792ea">① pre-filter</text>
+  <text x="60" y="125" class="s3" fill="#c792ea">② capture request</text>
+
+  <!-- post labels -->
+  <text x="340" y="110" class="s3" fill="#7aa2ff">③ capture response</text>
+  <text x="340" y="125" class="s3" fill="#7aa2ff">④ emit(event)</text>
+
+  <!-- HTTP request arrow in -->
+  <line x1="20" y1="120" x2="178" y2="120" class="a3"/>
+  <text x="50" y="112" class="s3">HTTP request</text>
+
+  <!-- inner service arrow out -->
+  <line x1="320" y1="120" x2="460" y2="120" class="a3"/>
+  <text x="355" y="112" class="s3">HTTP response</text>
+
+  <!-- emit arrow down -->
+  <line x1="250" y1="200" x2="250" y2="218" class="a3b"/>
+  <text x="165" y="215" class="s3" fill="#7aa2ff">AuditHandle.emit_unchecked(event)</text>
+</svg>
+<figcaption>AuditLayer wraps the inner service and emits an audit event into the pipeline on both sides of the request/response flow.</figcaption>
+</figure>
+
+<h2>EndpointRule: deciding which endpoints to audit</h2>
+
+<p>You can audit every request, but usually you'll narrow the scope with <code>EndpointRule</code>. Rules match on path prefix and HTTP method, and also control whether the request and response bodies are captured.</p>
+
+<pre><span class="filename">examples/axum-demo/src/main.rs</span><code><span class="kw">let</span> audit_layer = <span class="ty">AuditLayer</span>::<span class="fn">new</span>(handle.clone())
+    .rules(vec![
+        <span class="hl">EndpointRule::prefix("/api/")</span>
+<span class="hl">            .method(Method::PUT)</span>
+<span class="hl">            .capture_request()    // capture request body</span>
+<span class="hl">            .capture_response()   // capture response body</span>
+    ])
+    .filters(FilterSet::new().pre(|req| {
+        <span class="com">// health checks don't need auditing → Skip</span>
+        <span class="kw">if</span> req.uri.path() == "/api/health" { FilterDecision::Skip }
+        <span class="kw">else</span> { FilterDecision::Audit }
+    }))
+    .target_extractor(|req, _res, _req_body, _res_body| {
+        <span class="dim">// derive the target entity from the URL path</span>
+        req.uri.path().strip_prefix("/api/docs/")
+            .map(|id| vec![TargetSpec::new("default_target", EntityInput::new(id)...)])
+            .unwrap_or_default()
+    });</code></pre>
+
+<p>Attaching the layer to an axum router takes exactly one line. Existing handler code is untouched.</p>
+
+<pre><span class="filename">examples/axum-demo/src/main.rs</span><code><span class="kw">let</span> app = Router::new()
+    .route("/api/docs/{id}", put(my_handler))
+    <span class="hl">.layer(audit_layer)</span>  <span class="com">// this one line auto-audits /api/**</span>
+    .route("/audit/logs", get(query_logs))
+    .with_state(handle);</code></pre>
+
+<h2>Inside the flow: what call() does</h2>
+
+<p>When a request arrives, <code>AuditService::call</code> runs through these steps in order.</p>
+
+<ol>
+  <li><strong>EndpointRule matching</strong> — checks whether this request is in scope for auditing.</li>
+  <li><strong>pre-filter</strong> — checks exemption conditions (health checks, static files, etc.). A <code>Skip</code> decision proxies the request straight through.</li>
+  <li><strong>Request body capture</strong> — if <code>capture_request_body</code> is set, reads the body and reassembles the same bytes to pass on to the inner service.</li>
+  <li><strong>Inner service call</strong> — the real handler runs.</li>
+  <li><strong>Response body capture</strong> — if <code>capture_response_body</code> is set, reads the response bytes.</li>
+  <li><strong>target_extractor</strong> — derives the target entity from the request and response information.</li>
+  <li><strong>post-filter</strong> — looks at the response to make the final exemption decision (e.g., skip 304s).</li>
+  <li><strong><code>emit_unchecked</code></strong> — pushes the event into the pipeline. Non-blocking, so it never stalls the response path.</li>
+</ol>
+
+<div class="callout warn"><span class="lab">Caution</span><p>Enabling body capture loads the entire body into memory. Bodies larger than <code>max_capture_bytes</code> (default 1 MiB) are not captured — only a size note is stored. For endpoints that accept large file uploads, turn capture off or lower the limit.</p></div>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① Explain what "tower Layer is the decorator pattern" means, using the onion analogy.<br>② What is the difference between a pre-filter and a post-filter? When would you use each?<br>③ Think about what type transformations happen internally when you write <code>.layer(audit_layer)</code>.</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="30-reliability-dlq.html"><span class="dir">← Prev</span><span class="t">30 · Reliability: retries, backoff, DLQ, idempotency</span></a><a class="next" href="32-permissions-meta-audit.html"><span class="dir">Next →</span><span class="t">32 · Permissions (RBAC), filters, and meta-audit</span></a></div>
+</div>
+</main>
+</div>
+<script src="assets/textbook.js"></script>
+</body>
+</html>

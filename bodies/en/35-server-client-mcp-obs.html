@@ -1,0 +1,157 @@
+<article>
+
+<p class="lead">This is the book's final chapter. We take one last look at the layer where everything you've learned — the storage engine, integrity, confidentiality, the pipeline — actually runs as a live service. Server mode, the client, the MCP auditor, and operational observability: a high-level survey of each, highlighting only the key decisions.</p>
+
+<h2>Server mode: a single store over HTTP/JSON</h2>
+
+<p>Embedded mode plants the audit log directly inside your process. Server mode wraps that same engine in an HTTP daemon, so <em>services written in any language</em> can send and query audit records with a single bearer token.</p>
+
+<figure>
+<svg viewBox="0 0 680 200" role="img" aria-label="quipu-server deployment: services connect to a single daemon over HTTP">
+  <defs>
+    <marker id="asv" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .t35{fill:#e6e8ee;font:13px -apple-system,sans-serif}
+    .s35{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .bx35{fill:#161922;stroke:#2a2f3d;stroke-width:1.5}
+  </style>
+
+  <!-- Services -->
+  <rect x="10" y="30" width="110" height="36" class="bx35" rx="5"/>
+  <text x="65" y="53" class="s35" text-anchor="middle">Service A (Go)</text>
+  <rect x="10" y="82" width="110" height="36" class="bx35" rx="5"/>
+  <text x="65" y="105" class="s35" text-anchor="middle">Service B (Python)</text>
+  <rect x="10" y="134" width="110" height="36" class="bx35" rx="5"/>
+  <text x="65" y="157" class="s35" text-anchor="middle">Auditor / SIEM</text>
+
+  <!-- Arrows -->
+  <line x1="120" y1="48" x2="205" y2="90" stroke="#9aa3b2" stroke-width="1.2" marker-end="url(#asv)"/>
+  <line x1="120" y1="100" x2="205" y2="100" stroke="#9aa3b2" stroke-width="1.2" marker-end="url(#asv)"/>
+  <line x1="120" y1="152" x2="205" y2="110" stroke="#9aa3b2" stroke-width="1.2" marker-end="url(#asv)"/>
+  <text x="155" y="80" class="s35" text-anchor="middle">Bearer token</text>
+  <text x="155" y="92" class="s35" text-anchor="middle">HTTP/JSON</text>
+
+  <!-- quipu-server -->
+  <rect x="210" y="48" width="160" height="104" class="bx35" rx="8"/>
+  <text x="290" y="70" class="t35" text-anchor="middle" fill="#7aa2ff">quipu-server</text>
+  <text x="290" y="89" class="s35" text-anchor="middle">RBAC (deny-by-default)</text>
+  <text x="290" y="106" class="s35" text-anchor="middle">bounded queue + writer</text>
+  <text x="290" y="123" class="s35" text-anchor="middle">file lock (single process)</text>
+  <text x="290" y="140" class="s35" text-anchor="middle">write-only capable</text>
+
+  <!-- store -->
+  <rect x="410" y="48" width="130" height="104" rx="8" fill="#16241d" stroke="#8be9c0" stroke-width="1.5"/>
+  <text x="475" y="70" class="t35" text-anchor="middle" fill="#8be9c0">Store</text>
+  <text x="475" y="90" class="s35" text-anchor="middle">logs/</text>
+  <text x="475" y="107" class="s35" text-anchor="middle">registry/&lt;type&gt;/</text>
+  <text x="475" y="124" class="s35" text-anchor="middle">dlq/</text>
+  <text x="475" y="141" class="s35" text-anchor="middle">access/</text>
+
+  <line x1="370" y1="100" x2="410" y2="100" stroke="#8be9c0" stroke-width="1.5" marker-end="url(#asv)"/>
+
+  <!-- syslog -->
+  <rect x="560" y="80" width="110" height="42" class="bx35" rx="5"/>
+  <text x="615" y="97" class="s35" text-anchor="middle" fill="#ffd479">syslog / SIEM</text>
+  <text x="615" y="112" class="s35" text-anchor="middle">UDP mirror (best-effort)</text>
+  <line x1="370" y1="115" x2="560" y2="100" stroke="#ffd479" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#asv)"/>
+</svg>
+<figcaption>quipu-server lets services in any language connect to a single audit daemon over HTTP. The store is held exclusively by a single process via a file lock.</figcaption>
+</figure>
+
+<p>A few key design points about the server.</p>
+
+<p><strong>Token authentication and RBAC.</strong> Every endpoint requires <code>Authorization: Bearer &lt;token&gt;</code> (except healthz). Tokens are stored as SHA-256 hashes in the config file, so the config file itself is never a credential. Each token is assigned a role, and each role is granted actions (emit · query · administer). Deny-by-default — anything not explicitly permitted is refused. Tokens can be hot-reloaded with zero downtime via <code>SIGHUP</code>.</p>
+
+<p><strong>Write-only deployment.</strong> As covered in detail in <span class="pill">Ch. 27 write-only deployment</span>, the server can start without an RSA private key. In that mode, RSA-protected fields are returned as undecryptable ciphertext — even if the server is compromised, plaintext is never exposed.</p>
+
+<p><strong>Query concurrency cap.</strong> Queries are full scans, so concurrent queries can monopolize the CPU. <code>auth.max_concurrent_queries</code> limits the number of simultaneous queries per token; exceeding the limit is rejected immediately with 429.</p>
+
+<p><strong>NDJSON export.</strong> <code>POST /v1/logs/export</code> takes the same <code>LogQuery</code> and responds with <code>application/x-ndjson</code> — intended for SIEM pipelines and auditor handoffs.</p>
+
+<h2>MCP: the LLM as auditor</h2>
+
+<p><code>quipu-mcp</code> is a Model Context Protocol (MCP) server — it lets an LLM agent query and verify audit logs in natural language. Questions like "What documents did Alice delete last week?" can be answered by the agent directly from the log.</p>
+
+<div class="callout why"><span class="lab">Why this design?</span><p>Making the MCP server an embedded store would create a file lock conflict with an already-running <code>quipu-server</code> — by design, there is only one writer. So <code>quipu-mcp</code> is an <strong>HTTP client</strong>, not an embedded store. That choice lets it reuse <code>quipu-server</code>'s RBAC, query concurrency cap, key boundaries, and meta-auditing entirely for free. MCP adds zero new security surface.</p></div>
+
+<p>Three tools are exposed to the agent.</p>
+
+<table>
+  <tr><th>Tool</th><th>What it does</th><th>Required permission</th></tr>
+  <tr><td><code>query_logs</code></td><td>Search audit logs with LogQuery</td><td>query</td></tr>
+  <tr><td><code>get_entity_history</code></td><td>Full version history of an entity</td><td>query</td></tr>
+  <tr><td><code>verify_store_integrity</code></td><td>Run chain integrity verification</td><td>administer</td></tr>
+</table>
+
+<p>Tool failures are returned as a normal result with <code>isError: true</code> rather than as a JSON-RPC protocol error. This lets the agent read the error as text and adjust its reasoning — the session stays alive.</p>
+
+<p>And an important property: <strong>the agent's own queries are recorded in the meta-audit log.</strong> Every tool call goes through <code>quipu-server</code>'s query path, so when <code>access_log</code> is enabled, "when the AI queried what" is captured automatically. This is a free property the MCP crate gets without any special handling.</p>
+
+<pre><span class="filename">crates/quipu-mcp/src/lib.rs — core design decision</span><code><span class="com">// The agent talks MCP to this server; this server talks the</span>
+<span class="com">// ordinary token-authenticated HTTP API to quipu-server.</span>
+<span class="hl">// Access is audited for free. Every tool call is an HTTP query
+// against the server, so the agent's own reads land in the ledger
+// through the same path — without this crate doing anything special.</span></code></pre>
+
+<h2>Observability: you can't operate what you can't see</h2>
+
+<p>A server going down, a disk filling up, events piling into the DLQ — you need to know about these things in time to act. Quipu-Log supports this with Prometheus, healthz, and syslog.</p>
+
+<h3>Prometheus: GET /metrics</h3>
+
+<p>Metrics are served as <strong>lock-free atomic snapshots</strong> on a path separate from the writer thread. Even if the writer dies, <code>/metrics</code> stays alive — the most important information available at the most critical moment.</p>
+
+<pre><span class="filename">crates/quipu-middleware/src/metrics.rs — lock-free histogram</span><code><span class="kw">pub struct</span> <span class="ty">PipelineMetrics</span> {
+    <span class="dim">queue_depth: AtomicI64,</span>
+    <span class="dim">writes_ok: AtomicU64,</span>
+    <span class="dim">writes_parked: AtomicU64,   // events sent to DLQ</span>
+    <span class="dim">events_lost: AtomicU64,     // store + DLQ both failed</span>
+    <span class="hl">latency_buckets: [AtomicU64; LATENCY_BUCKETS_SECS.len()], // histogram</span>
+    <span class="dim">latency_sum_micros: AtomicU64,</span>
+}</code></pre>
+
+<p>Key metrics and recommended alerts.</p>
+
+<table>
+  <tr><th>Metric</th><th>Type</th><th>Alert threshold</th></tr>
+  <tr><td><code>quipu_writer_alive</code></td><td>gauge</td><td>page immediately if == 0</td></tr>
+  <tr><td><code>quipu_disk_full</code></td><td>gauge</td><td>page immediately if == 1</td></tr>
+  <tr><td><code>quipu_events_lost_total</code></td><td>counter</td><td>page immediately if rate &gt; 0</td></tr>
+  <tr><td><code>quipu_dlq_entries</code></td><td>gauge</td><td>warn if &gt; 0 persists for several minutes</td></tr>
+  <tr><td><code>quipu_disk_low</code></td><td>gauge</td><td>warn if == 1</td></tr>
+  <tr><td><code>quipu_write_latency_seconds</code></td><td>histogram</td><td>monitor for rising p99 trend</td></tr>
+</table>
+
+<h3>GET /v1/healthz: three states</h3>
+
+<p>healthz returns JSON: <code>{"status": "ok"/"degraded"/"unhealthy", "reasons": [...]}</code>.</p>
+
+<ul>
+  <li><strong>unhealthy (HTTP 503)</strong> — writer thread is dead, ENOSPC latch is set, or the store root probe failed. Events are not being persisted.</li>
+  <li><strong>degraded (HTTP <em>200</em>)</strong> — writes are working but disk free space is below the threshold. <strong>The 200 is the point</strong> — a load balancer must not pull this instance. Alerts should fire on the <code>status</code> field, not the status code.</li>
+  <li><strong>ok (HTTP 200)</strong> — everything is normal.</li>
+</ul>
+
+<pre><span class="filename">crates/quipu-middleware/src/health.rs — HealthState</span><code><span class="kw">pub struct</span> <span class="ty">HealthState</span> {
+    writer_alive: AtomicBool,
+    disk_full: AtomicBool,    <span class="com">// ENOSPC latch — auto-clears on successful write</span>
+    low_disk: AtomicBool,     <span class="com">// early warning — below disk threshold</span>
+    <span class="hl">// all atomic — healthz remains readable even if the writer dies</span>
+}</code></pre>
+
+<h3>syslog / SIEM mirror</h3>
+
+<p>Add <code>"sink": {"syslog_udp": "10.0.0.5:514"}</code> to the config and every audited event is mirrored to the SIEM as RFC 5424 syslog over UDP. The mirror is best-effort — if the backlog fills, lines are dropped and the write path is never blocked. The store is the system of record; the SIEM holds a skeleton copy.</p>
+
+<div class="callout key"><span class="lab">Security note</span><p><code>GET /metrics</code> requires an administer token. Metrics contain internal operational details — queue depth, DLQ state, and so on — that could become an attack surface if exposed publicly. Make sure your Prometheus scrape configuration always includes the bearer token.</p></div>
+
+<h2>Closing the book: what it means to build a database on files</h2>
+
+<p>This book started with a single question: "How do you hand-build everything a database gives you for free, on top of plain files?" We built a WAL out of an append-only file, detected torn writes with CRC, tuned durability with fsync policy, and enforced a single writer with a file lock. We built indexes directly in memory and made reads non-blocking with snapshots. We layered Merkle trees on top for tamper-evidence, and searched without plaintext using AEAD and blind indexes. And at the end, we scaled this simple single-writer design — without making it complex — using client-side spooling and sharding. <strong>At every layer, one principle held without exception: keep it simple, and don't add complexity where you don't have to.</strong> That is the deepest lesson Quipu-Log — and every storage engine built on a filesystem — has to teach.</p>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① Why is <code>quipu-mcp</code> an HTTP client rather than an embedded store? How does that connect to the single-writer design?<br>② Why does <code>/v1/healthz</code> return HTTP 200 in the "degraded" state? What operational problem would returning 503 cause?<br>③ Looking back at the whole book, pick three examples where something a database "gives you for free" was instead built directly on files, and explain each one.</p></div>
+
+</article>

@@ -1,0 +1,163 @@
+<article>
+
+<p class="lead"><span class="pill">7장</span>에서 "파일 끝에 덧붙이기만 한다"는 원칙을 배웠습니다. 그런데 한 파일만 계속 늘리면 어떻게 될까요? 수 GB짜리 파일 하나, 삭제는 어떻게 하나, 백업은? 이 챕터는 로그를 <strong>여러 파일(세그먼트)로 쪼개는 이유와 방법</strong> — 그리고 쪼갤 때 생기는 롤오버·봉인·재구성 문제를 다룹니다.</p>
+
+<div class="callout"><span class="lab">한 문장 요약</span><p>하나의 로그는 여러 <em>세그먼트 파일</em>로 나뉜다. 가득 찬 파일은 봉인(sealed)되어 불변이 되고, 새 파일이 열려 쓰기를 이어받는다 — 이게 <strong>롤오버(rollover)</strong>다.</p></div>
+
+<h2>당신이 아는 것: SSTable과 데이터파일</h2>
+
+<p>관계형 DB를 쓴 적 있다면 데이터가 여러 파일로 나뉜다는 걸 어렴풋이 알고 있을 겁니다. PostgreSQL의 테이블은 1 GB 단위로 파일이 쪼개지고, LSM-Tree 기반 엔진(RocksDB 등)은 <strong>SSTable</strong>이라는 불변 파일 단위로 데이터를 관리합니다. 왜 한 파일이 아닐까요?</p>
+
+<ul>
+  <li><strong>삭제가 가볍습니다.</strong> "이 기간 데이터 버려"를 파일 하나 unlink로 끝냅니다. 행을 찾아 지우는(vacuum) 무거운 작업이 필요 없죠.</li>
+  <li><strong>백업·복제가 쉽습니다.</strong> 오래된 파일은 더 이상 바뀌지 않으니, 복사하는 동안 파일이 달라질 걱정이 없습니다.</li>
+  <li><strong>손상 범위가 제한됩니다.</strong> 한 파일이 깨져도 다른 파일의 데이터는 온전합니다.</li>
+</ul>
+
+<p>Quipu-Log도 같은 이유로 로그를 여러 세그먼트 파일로 나눕니다. 단, SSTable처럼 정렬·병합(compaction)은 없습니다 — append-only이므로 쓴 순서가 곧 파일 순서입니다.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ 파일시스템</span><p><strong>DB에서는</strong> LSM의 SSTable, PostgreSQL의 relation 파일처럼 데이터를 유한한 크기의 파일 단위로 쪼갠다. <strong>Quipu-Log에서는</strong> 그 단위가 <em>세그먼트(.log)</em>다. 봉인된 세그먼트는 SSTable처럼 불변이고, active 세그먼트는 끝이 열려 있다.</p></div>
+
+<h2>세그먼트의 두 상태: active vs sealed</h2>
+
+<p>세그먼트는 항상 둘 중 하나입니다.</p>
+
+<figure>
+<svg viewBox="0 0 720 260" role="img" aria-label="active 세그먼트와 sealed 세그먼트 구조">
+  <defs>
+    <marker id="arr8" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <!-- sealed segs -->
+  <text x="30" y="28" fill="#e6e8ee" font="600 14px -apple-system,sans-serif" font-size="14" font-weight="600" font-family="-apple-system,sans-serif">봉인(sealed) — 읽기 전용, 불변</text>
+  <rect x="30" y="42" width="140" height="70" rx="6" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="50" y="64" fill="#8be9c0" font-size="12" font-family="-apple-system,sans-serif">seg-0000000000.log</text>
+  <rect x="42" y="72" width="116" height="10" rx="2" fill="#0b0d12"/>
+  <rect x="42" y="86" width="116" height="10" rx="2" fill="#0b0d12"/>
+  <rect x="42" y="100" width="116" height="10" rx="2" fill="#0b0d12"/>
+
+  <rect x="190" y="42" width="140" height="70" rx="6" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="210" y="64" fill="#8be9c0" font-size="12" font-family="-apple-system,sans-serif">seg-0000000001.log</text>
+  <rect x="202" y="72" width="116" height="10" rx="2" fill="#0b0d12"/>
+  <rect x="202" y="86" width="116" height="10" rx="2" fill="#0b0d12"/>
+  <rect x="202" y="100" width="116" height="10" rx="2" fill="#0b0d12"/>
+
+  <text x="354" y="82" fill="#9aa3b2" font-size="20" font-family="-apple-system,sans-serif">…</text>
+
+  <!-- active seg -->
+  <text x="430" y="28" fill="#e6e8ee" font-size="14" font-weight="600" font-family="-apple-system,sans-serif">active — 쓰기 중</text>
+  <rect x="430" y="42" width="260" height="150" rx="6" fill="#16241d" stroke="#3a6a50" stroke-width="2"/>
+  <text x="450" y="64" fill="#ffd479" font-size="12" font-family="-apple-system,sans-serif">seg-0000000007.log</text>
+  <rect x="442" y="72" width="230" height="10" rx="2" fill="#0b0d12"/>
+  <rect x="442" y="86" width="230" height="10" rx="2" fill="#0b0d12"/>
+  <rect x="442" y="100" width="230" height="10" rx="2" fill="#0b0d12"/>
+  <rect x="442" y="114" width="230" height="10" rx="2" fill="#0b0d12"/>
+  <rect x="442" y="128" width="160" height="10" rx="2" fill="#0b0d12"/>
+  <!-- append arrow -->
+  <line x1="560" y1="148" x2="560" y2="172" stroke="#7aa2ff" stroke-width="2" marker-end="url(#arr8)"/>
+  <text x="570" y="167" fill="#7aa2ff" font-size="12" font-family="-apple-system,sans-serif">append</text>
+
+  <!-- max_segment_bytes label -->
+  <line x1="375" y1="120" x2="428" y2="120" stroke="#ff8b8b" stroke-width="1.5" stroke-dasharray="4"/>
+  <text x="300" y="124" fill="#ff8b8b" font-size="11" font-family="-apple-system,sans-serif">max_segment_bytes</text>
+
+  <!-- rollover arrow -->
+  <path d="M 375 90 Q 400 90 400 120 Q 400 155 430 165" stroke="#ffd479" stroke-width="1.5" fill="none" marker-end="url(#arr8)"/>
+  <text x="290" y="168" fill="#ffd479" font-size="12" font-family="-apple-system,sans-serif">롤오버 → 새 active</text>
+
+  <!-- seq labels -->
+  <text x="30" y="130" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">seq=0</text>
+  <text x="190" y="130" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">seq=1</text>
+  <text x="430" y="205" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">seq=7 (active_seq)</text>
+</svg>
+<figcaption>봉인된 세그먼트는 불변·읽기 전용이다. active 세그먼트만 끝에 레코드가 붙는다. <code>max_segment_bytes</code>를 넘으면 롤오버해 active가 교체된다.</figcaption>
+</figure>
+
+<p><strong>active 세그먼트</strong>는 현재 쓰고 있는 파일입니다. 레코드가 계속 append됩니다.<br>
+<strong>sealed 세그먼트</strong>는 <code>max_segment_bytes</code>를 초과해 "더 이상 쓰지 않기로 결정된" 파일입니다. 내용이 굳어집니다 — 수정이 없으므로 변조 탐지와 백업 관점에서 이상적입니다.</p>
+
+<h2>파일 이름과 시퀀스 번호</h2>
+
+<p>각 세그먼트 파일은 <code>seg-NNNNNNNNNN.log</code> 형식으로 이름 붙습니다. N은 10자리 0-패딩 정수, 즉 <em>시퀀스 번호(sequence number)</em>입니다. 코드에서는:</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/table.rs</span><code><span class="dim">const SEGMENT_PREFIX: &amp;str = "seg-";</span>
+<span class="dim">const SEGMENT_SUFFIX: &amp;str = ".log";</span>
+
+<span class="kw">fn</span> <span class="fn">segment_path</span>(dir: &amp;<span class="ty">Path</span>, seq: <span class="ty">u64</span>) -&gt; <span class="ty">PathBuf</span> {
+<span class="hl">    dir.join(format!("{SEGMENT_PREFIX}{seq:010}{SEGMENT_SUFFIX}"))</span>
+}</code></pre>
+
+<p>0-패딩 덕분에 파일 이름을 사전순으로 정렬하면 시간순이 됩니다. OS의 <code>read_dir</code>로 파일 목록을 받아 이름으로 정렬하면 곧바로 "과거 → 현재" 순서가 되죠. 가장 번호가 큰 파일이 active 세그먼트입니다.</p>
+
+<h2>롤오버: 새 세그먼트를 여는 순간</h2>
+
+<p>레코드를 append할 때마다 "이 파일이 충분히 찼는가?"를 확인합니다. 코드를 보겠습니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/table.rs — Table::append</span><code><span class="kw">pub fn</span> <span class="fn">append</span>(&amp;<span class="kw">mut</span> <span class="kw">self</span>, row: &amp;<span class="ty">T</span>, timestamp: <span class="ty">u64</span>) -&gt; <span class="ty">Result</span>&lt;()&gt; {
+    <span class="kw">let</span> payload = bincode::serialize(row)?;
+<span class="hl">    if !self.active.is_empty()
+        &amp;&amp; self.active.len() + payload.len() as <span class="ty">u64</span> &gt; self.max_segment_bytes
+    {
+        self.roll()?;
+    }</span>
+    self.active.append(&amp;payload, timestamp)?;
+    self.spine.append(leaf_hash(&amp;payload))?;
+    <span class="ty">Ok</span>(())
+}</code></pre>
+
+<p>active 세그먼트가 비어 있지 않고, 이 레코드를 더하면 <code>max_segment_bytes</code>를 넘을 것 같으면 <code>roll()</code>을 부릅니다. 기본값은 <code>64 * 1024 * 1024</code> = 64 MiB(<code>StoreConfig::new</code>에서 설정)입니다.</p>
+
+<p><code>roll()</code> 안에서는 ① 현재 active를 fsync하고 ② 메타데이터 사이드카를 쓴 다음 ③ sealed로 이동, ④ 시퀀스 번호 +1로 새 파일을 엽니다. 이 순서가 중요합니다 — 새 파일이 열리기 전에 이전 파일이 완전히 기록되어야 하니까요.</p>
+
+<h2>사이드카(.meta)와 재시작 최적화</h2>
+
+<p>재시작할 때마다 sealed 세그먼트를 처음부터 읽어 시간 범위를 파악하면 느립니다. 그래서 Quipu-Log는 봉인 시점에 <strong>사이드카 파일</strong>(<code>seg-NNNNNNNNNN.meta</code>)을 씁니다. 여기에 최소·최대 타임스탬프, 레코드 수, base_index를 보관합니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/table.rs</span><code><span class="dim">#[derive(Debug, Clone, Copy, Serialize, Deserialize)]</span>
+<span class="kw">struct</span> <span class="ty">SegmentMeta</span> {
+<span class="hl">    min_timestamp: <span class="ty">u64</span>,
+    max_timestamp: <span class="ty">u64</span>,
+    records: <span class="ty">u64</span>,
+    base_index: <span class="ty">u64</span>,</span>
+}</code></pre>
+
+<div class="callout warn"><span class="lab">주의</span><p>사이드카는 힌트(hint)일 뿐, <strong>진실의 원본이 아닙니다.</strong> 크래시로 사이드카 쓰기가 실패해도 재시작 시 세그먼트를 처음부터 <em>skim</em>(훑기)해서 재구성합니다. 무결성 증명(머클 트리)은 절대 사이드카에 의존하지 않습니다.</p></div>
+
+<h2>base_index: 세그먼트 파일을 넘어서도 유지되는 레코드 위치</h2>
+
+<p>각 세그먼트의 <em>첫 번째 레코드</em>가 전체 로그에서 몇 번째인지 기록하는 값이 <code>base_index</code>입니다. 예를 들어 세그먼트 0이 100개, 세그먼트 1이 80개 레코드를 담고 있다면 세그먼트 2의 base_index는 180입니다.</p>
+
+<p>왜 필요할까요? 리텐션으로 세그먼트 0을 삭제해도, 세그먼트 2 안의 레코드들이 머클 트리에서 180번째부터임을 파일 헤더를 통해 알 수 있습니다. 세그먼트가 삭제된 후에도 <strong>머클 포함 증명(inclusion proof)이 유효</strong>하게 됩니다. <span class="pill">21장 포함 증명</span>에서 자세히 다룹니다.</p>
+
+<h2>재시작: 디렉토리를 읽고 상태를 복원</h2>
+
+<p>프로세스가 재시작하면 <code>Table::open</code>이 로그 디렉토리를 읽어 상태를 재구성합니다.</p>
+
+<ol>
+  <li><code>read_dir</code>로 <code>.log</code> 파일 목록을 수집하고 시퀀스 번호로 정렬합니다.</li>
+  <li>가장 번호가 큰 파일을 active 세그먼트로 지정합니다.</li>
+  <li>나머지는 사이드카를 읽어 sealed 목록에 등록합니다. 사이드카가 없으면 skim으로 재구성합니다.</li>
+  <li>마지막으로 <code>reconcile_spine()</code>을 불러 머클 스파인과 세그먼트를 동기화합니다. <span class="pill">12장 크래시 복구</span></li>
+</ol>
+
+<div class="callout dbfs"><span class="lab">DB ↔ 파일시스템</span><p><strong>DB에서는</strong> 카탈로그 테이블(pg_class 등)이 "어떤 파일이 어느 테이블에 속하나"를 알고 있다. <strong>Quipu-Log에서는</strong> 카탈로그가 없다 — 파일 이름 패턴(<code>seg-*.log</code>)이 곧 카탈로그다. 재시작 시 디렉토리를 읽는 것만으로 완전히 복원할 수 있다.</p></div>
+
+<h2>삭제는 unlink 한 번</h2>
+
+<p>리텐션 정책("30일 지난 것은 삭제")이 실행될 때 Quipu-Log가 하는 일은 매우 단순합니다 — 대상 sealed 세그먼트 파일을 <code>remove_file</code>(OS의 unlink)로 지웁니다. 행을 찾아 삭제하고 남은 공간을 재사용하는 vacuum 같은 것이 없습니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/table.rs — Table::purge_older_than</span><code><span class="kw">for</span> seq <span class="kw">in</span> &amp;doomed {
+    <span class="kw">if let</span> <span class="ty">Some</span>(s) = self.sealed.remove(seq) {
+<span class="hl">        std::fs::remove_file(s.path)?;</span>
+        <span class="kw">let</span> _ = std::fs::remove_file(meta_path(&amp;self.dir, *seq));
+    }
+}</code></pre>
+
+<p>active 세그먼트는 절대 지우지 않습니다 — 가장 최근 기록은 항상 살아남습니다.</p>
+
+<div class="callout why"><span class="lab">왜 이렇게?</span><p>세그먼트 단위 삭제는 O(1) 파일시스템 연산입니다. "30일 전 레코드를 행 단위로 찾아 지우기"는 로그 전체를 훑어야 하는 O(n) 작업이고, 남은 공간을 재사용하려면 compaction까지 필요합니다. append-only 설계가 삭제도 단순하게 만들어줍니다. 단, <em>세그먼트 경계보다 정밀한 삭제는 불가능</em>합니다 — 30.1일 전 레코드 하나만 지울 수는 없습니다. <span class="pill">17장 삭제와 보존</span></p></div>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① active 세그먼트와 sealed 세그먼트의 차이를 한 문장으로 설명해 보세요. 왜 sealed는 "불변"이라고 할 수 있나요?<br>② 재시작 시 Quipu-Log가 카탈로그 테이블 없이 세그먼트를 재구성할 수 있는 이유는 무엇인가요?<br>③ base_index가 없다면 리텐션 후에 무슨 문제가 생길까요?</p></div>
+
+</article>

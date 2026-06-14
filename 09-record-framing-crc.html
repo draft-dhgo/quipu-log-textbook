@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>09 · Record framing: length, CRC32, magic/version — The Quipu-Log Book</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ Contents</button><b>The Quipu-Log Book</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn active" href="09-record-framing-crc.html">EN</a><a class="langbtn" href="ko/09-record-framing-crc.html">한국어</a></div>
+<a class="home" href="index.html">The Quipu-Log Book</a>
+<div class="sub">Storage engines and tamper-evident audit logs, built on nothing but the filesystem — explained from the ground up</div>
+<div class="part">Part 1 · Starting point: files, not a DB</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>What an audit log is, and why “files, no DB”</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>The map, and the DB↔filesystem correspondence</a>
+<div class="part">Part 2 · Filesystem basics</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>Filesystem basics: files, directories, inodes, descriptors</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>Reading &amp; writing, and the atomicity of rename</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>When data really hits disk: the page cache and fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>The std::fs toolbox: handling files in Rust</a>
+<div class="part">Part 3 · The heart of the engine: the append-only log</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>Append-only log = the WAL is the database</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>Segment files and rollover</a>
+<a class="lnk active" href="09-record-framing-crc.html"><span class="n">09</span>Record framing: length, CRC32, magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>Serialization: turning structs into bytes</a>
+<div class="part">Part 4 · Re-creating what a DB gave you for free, on files</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>Durability: fsync policy and group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>Atomicity and crash recovery: torn writes and tail detection</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>Concurrency I: single-writer and the file lock</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>Concurrency II: read snapshots and MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>Indexing: in-memory index + on-disk tokens</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>Query execution: segment scans and cursor pagination</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>Deletion and retention: segment unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>Store layout and format versioning</a>
+<div class="part">Part 5 · Integrity: making tampering evident (Security I)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>Hash functions and SHA-256: a digital fingerprint</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>The Merkle history tree: committing the log to 32 bytes</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>Inclusion proofs and consistency proofs</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>Checkpoints and external anchoring</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>Tamper-evident vs tamper-proof, and the threat model</a>
+<div class="part">Part 6 · Confidentiality: searching while keeping secrets (Security II)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>Field protection in four levels: plaintext/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>Symmetric, asymmetric, hybrid encryption and AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>Blind indexes: searching without plaintext</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>Write-only deployment: a server without the private key</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>Key management: keyring, versioning, rotation vs re-keying</a>
+<div class="part">Part 7 · The write &amp; read paths</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>The async pipeline: non-blocking emit and backpressure</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>Reliability: retries, backoff, DLQ, idempotency</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>The tower middleware: auto-recording HTTP requests</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>Permissions (RBAC), filters, and meta-audit</a>
+<div class="part">Part 8 · Distribution, operations, scaling</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>Single point of failure and availability: the client spool</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>Horizontal scaling: sharding, consistent hashing, read replicas</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>Server, client, MCP, and observability</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">Part 3 · The heart of the engine: the append-only log</span><h1><span class="chno">09</span> · Record framing: length, CRC32, magic/version</h1></div><article>
+
+<p class="lead">When you string records one after another into a file, one problem immediately surfaces — "where does one record end and the next begin?" Looking at raw bytes, there are no boundaries. On top of that, disks occasionally corrupt bits silently. This chapter explains how Quipu-Log solves the boundary problem with frames and the silent-corruption problem with CRC32.</p>
+
+<div class="callout"><span class="lab">In one sentence</span><p>Each record is wrapped in a <code>[u32 length][u32 CRC32][u64 timestamp][payload]</code> frame. CRC catches <em>accidental corruption only</em> — detecting intentional tampering is the Merkle tree's job (<span class="pill">Part 5</span>).</p></div>
+
+<h2>What you already know: DB pages and checksums</h2>
+
+<p>Think about a database like PostgreSQL. Data is stored in 8 KB <strong>pages</strong>. Each page header includes a <strong>checksum</strong> that's recomputed on every read and compared against the stored value. A mismatch means "this page is a torn page (partially written) or has a disk error."</p>
+
+<p>Quipu-Log faces the same problem — but instead of fixed-size pages, it deals with <strong>variable-length records</strong>. So instead of page checksums, it uses a <strong>per-record frame header + CRC</strong>.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ Filesystem</span><p><strong>In a DB</strong>, fixed-size page headers hold checksums to detect torn pages. <strong>In Quipu-Log</strong>, every variable-length record is preceded by a frame header (length + CRC + timestamp) that handles both boundary detection and corruption in one shot.</p></div>
+
+<h2>Inside a file: MAGIC + header + frames</h2>
+
+<p>A segment file has this structure.</p>
+
+<figure>
+<svg viewBox="0 0 720 220" role="img" aria-label="Segment file binary layout">
+  <defs>
+    <marker id="arr9" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+
+  <!-- file background -->
+  <rect x="20" y="40" width="680" height="60" rx="6" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+
+  <!-- MAGIC 4B -->
+  <rect x="22" y="42" width="60" height="56" rx="4" fill="#241f12" stroke="#ffd479" stroke-width="1.5"/>
+  <text x="52" y="68" text-anchor="middle" fill="#ffd479" font-size="11" font-family="-apple-system,sans-serif" font-weight="600">ALOG</text>
+  <text x="52" y="83" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">4 B</text>
+
+  <!-- VERSION 1B -->
+  <rect x="84" y="42" width="40" height="56" rx="4" fill="#241f12" stroke="#ffd479" stroke-width="1.5"/>
+  <text x="104" y="68" text-anchor="middle" fill="#ffd479" font-size="11" font-family="-apple-system,sans-serif" font-weight="600">v=2</text>
+  <text x="104" y="83" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">1 B</text>
+
+  <!-- BASE_INDEX 8B -->
+  <rect x="126" y="42" width="70" height="56" rx="4" fill="#241f12" stroke="#ffd479" stroke-width="1.5"/>
+  <text x="161" y="64" text-anchor="middle" fill="#ffd479" font-size="10" font-family="-apple-system,sans-serif">base</text>
+  <text x="161" y="78" text-anchor="middle" fill="#ffd479" font-size="10" font-family="-apple-system,sans-serif">index</text>
+  <text x="161" y="92" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">8 B</text>
+
+  <!-- seg header label -->
+  <text x="100" y="26" text-anchor="middle" fill="#ffd479" font-size="12" font-family="-apple-system,sans-serif">Segment header (13 B)</text>
+
+  <!-- Frame 1 -->
+  <rect x="200" y="42" width="55" height="56" rx="4" fill="#16241d" stroke="#8be9c0" stroke-width="1.5"/>
+  <text x="227" y="65" text-anchor="middle" fill="#8be9c0" font-size="10" font-family="-apple-system,sans-serif">len</text>
+  <text x="227" y="79" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">u32 4B</text>
+
+  <rect x="257" y="42" width="55" height="56" rx="4" fill="#16241d" stroke="#8be9c0" stroke-width="1.5"/>
+  <text x="284" y="65" text-anchor="middle" fill="#8be9c0" font-size="10" font-family="-apple-system,sans-serif">crc32</text>
+  <text x="284" y="79" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">u32 4B</text>
+
+  <rect x="314" y="42" width="55" height="56" rx="4" fill="#16241d" stroke="#8be9c0" stroke-width="1.5"/>
+  <text x="341" y="65" text-anchor="middle" fill="#8be9c0" font-size="10" font-family="-apple-system,sans-serif">ts</text>
+  <text x="341" y="79" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">u64 8B</text>
+
+  <rect x="371" y="42" width="90" height="56" rx="4" fill="#0b1a14" stroke="#8be9c0" stroke-width="1.5"/>
+  <text x="416" y="65" text-anchor="middle" fill="#8be9c0" font-size="10" font-family="-apple-system,sans-serif">payload</text>
+  <text x="416" y="79" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">len bytes</text>
+
+  <!-- frame 1 brace label -->
+  <text x="340" y="26" text-anchor="middle" fill="#8be9c0" font-size="12" font-family="-apple-system,sans-serif">Record frame #1</text>
+
+  <!-- Frame 2 -->
+  <rect x="465" y="42" width="55" height="56" rx="4" fill="#16241d" stroke="#8be9c0" stroke-width="1"/>
+  <text x="492" y="65" text-anchor="middle" fill="#8be9c0" font-size="10" font-family="-apple-system,sans-serif">len</text>
+  <rect x="522" y="42" width="55" height="56" rx="4" fill="#16241d" stroke="#8be9c0" stroke-width="1"/>
+  <text x="549" y="65" text-anchor="middle" fill="#8be9c0" font-size="10" font-family="-apple-system,sans-serif">crc32</text>
+  <rect x="579" y="42" width="55" height="56" rx="4" fill="#16241d" stroke="#8be9c0" stroke-width="1"/>
+  <text x="606" y="65" text-anchor="middle" fill="#8be9c0" font-size="10" font-family="-apple-system,sans-serif">ts</text>
+  <text x="672" y="65" text-anchor="middle" fill="#9aa3b2" font-size="12" font-family="-apple-system,sans-serif">…</text>
+
+  <!-- byte count bar -->
+  <line x1="200" y1="115" x2="461" y2="115" stroke="#8be9c0" stroke-width="1"/>
+  <line x1="200" y1="110" x2="200" y2="120" stroke="#8be9c0" stroke-width="1"/>
+  <line x1="461" y1="110" x2="461" y2="120" stroke="#8be9c0" stroke-width="1"/>
+  <text x="330" y="135" text-anchor="middle" fill="#8be9c0" font-size="11" font-family="-apple-system,sans-serif">FRAME_HEADER (16 B) + payload</text>
+
+  <!-- total seg header -->
+  <line x1="22" y1="155" x2="196" y2="155" stroke="#ffd479" stroke-width="1"/>
+  <line x1="22" y1="150" x2="22" y2="160" stroke="#ffd479" stroke-width="1"/>
+  <line x1="196" y1="150" x2="196" y2="160" stroke="#ffd479" stroke-width="1"/>
+  <text x="109" y="175" text-anchor="middle" fill="#ffd479" font-size="11" font-family="-apple-system,sans-serif">SEGMENT_HEADER = 13 B</text>
+</svg>
+<figcaption>Segment file binary layout. The first 13 bytes are the header (MAGIC 4 + version 1 + base_index 8), followed by a stream of record frames. The frame header is a fixed 16 bytes (FRAME_HEADER).</figcaption>
+</figure>
+
+<p>Let's verify the exact constants in code.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs</span><code><span class="kw">pub const</span> <span class="ty">MAGIC</span>: [<span class="ty">u8</span>; <span class="num">4</span>] = *<span class="str">b"ALOG"</span>;
+<span class="kw">pub const</span> <span class="ty">FORMAT_VERSION</span>: <span class="ty">u8</span> = <span class="num">2</span>;
+<span class="hl">pub const <span class="ty">SEGMENT_HEADER</span>: <span class="ty">usize</span> = MAGIC.len() + <span class="num">1</span> + <span class="num">8</span>; </span><span class="com">// = 13</span>
+
+<span class="com">// Frame header: u32 length + u32 CRC + u64 timestamp</span>
+<span class="hl">pub const <span class="ty">FRAME_HEADER</span>: <span class="ty">usize</span> = <span class="num">4</span> + <span class="num">4</span> + <span class="num">8</span>; </span><span class="com">// = 16</span>
+<span class="com">/// Maximum size of a single record: 64 MiB</span>
+<span class="kw">pub const</span> <span class="ty">MAX_RECORD</span>: <span class="ty">u32</span> = <span class="num">64</span> * <span class="num">1024</span> * <span class="num">1024</span>;</code></pre>
+
+<h2>MAGIC and FORMAT_VERSION: file identity check</h2>
+
+<p>The very first thing that happens when opening a file is an identity check. The code verifies that the first four bytes are <code>ALOG</code> and the next byte is <code>2</code> (the current format version).</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — read_header</span><code><span class="kw">if</span> head[<span class="num">0</span>..<span class="num">4</span>] != <span class="ty">MAGIC</span> {
+    <span class="kw">return</span> <span class="ty">Err</span>(<span class="ty">Error</span>::<span class="fn">Corrupt</span> { <span class="dim">/* … */</span>
+        reason: <span class="str">"bad magic (not an audit segment file)"</span>.into(),
+    });
+}
+<span class="kw">let</span> version = head[<span class="num">4</span>];
+<span class="kw">if</span> version != <span class="ty">FORMAT_VERSION</span> {
+<span class="hl">    <span class="kw">return</span> <span class="ty">Err</span>(<span class="ty">Error</span>::<span class="fn">Corrupt</span> { <span class="dim">/* … */</span>
+        reason: format!(<span class="str">"unsupported segment format version {version}"</span>),
+    });</span>
+}</code></pre>
+
+<p>Why two separate checks?</p>
+
+<ul>
+  <li><strong>MAGIC</strong> (<code>ALOG</code>) — identifies "this is a Quipu-Log segment file." It catches files that accidentally ended up in the segment directory or are a completely different format, and rejects them fast.</li>
+  <li><strong>FORMAT_VERSION</strong> — the same <code>ALOG</code> file can have a changed internal structure. The current implementation only reads version 2. Version 1 had per-record hash chaining, which was removed in v2 when the design moved to a Merkle spine. A version mismatch causes an immediate error rather than attempting a parse that would silently mangle data.</li>
+</ul>
+
+<div class="callout analogy"><span class="lab">Analogy</span><p>MAGIC is the "TO:" address on the outside of an envelope; FORMAT_VERSION is the form-version number inside the letter. A mis-addressed envelope gets returned without opening; a letter on an old form gets the reply "sorry, we can't read this format anymore."</p></div>
+
+<h2>The three frame header fields: length, CRC, timestamp</h2>
+
+<p>Let's walk through each of the three frame header fields and what they actually do.</p>
+
+<h3>① u32 length (payload length)</h3>
+
+<p>How many bytes this record's payload is. The reader uses this value to know "I need to read N bytes and then this record is done," and the very next byte after that is the start of the next frame header. This is the most fundamental way to pack variable-length records end to end.</p>
+
+<p>But a length field alone is dangerous — a crash that leaves a garbage value there could cause the reader to try to allocate a "1 GB record" and OOM. That's why the <code>MAX_RECORD</code> guard exists.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — inside the skim function</span><code><span class="kw">let</span> len = <span class="ty">u32</span>::from_le_bytes(header[<span class="num">0</span>..<span class="num">4</span>].try_into().unwrap());
+<span class="hl">if len &gt; <span class="ty">MAX_RECORD</span> || total - valid - (<span class="ty">FRAME_HEADER</span> as <span class="ty">u64</span>) &lt; len as <span class="ty">u64</span> {
+    break; <span class="com">// length is unrealistic or extends past the end of the file → torn tail</span>
+}</span></code></pre>
+
+<p><code>MAX_RECORD</code> is 64 MiB. Any "record" larger than that is treated as a crashed and corrupted length field, and reading stops there.</p>
+
+<h3>② u32 CRC32 (checksum)</h3>
+
+<p>A CRC32 hash of the payload bytes. After reading a record, the reader recomputes CRC32 over the payload. If it doesn't match the stored value, the record is flagged as corrupt.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — append</span><code><span class="kw">let</span> crc = <span class="fn">crc32fast::hash</span>(payload);
+self.writer.write_all(&amp;(payload.len() as <span class="ty">u32</span>).to_le_bytes())?;
+<span class="hl">self.writer.write_all(&amp;crc.to_le_bytes())?;</span>
+self.writer.write_all(&amp;timestamp.to_le_bytes())?;
+self.writer.write_all(payload)?;</code></pre>
+
+<p>Reading is symmetric.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — SegmentReader::next_record</span><code>self.reader.read_exact(&amp;<span class="kw">mut</span> buf)?;
+<span class="hl">if <span class="fn">crc32fast::hash</span>(&amp;buf) != crc {
+    <span class="kw">return</span> <span class="ty">Err</span>(<span class="ty">Error</span>::<span class="fn">Corrupt</span> { <span class="dim">/* … */</span> reason: <span class="str">"crc mismatch"</span>.into() });
+}</span></code></pre>
+
+<h3>③ u64 timestamp</h3>
+
+<p>When the record was written (microseconds since Unix epoch). The interesting part is that this lives in the <em>header</em>, not inside the payload. That means the timestamp can be read without deserializing the payload at all. When retention needs to figure out a segment's time range ("delete segments older than 90 days"), it only needs to skim the frame headers — it never has to unwrap individual records.</p>
+
+<h2>CRC32: accidental corruption detection, nothing more</h2>
+
+<p>One point about CRC32 needs to be made absolutely clear.</p>
+
+<div class="callout warn"><span class="lab">Caution — CRC is not a security tool</span><p>CRC32 catches <strong>accidental corruption</strong> (disk bit flips, transmission errors, torn writes). It does <strong>not</strong> detect intentional tampering. An attacker with direct disk access can change the payload and then recompute and overwrite the CRC. Detecting intentional tampering is the Merkle history tree's job (<span class="pill">Part 5</span>).</p></div>
+
+<p>The code comments say exactly the same thing.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — segment docs</span><code><span class="com">// The segment CRC catches only accidental corruption.</span>
+<span class="com">// Tamper-evidence lives in the spine, not the segments.</span></code></pre>
+
+<p>CRC and Merkle are tools for <em>different threats</em>.</p>
+
+<table>
+  <tr><th></th><th>CRC32 (segment frame)</th><th>Merkle tree (spine)</th></tr>
+  <tr><td>What it detects</td><td>Accidental bit corruption, torn writes</td><td>Intentional payload modification</td></tr>
+  <tr><td>Assumed adversary</td><td>None (physical faults only)</td><td>Insider with disk access</td></tr>
+  <tr><td>Cost</td><td>Very fast (hardware-accelerated CRC32)</td><td>Hash tree computation</td></tr>
+  <tr><td>Location</td><td>Each segment frame</td><td>Separate spine file</td></tr>
+</table>
+
+<h2>MAX_RECORD: the safety net that protects recovery</h2>
+
+<p><code>MAX_RECORD = 64 * 1024 * 1024</code> (64 MiB) is the threshold: "if a record claims to be larger than this, treat it as corrupt."</p>
+
+<p>When a segment is opened right after a crash, the last record may be cut off mid-write — maybe only 2 of the 4 length bytes were written, leaving a completely wrong <code>len</code> field. Trusting that value and allocating memory for it causes an OOM. The <code>MAX_RECORD</code> guard prevents this. Any <code>len</code> above the limit is treated as a "torn tail," and recovery stops at the last valid record. <span class="pill">Ch. 12, crash recovery</span> covers this in detail.</p>
+
+<h2>Write order matters</h2>
+
+<p>Let's look at the write order in the append function again.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — Segment::append</span><code><span class="hl">self.writer.write_all(&amp;(payload.len() as <span class="ty">u32</span>).to_le_bytes())?; <span class="com">// 1. length</span>
+self.writer.write_all(&amp;crc.to_le_bytes())?;                    <span class="com">// 2. CRC</span>
+self.writer.write_all(&amp;timestamp.to_le_bytes())?;              <span class="com">// 3. timestamp</span>
+self.writer.write_all(payload)?;                                <span class="com">// 4. payload</span></span></code></pre>
+
+<p>Because length comes first, a reader scanning forward always knows "where does this record end." Because CRC comes <em>before</em> the payload, validation can happen immediately after the payload is read in. And because the timestamp is in the header, time information is available without parsing the payload at all.</p>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① Why is CRC32 a "corruption detector" rather than a "tamper detector"? What would an attacker need to do to defeat it?<br>② What goes wrong during a torn write if there's no <code>MAX_RECORD</code> guard?<br>③ Explain the design decision to put the timestamp in the frame header rather than in the payload, connecting it to the retention logic in Ch. 17.</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="08-segments.html"><span class="dir">← Prev</span><span class="t">08 · Segment files and rollover</span></a><a class="next" href="10-serialization.html"><span class="dir">Next →</span><span class="t">10 · Serialization: turning structs into bytes</span></a></div>
+</div>
+</main>
+</div>
+<script src="assets/textbook.js"></script>
+</body>
+</html>

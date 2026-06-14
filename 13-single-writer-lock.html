@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>13 · Concurrency I: single-writer and the file lock — The Quipu-Log Book</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ Contents</button><b>The Quipu-Log Book</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn active" href="13-single-writer-lock.html">EN</a><a class="langbtn" href="ko/13-single-writer-lock.html">한국어</a></div>
+<a class="home" href="index.html">The Quipu-Log Book</a>
+<div class="sub">Storage engines and tamper-evident audit logs, built on nothing but the filesystem — explained from the ground up</div>
+<div class="part">Part 1 · Starting point: files, not a DB</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>What an audit log is, and why “files, no DB”</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>The map, and the DB↔filesystem correspondence</a>
+<div class="part">Part 2 · Filesystem basics</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>Filesystem basics: files, directories, inodes, descriptors</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>Reading &amp; writing, and the atomicity of rename</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>When data really hits disk: the page cache and fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>The std::fs toolbox: handling files in Rust</a>
+<div class="part">Part 3 · The heart of the engine: the append-only log</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>Append-only log = the WAL is the database</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>Segment files and rollover</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>Record framing: length, CRC32, magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>Serialization: turning structs into bytes</a>
+<div class="part">Part 4 · Re-creating what a DB gave you for free, on files</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>Durability: fsync policy and group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>Atomicity and crash recovery: torn writes and tail detection</a>
+<a class="lnk active" href="13-single-writer-lock.html"><span class="n">13</span>Concurrency I: single-writer and the file lock</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>Concurrency II: read snapshots and MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>Indexing: in-memory index + on-disk tokens</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>Query execution: segment scans and cursor pagination</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>Deletion and retention: segment unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>Store layout and format versioning</a>
+<div class="part">Part 5 · Integrity: making tampering evident (Security I)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>Hash functions and SHA-256: a digital fingerprint</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>The Merkle history tree: committing the log to 32 bytes</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>Inclusion proofs and consistency proofs</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>Checkpoints and external anchoring</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>Tamper-evident vs tamper-proof, and the threat model</a>
+<div class="part">Part 6 · Confidentiality: searching while keeping secrets (Security II)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>Field protection in four levels: plaintext/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>Symmetric, asymmetric, hybrid encryption and AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>Blind indexes: searching without plaintext</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>Write-only deployment: a server without the private key</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>Key management: keyring, versioning, rotation vs re-keying</a>
+<div class="part">Part 7 · The write &amp; read paths</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>The async pipeline: non-blocking emit and backpressure</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>Reliability: retries, backoff, DLQ, idempotency</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>The tower middleware: auto-recording HTTP requests</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>Permissions (RBAC), filters, and meta-audit</a>
+<div class="part">Part 8 · Distribution, operations, scaling</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>Single point of failure and availability: the client spool</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>Horizontal scaling: sharding, consistent hashing, read replicas</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>Server, client, MCP, and observability</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">Part 4 · Re-creating what a DB gave you for free, on files</span><h1><span class="chno">13</span> · Concurrency I: single-writer and the file lock</h1></div><article>
+
+<p class="lead">What happens when two programs write to the same file at the same time? A DB engine has a lock manager to prevent exactly that. Quipu-Log has no DB engine — and therefore no lock manager. Instead, a single OS file lock guarantees "this directory belongs to exactly one process." And that simple guarantee turns out to make tamper detection simpler too.</p>
+
+<div class="callout"><span class="lab">In one sentence</span><p>Quipu-Log places a <code>LOCK</code> file in the root directory and calls <code>File::try_lock()</code> on it. A second process that tries to open the same root fails immediately — single-writer is guaranteed.</p></div>
+
+<h2>First, what you already know: the DB's lock manager</h2>
+
+<p>A relational DB has a sophisticated lock manager that handles row-level, page-level, and table-level locks. It arbitrates conflicts when multiple transactions touch the same data, detects deadlocks, and manages wait queues. It's complex machinery — but it's what allows many concurrent writes to proceed safely.</p>
+
+<p>Quipu-Log implements none of this. It chose a much simpler principle instead: <strong>"only one writer at a time."</strong></p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ Filesystem</span><p><strong>In a DB</strong>, a row-level lock manager mediates between multiple concurrent write sessions. <strong>In Quipu-Log</strong>, a single OS file lock enforces "one process per root directory." Rather than arbitrating between two writers, it prevents a second writer from opening at all.</p></div>
+
+<h2>Advisory lock: the key the OS hands you</h2>
+
+<p>The OS provides a system call for placing an <strong>advisory lock</strong> on a file. "Advisory" means the OS doesn't enforce it mechanically — a process that opens the file directly without checking the lock won't be blocked by the OS. What the lock does is detect conflicts <em>between processes that both try to acquire it</em>. Think of it as a gentleman's agreement among cooperating processes.</p>
+
+<p>Since Rust 1.89, <code>std::fs::File</code> ships <code>try_lock()</code> and <code>try_lock_shared()</code> as stable APIs. File locking now works with nothing but the standard library — no external crates needed.</p>
+
+<pre><span class="filename">Cargo.toml (workspace)</span><code><span class="com"># MSRV floor: the store guards its root with `std::fs::File::try_lock` and</span>
+<span class="com"># matches on `std::fs::TryLockError`, both stabilized in Rust 1.89.</span>
+<span class="hl">rust-version = <span class="str">"1.89"</span></span></code></pre>
+
+<p>That's the reason the MSRV is 1.89: to use <code>try_lock</code>.</p>
+
+<h2>The root lock in code</h2>
+
+<p>The very first thing <code>AuditStore::open()</code> does is acquire the lock on the <code>LOCK</code> file.</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs — AuditStore::open()</span><code><span class="kw">let</span> lock = <span class="ty">std::fs</span>::<span class="ty">OpenOptions</span>::new()
+    .create(<span class="kw">true</span>)
+    .truncate(<span class="kw">false</span>)
+    .write(<span class="kw">true</span>)
+    .open(cfg.root.join(<span class="str">"LOCK"</span>))?;
+
+<span class="hl">lock.try_lock().map_err(|e| match e {
+    std::fs::TryLockError::WouldBlock =&gt;
+        Error::Locked(cfg.root.display().to_string()),
+    std::fs::TryLockError::Error(e) =&gt; Error::Io(e),
+})?;</span></code></pre>
+
+<p>On success the file handle is stored in the <code>_lock: std::fs::File</code> field and held for as long as <code>AuditStore</code> is alive. If a second process (or thread) calls <code>AuditStore::open()</code> on the same root, <code>try_lock()</code> returns <code>WouldBlock</code>, which the code converts to <code>Error::Locked</code> — meaning "another process is already writing to this root."</p>
+
+<p>The lock releases automatically when the process exits or <code>AuditStore</code> is dropped. Rust's Drop guarantee means no explicit "release lock" code is ever needed.</p>
+
+<figure>
+<svg viewBox="0 0 680 240" role="img" aria-label="What happens when two processes try to open the same root">
+  <defs>
+    <marker id="arr13ok" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#8be9c0"/>
+    </marker>
+    <marker id="arr13err" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#ff8b8b"/>
+    </marker>
+  </defs>
+  <!-- Process A -->
+  <rect x="20" y="40" width="160" height="60" rx="8" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="100" y="65" text-anchor="middle" fill="#e6e8ee" font-size="13" font-family="-apple-system,sans-serif" font-weight="600">Process A</text>
+  <text x="100" y="85" text-anchor="middle" fill="#8be9c0" font-size="11" font-family="-apple-system,sans-serif">AuditStore::open() → OK</text>
+  <!-- LOCK file -->
+  <rect x="260" y="80" width="160" height="60" rx="8" fill="#161922" stroke="#7aa2ff" stroke-width="1.5"/>
+  <text x="340" y="105" text-anchor="middle" fill="#7aa2ff" font-size="13" font-family="-apple-system,sans-serif" font-weight="600">root/LOCK</text>
+  <text x="340" y="125" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">locked by A</text>
+  <!-- Arrow A → LOCK -->
+  <line x1="180" y1="80" x2="258" y2="110" stroke="#8be9c0" stroke-width="1.5" marker-end="url(#arr13ok)"/>
+  <text x="208" y="88" fill="#8be9c0" font-size="10" font-family="-apple-system,sans-serif">try_lock() → OK</text>
+  <!-- Process B -->
+  <rect x="20" y="150" width="160" height="60" rx="8" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="100" y="175" text-anchor="middle" fill="#e6e8ee" font-size="13" font-family="-apple-system,sans-serif" font-weight="600">Process B</text>
+  <text x="100" y="195" text-anchor="middle" fill="#ff8b8b" font-size="11" font-family="-apple-system,sans-serif">Error::Locked ← fails immediately</text>
+  <!-- Arrow B → LOCK -->
+  <line x1="180" y1="175" x2="258" y2="130" stroke="#ff8b8b" stroke-width="1.5" marker-end="url(#arr13err)"/>
+  <text x="200" y="162" fill="#ff8b8b" font-size="10" font-family="-apple-system,sans-serif">try_lock() → WouldBlock</text>
+  <!-- Root directory -->
+  <rect x="500" y="60" width="160" height="100" rx="8" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="580" y="90" text-anchor="middle" fill="#e6e8ee" font-size="12" font-family="-apple-system,sans-serif" font-weight="600">root/</text>
+  <text x="580" y="110" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">├── LOCK</text>
+  <text x="580" y="126" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">├── logs/</text>
+  <text x="580" y="142" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">└── registry/</text>
+  <line x1="420" y1="110" x2="498" y2="110" stroke="#2a2f3d" stroke-width="1" stroke-dasharray="4"/>
+</svg>
+<figcaption>While Process A holds the LOCK file, Process B's <code>try_lock()</code> returns WouldBlock and fails immediately. It does not wait.</figcaption>
+</figure>
+
+<h2>Why single-writer — complexity vs. simplicity</h2>
+
+<p>What would it actually take to allow multiple processes to write at the same time? You'd need per-segment locks so writes don't overlap at the file level; shared memory or message passing because multiple processes would all need access to the in-memory index; and extra coordination to stop separate BufWriter instances from interleaving their buffers. In other words, you'd be importing the complexity of a distributed system.</p>
+
+<p>Quipu-Log doesn't want that complexity. Instead it adopts a pipeline model: multiple threads or requests <em>emit</em> events, those events flow through a channel to a single dedicated <strong>writer thread</strong>, and the channel serializes the writes. Multiple threads never touch the file simultaneously. <span class="pill">Ch. 29, async pipeline</span></p>
+
+<div class="callout why"><span class="lab">Why this design?</span><p>A single writer cuts down on debt. One file lock blocks two processes from opening at the same time; a channel blocks two threads from writing at the same time. No lock manager, no deadlock detection, no conflict resolution. This model fits an audit log perfectly — events flow in one direction.</p></div>
+
+<h2>Single-writer makes tamper detection simpler</h2>
+
+<p>single-writer isn't only about performance and simplicity. It matters for security too.</p>
+
+<p>Quipu-Log commits every record to a Merkle tree <span class="pill">Ch. 20, Merkle tree</span>. The tree records the promise "record N has this hash." If that promise is broken — someone secretly edits a record on disk — the Merkle root changes and the tampering is detected.</p>
+
+<p>Now imagine multiple writers. If several processes append simultaneously, the order in which leaves are added to the Merkle tree becomes ambiguous. There's no clear answer to "which process is responsible for leaf N?" Verification becomes hard. With a single writer guaranteed, "the Nth append = the Nth leaf" is unambiguous. Verification logic stays simple and ordering is straightforward.</p>
+
+<div class="callout key"><span class="lab">Security note</span><p>An advisory lock only works among <em>cooperating</em> processes. An attacker with direct access to the root directory (a mounted disk, root privileges) can ignore the <code>LOCK</code> file and edit the files directly. But such an attacker could touch the filesystem itself anyway, so the lock's job is to prevent <em>accidental or buggy concurrent opens</em>, not to stop a malicious intruder. Detecting malicious tampering is the Merkle tree's job (Part 5).</p></div>
+
+<h2>Recap</h2>
+<ul>
+  <li>Instead of a DB lock manager, Quipu-Log uses a single OS advisory lock (<code>File::try_lock()</code>) to enforce "one process per root directory."</li>
+  <li><code>try_lock()</code> does not block. If the lock is already held it returns <code>WouldBlock</code> immediately, which is converted to <code>Error::Locked</code>.</li>
+  <li><code>File::try_lock()</code> was stabilized in Rust 1.89 — that's why the MSRV is 1.89.</li>
+  <li>single-writer keeps the Merkle leaf order unambiguous, which keeps tamper-detection logic simple.</li>
+  <li>An advisory lock is a promise among cooperating processes. Defending against malicious intruders is the Merkle tree's responsibility.</li>
+</ul>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① What's the difference between <code>try_lock()</code> and a blocking <code>lock()</code>? Why do you think Quipu-Log uses the non-blocking version?<br>② Explain why the single-writer principle simplifies Merkle tree verification.<br>③ If two processes were allowed to open the same root simultaneously, what problem would arise for the in-memory index?</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="12-crash-recovery.html"><span class="dir">← Prev</span><span class="t">12 · Atomicity and crash recovery: torn writes and tail detection</span></a><a class="next" href="14-read-snapshot-mvcc.html"><span class="dir">Next →</span><span class="t">14 · Concurrency II: read snapshots and MVCC</span></a></div>
+</div>
+</main>
+</div>
+<script src="assets/textbook.js"></script>
+</body>
+</html>

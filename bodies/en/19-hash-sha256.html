@@ -1,0 +1,129 @@
+<article>
+
+<p class="lead">In Ch. 9 we met CRC32 — a fast checksum for catching accidental bit flips on disk. SHA-256, the tool we pick up in Part 5, looks like the same kind of "fingerprint," but it serves a completely different purpose. CRC catches <em>mistakes</em>; a cryptographic hash catches <em>malice</em> too. That difference is the foundation of integrity guarantees.</p>
+
+<div class="callout"><span class="lab">In one sentence</span><p>SHA-256 turns any input into a 256-bit (32-byte) "digital fingerprint" — the same input always produces the same fingerprint, the original cannot be recovered from the fingerprint, and even a single changed byte produces a completely different fingerprint.</p></div>
+
+<h2>What CRC32 catches — and what it misses</h2>
+
+<p>In <span class="pill">Ch. 9 (record framing)</span> we stored <code>crc32(payload)</code> in the frame header. On read, recomputing the CRC and comparing it with the stored value lets us detect bit flips or crash-torn writes.</p>
+
+<p>But CRC has a serious blind spot: <strong>it cannot stop intentional tampering.</strong> If an attacker edits a record, they can simply recompute the matching CRC for the new content. CRC is only a 32-bit number; its calculation is straightforward, and working backwards to a target CRC is not hard.</p>
+
+<table>
+  <tr><th></th><th>CRC32</th><th>SHA-256 (cryptographic hash)</th></tr>
+  <tr><td>Bit flip (disk corruption)</td><td>Detected ✅</td><td>Detected ✅</td></tr>
+  <tr><td>Torn write (crash residue)</td><td>Detected ✅</td><td>Detected ✅</td></tr>
+  <tr><td>Intentional data edit + checksum recompute</td><td>Not stopped ❌</td><td>Computationally infeasible ✅</td></tr>
+  <tr><td>Output size</td><td>32 bits (4 bytes)</td><td>256 bits (32 bytes)</td></tr>
+  <tr><td>Design goal</td><td>Error detection (CRC = error-detection code)</td><td>Tamper resistance (collision resistance)</td></tr>
+</table>
+
+<p>This distinction is the core point. <strong>CRC is a tool for catching channel noise; a cryptographic hash catches deliberate tampering as well.</strong></p>
+
+<div class="callout analogy"><span class="lab">Analogy</span><p>CRC is like pressing a finger onto paper — if someone tears the paper and substitutes a new sheet, they can press their finger onto the new one too, and you'd never know. SHA-256 is like a DNA fingerprint — forging the fingerprint itself and attaching it to different content is not realistically possible.</p></div>
+
+<h2>The three properties of a cryptographic hash function</h2>
+
+<p>SHA-256 earns its place in tamper detection because of three properties.</p>
+
+<figure>
+<svg viewBox="0 0 720 280" role="img" aria-label="The three properties of a cryptographic hash function">
+  <defs>
+    <marker id="arr19" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .t19{fill:#e6e8ee;font:600 13px -apple-system,sans-serif}
+    .s19{fill:#9aa3b2;font:12px -apple-system,sans-serif}
+    .box19{fill:#161922;stroke:#2a2f3d;stroke-width:1.5;rx:8}
+    .hl19{fill:#0b1a2b;stroke:#7aa2ff;stroke-width:1.5;rx:6}
+    .arr19{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#arr19)}
+  </style>
+
+  <!-- One-wayness -->
+  <rect x="20" y="20" width="200" height="110" class="box19" rx="8"/>
+  <text x="35" y="48" class="t19" fill="#7aa2ff">① One-wayness (preimage resistance)</text>
+  <text x="35" y="70" class="s19">"hello world"</text>
+  <line x1="130" y1="75" x2="160" y2="75" class="arr19"/>
+  <text x="35" y="92" class="s19" fill="#8be9c0">→ b94d27b9...</text>
+  <text x="35" y="110" class="s19" fill="#ff8b8b">Reverse direction impossible ✗</text>
+  <text x="35" y="128" class="s19">hash → original = computationally infeasible</text>
+
+  <!-- Collision resistance -->
+  <rect x="260" y="20" width="200" height="110" class="box19" rx="8"/>
+  <text x="275" y="48" class="t19" fill="#ffd479">② Collision resistance</text>
+  <text x="275" y="68" class="s19">"alice did X"</text>
+  <text x="275" y="86" class="s19">"alice did Y"</text>
+  <text x="275" y="105" class="s19" fill="#ff8b8b">Finding same hash = infeasible</text>
+  <text x="275" y="123" class="s19">2²⁵⁶ possible outputs</text>
+
+  <!-- Avalanche effect -->
+  <rect x="500" y="20" width="200" height="110" class="box19" rx="8"/>
+  <text x="515" y="48" class="t19" fill="#8be9c0">③ Avalanche effect</text>
+  <text x="515" y="68" class="s19">"alice did X"</text>
+  <text x="515" y="84" class="s19" fill="#8be9c0">→ a3f7c1d2...</text>
+  <text x="515" y="106" class="s19">"Alice did X" (capital A)</text>
+  <text x="515" y="122" class="s19" fill="#ffd479">→ 9e42b801... (completely different)</text>
+
+  <!-- Summary box -->
+  <rect x="20" y="165" width="680" height="90" class="hl19" rx="8"/>
+  <text x="40" y="192" class="t19">What the three properties mean together:</text>
+  <text x="40" y="214" class="s19">Change the original → the hash changes completely (avalanche). Tampering is detected.</text>
+  <text x="40" y="234" class="s19">Without the original, you can't craft different content that yields the same hash (collision resistance). Forgery fails.</text>
+  <text x="40" y="254" class="s19">You can't recover the original from the hash alone (one-wayness). Publishing the hash doesn't leak the original.</text>
+</svg>
+<figcaption>The three core properties of a cryptographic hash function — together they guarantee that tampering is always detected.</figcaption>
+</figure>
+
+<p>To put it plainly:</p>
+<ul>
+  <li><strong>One-wayness</strong> — knowing SHA-256(data) tells you nothing about data itself. You can publish the hash without exposing the original.</li>
+  <li><strong>Collision resistance</strong> — finding two <em>different</em> inputs that produce the same hash is not realistically possible. You can't attach a genuine fingerprint to a forged document.</li>
+  <li><strong>Avalanche effect</strong> — flip a single input bit and more than half of the output bits change. It's not "a small edit produces a slightly different hash" — it produces a <em>completely different</em> hash.</li>
+</ul>
+
+<div class="callout key"><span class="lab">Security note</span><p>Collision resistance and the avalanche effect together give you this guarantee: "If data changes, the hash changes. If the hash is the same, the data is the same." That guarantee is the pillar on which the Merkle tree (Ch. 20) stands — a single 32-byte root hash can certify that millions of log records have not changed by even one character.</p></div>
+
+<h2>How SHA-256 is used in Quipu-Log</h2>
+
+<p>The source is refreshingly concise. There is a two-line public function in <code>crypto.rs</code>:</p>
+
+<pre><span class="filename">crates/quipu-core/src/crypto.rs</span><code><span class="kw">pub fn</span> <span class="fn">sha256_hex</span>(data: <span class="ty">&amp;[u8]</span>) -&gt; <span class="ty">String</span> {
+<span class="hl">    hex(&amp;Sha256::digest(data))</span>
+}
+
+<span class="com">// sha2 crate's Sha256::digest computes the 32-byte hash in one call,</span>
+<span class="com">// and hex() converts it to a lowercase hexadecimal string.</span></code></pre>
+
+<p>On the Merkle tree side, the code works directly with the <code>[u8; 32]</code> array type (<code>Hash</code>). That's twice as storage-efficient as a hex string:</p>
+
+<pre><span class="filename">crates/quipu-core/src/merkle.rs</span><code><span class="com">/// SHA-256(0x00 || record) — leaf hash</span>
+<span class="kw">pub fn</span> <span class="fn">leaf_hash</span>(record: <span class="ty">&amp;[u8]</span>) -&gt; <span class="ty">Hash</span> {
+    <span class="kw">let mut</span> h = <span class="ty">Sha256</span>::new();
+<span class="hl">    h.update([LEAF_PREFIX]);  <span class="com">// 0x00: marks this as a leaf</span></span>
+<span class="hl">    h.update(record);</span>
+    h.finalize().into()
+}</code></pre>
+
+<p>The <code>LEAF_PREFIX = 0x00</code> prepended here is interesting. Ch. 20 covers this in depth, but a quick preview: if you hash leaves and interior nodes with the same function and no prefix, a "second-preimage confusion attack" becomes possible — the concatenation of two leaf hashes could accidentally equal an interior node hash. Different prefixes eliminate that ambiguity entirely. This is one of the core rules of RFC 6962.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ Filesystem</span><p><strong>In a DB</strong>, page checksums use CRC32 (or FNV) — the goal is detecting disk errors and torn pages, with no consideration for an attacker forging the checksum. <strong>In Quipu-Log</strong>, the threat to an audit log is a malicious insider, so the chain of record content → Merkle tree → SHA-256 is necessary. Checksum for error detection = CRC; checksum for tamper detection = cryptographic hash.</p></div>
+
+<h2>SHA-256 performance characteristics</h2>
+
+<p>You might worry: "Isn't cryptographic hashing slow?" Modern CPUs have built-in hardware acceleration for SHA-256 (SHA-NI on x86, Crypto Extensions on ARMv8), processing hundreds to thousands of MB per second. Hashing a single audit record (a few kilobytes) takes well under a microsecond. The actual performance bottleneck in Quipu-Log is fsync (<span class="pill">Ch. 11, durability</span>), not the hash.</p>
+
+<h2>Recap</h2>
+
+<ul>
+  <li>CRC32 is an accidental-error detection tool. It cannot stop intentional tampering.</li>
+  <li>SHA-256 is a cryptographic hash — <strong>one-way, collision-resistant, avalanche</strong>. It detects deliberate tampering too.</li>
+  <li>In Quipu-Log, <code>sha256_hex()</code> is used across field protection (Ch. 24) and the Merkle tree (Ch. 20).</li>
+  <li>Prepending <code>0x00</code> to leaf hashes is an RFC 6962 rule that prevents second-preimage confusion attacks.</li>
+</ul>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① Both CRC32 and SHA-256 are checksums — so why does Quipu-Log use CRC32 in record frames (Ch. 9) and SHA-256 in the Merkle tree (Ch. 20) separately? Explain the difference in purpose.<br>② If the avalanche effect didn't exist (changing 1 input bit changed only 1 output bit), why would the "32-byte root certifies the whole log" claim of the Merkle tree break down?<br>③ Explain in your own words why <code>leaf_hash</code> prepends <code>0x00</code> to the data.</p></div>
+
+</article>

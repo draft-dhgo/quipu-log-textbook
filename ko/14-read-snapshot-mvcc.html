@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>14 · 동시성 제어 ②: 읽기 스냅샷과 MVCC — Quipu-Log 교과서</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ 목차</button><b>Quipu-Log 교과서</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn" href="../14-read-snapshot-mvcc.html">EN</a><a class="langbtn active" href="14-read-snapshot-mvcc.html">한국어</a></div>
+<a class="home" href="index.html">Quipu-Log 교과서</a>
+<div class="sub">파일시스템만으로 짓는 저장 엔진과 변조-탐지 감사 로그 — 밑바닥부터</div>
+<div class="part">파트 1 · 출발점: DB 없이, 파일로</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>감사 로그란, 그리고 왜 &#x27;DB 없이 파일로&#x27;인가</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>Quipu-Log 지도와 DB↔파일시스템 대응표</a>
+<div class="part">파트 2 · 파일시스템 기본기</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>파일시스템의 기본: 파일·디렉토리·inode·디스크립터</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>읽고 쓰기, 그리고 rename의 원자성</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>데이터는 언제 진짜 디스크에 남나: page cache와 fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>std::fs 도구상자: Rust로 파일 다루기</a>
+<div class="part">파트 3 · 저장 엔진의 심장: append-only 로그</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>append-only 로그 = WAL이 곧 데이터베이스</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>세그먼트 파일과 롤오버</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>레코드 프레이밍: 길이·CRC32·magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>직렬화: 구조체를 바이트로</a>
+<div class="part">파트 4 · DB가 공짜로 주던 보장을 파일로 재현</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>내구성: fsync 정책과 group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>원자성과 크래시 복구: torn write와 꼬리 탐지</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>동시성 제어 ①: single-writer와 파일 락</a>
+<a class="lnk active" href="14-read-snapshot-mvcc.html"><span class="n">14</span>동시성 제어 ②: 읽기 스냅샷과 MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>인덱싱: 인메모리 인덱스 + 디스크 토큰</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>쿼리 실행: 세그먼트 스캔과 커서 페이지네이션</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>삭제와 보존: 세그먼트 unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>저장소 레이아웃과 포맷 버저닝</a>
+<div class="part">파트 5 · 무결성: 고치면 티가 나게 (보안 ①)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>해시 함수와 SHA-256: 디지털 지문</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>머클 히스토리 트리: 로그를 32바이트로 커밋</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>포함 증명·일관성 증명</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>체크포인트와 외부 앵커링</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>tamper-evident vs tamper-proof, 그리고 위협 모델</a>
+<div class="part">파트 6 · 기밀성: 비밀을 지키면서 검색하기 (보안 ②)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>필드 보호 4단계: 평문/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>대칭·비대칭·하이브리드 암호와 AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>블라인드 인덱스: 평문 없이 검색</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>쓰기 전용 배포: 개인키 없는 서버</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>키 관리: 키링·버저닝·로테이션 vs 리키</a>
+<div class="part">파트 7 · 쓰기·읽기 경로</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>비동기 파이프라인: 논블로킹 emit과 백프레셔</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>신뢰성: 재시도·백오프·DLQ·멱등성</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>tower 미들웨어: HTTP 요청 자동 기록</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>권한(RBAC)·필터·메타 감사</a>
+<div class="part">파트 8 · 분산·운영·확장</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>단일 장애점과 가용성: 클라이언트 스풀</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>수평 확장: 샤딩·일관성 해싱·읽기 복제</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>서버·클라이언트·MCP·관측성</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">파트 4 · DB가 공짜로 주던 보장을 파일로 재현</span><h1><span class="chno">14</span> · 동시성 제어 ②: 읽기 스냅샷과 MVCC</h1></div><article>
+
+<p class="lead">쓰기가 진행되는 동안 읽기는 어떻게 될까요? DB는 MVCC(Multi-Version Concurrency Control)로 읽기와 쓰기가 서로를 막지 않게 합니다. Quipu-Log는 B-tree도, 트랜잭션 버전도 없습니다. 하지만 같은 목적 — <strong>읽기가 쓰기를 막지 않고, 쓰기도 읽기를 막지 않는다</strong> — 을 훨씬 단순한 방법으로 달성합니다. 인덱스를 복사하고, 파일 길이를 고정합니다.</p>
+
+<div class="callout"><span class="lab">한 문장 요약</span><p><code>ReadSnapshot</code>은 인메모리 인덱스를 클론하고 각 세그먼트 파일의 "지금 이 순간 길이"를 기록한다. 그 이후로 쓰기가 아무리 일어나도 스냅샷은 그 순간을 본다 — 잠금 없이.</p></div>
+
+<h2>당신이 아는 것: DB의 MVCC</h2>
+
+<p>PostgreSQL이나 MySQL InnoDB는 각 행에 버전을 붙여 관리합니다. <code>UPDATE</code>를 하면 이전 버전을 지우지 않고, 새 버전을 만들고 이전 버전을 "만료" 처리합니다. 읽기 트랜잭션은 자신이 시작할 때의 "스냅샷 ID"를 받아, 그 이후에 커밋된 변경은 보이지 않습니다. 이것이 Snapshot Isolation입니다. 핵심: <strong>읽기 트랜잭션이 쓰기를 막지 않고, 쓰기 트랜잭션도 읽기를 막지 않습니다.</strong></p>
+
+<p>하지만 이를 구현하려면 "어느 버전을 볼 수 있는가"를 추적하는 복잡한 자료구조(undolog, MVCC 체인, vacuum)가 필요합니다.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ 파일시스템</span><p><strong>DB의 MVCC</strong>는 같은 행의 여러 버전을 디스크에 두고, 읽기 트랜잭션마다 자신이 볼 수 있는 버전을 골라 읽는다. 복잡하지만 정밀하다. <strong>Quipu-Log의 ReadSnapshot</strong>은 인메모리 인덱스를 통째로 클론하고, 세그먼트 파일의 현재 길이에 상한선을 박는다. 구조는 다르지만 목적은 같다: 읽기와 쓰기의 비차단.</p></div>
+
+<h2>ReadSnapshot: copy-on-read</h2>
+
+<p><code>AuditStore::snapshot()</code>을 부르면 <code>ReadSnapshot</code>이 만들어집니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs — AuditStore::snapshot()</span><code><span class="kw">pub fn</span> <span class="fn">snapshot</span>(&amp;<span class="kw">mut</span> self) -&gt; <span class="ty">Result</span>&lt;<span class="ty">ReadSnapshot</span>&gt; {
+    <span class="ty">Ok</span>(<span class="ty">ReadSnapshot</span> {
+        keys: self.cfg.keys.clone(),
+        <span class="hl">registries: self.registries
+            .iter()
+            .map(|(k, v)| (k.clone(), v.idx.clone())) <span class="com">// 인덱스 클론</span>
+            .collect(),</span>
+        <span class="hl">logs: self.logs.slices()?,      <span class="com">// 세그먼트 파일 경로 + 현재 길이</span></span>
+        relations: self.relations.slices()?,
+    })
+}</code></pre>
+
+<p>두 가지가 일어납니다.</p>
+
+<ol>
+  <li><strong>레지스트리 인덱스 클론</strong> — 현재 인메모리 인덱스(어떤 엔티티 ID → 어떤 버전 uid)를 복사합니다. 이 클론은 독립적이어서, 이후 <code>append()</code>가 원본 인덱스를 업데이트해도 클론된 스냅샷은 변하지 않습니다.</li>
+  <li><strong>세그먼트 슬라이스 기록</strong> — 각 세그먼트 파일의 경로와 <em>지금 이 순간의 파일 길이(bound)</em>를 <code>SegmentSlice</code>로 기록합니다. 이후 append가 파일을 더 길게 만들어도, 스냅샷은 <code>bound</code> 이전까지만 읽습니다.</li>
+</ol>
+
+<figure>
+<svg viewBox="0 0 700 260" role="img" aria-label="스냅샷 생성과 읽기-쓰기 비차단 흐름">
+  <defs>
+    <marker id="arr14a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#7aa2ff"/>
+    </marker>
+    <marker id="arr14b" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#8be9c0"/>
+    </marker>
+    <marker id="arr14c" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+
+  <!-- Writer 스레드 -->
+  <rect x="20" y="20" width="140" height="50" rx="8" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="90" y="42" text-anchor="middle" fill="#e6e8ee" font-size="12" font-family="-apple-system,sans-serif" font-weight="600">Writer 스레드</text>
+  <text x="90" y="58" text-anchor="middle" fill="#8be9c0" font-size="11" font-family="-apple-system,sans-serif">append() 계속 실행</text>
+
+  <!-- AuditStore -->
+  <rect x="220" y="20" width="160" height="80" rx="8" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="300" y="46" text-anchor="middle" fill="#e6e8ee" font-size="12" font-family="-apple-system,sans-serif" font-weight="600">AuditStore</text>
+  <text x="300" y="64" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">registries (인덱스 원본)</text>
+  <text x="300" y="80" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">logs (세그먼트 파일들)</text>
+  <text x="300" y="96" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">snapshot() → clone</text>
+
+  <!-- 화살표 Writer → Store -->
+  <line x1="160" y1="50" x2="218" y2="60" stroke="#8be9c0" stroke-width="1.5" marker-end="url(#arr14b)"/>
+
+  <!-- ReadSnapshot -->
+  <rect x="460" y="20" width="200" height="80" rx="8" fill="#16241d" stroke="#2c4a3a" stroke-width="1.5"/>
+  <text x="560" y="44" text-anchor="middle" fill="#8be9c0" font-size="12" font-family="-apple-system,sans-serif" font-weight="600">ReadSnapshot</text>
+  <text x="560" y="62" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">registries (클론 — 독립)</text>
+  <text x="560" y="78" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">logs: [SliceA(bound=1024), ...]</text>
+  <text x="560" y="94" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">이 bound 이후는 안 읽음</text>
+
+  <!-- 화살표 Store → Snapshot (clone) -->
+  <line x1="380" y1="55" x2="458" y2="55" stroke="#7aa2ff" stroke-width="1.5" marker-end="url(#arr14a)"/>
+  <text x="419" y="46" text-anchor="middle" fill="#7aa2ff" font-size="10" font-family="-apple-system,sans-serif">clone()</text>
+
+  <!-- Caller 스레드 -->
+  <rect x="460" y="155" width="200" height="60" rx="8" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="560" y="178" text-anchor="middle" fill="#e6e8ee" font-size="12" font-family="-apple-system,sans-serif" font-weight="600">호출자 스레드</text>
+  <text x="560" y="196" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">snapshot.query() 실행</text>
+  <text x="560" y="212" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">(Writer와 독립적으로)</text>
+
+  <!-- 화살표 Snapshot → Caller -->
+  <line x1="560" y1="100" x2="560" y2="153" stroke="#9aa3b2" stroke-width="1.5" marker-end="url(#arr14c)"/>
+  <text x="580" y="130" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">전달</text>
+</svg>
+<figcaption>스냅샷은 Writer 스레드에서 만들어지지만(클론 비용만), 실제 스캔은 호출자 스레드에서 독립적으로 실행된다. Writer는 스캔을 기다리지 않는다.</figcaption>
+</figure>
+
+<h2>SegmentReader의 bound: 파일 길이 고정</h2>
+
+<p><code>SegmentSlice</code>의 <code>bound</code> 필드가 핵심입니다. 스냅샷을 찍은 순간의 파일 길이가 <code>bound</code>로 기록됩니다. 스캔할 때 <code>SegmentReader::open_bounded()</code>는 <code>bound</code>를 넘어서는 읽지 않습니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — SegmentReader::open_bounded()</span><code><span class="kw">pub fn</span> <span class="fn">open_bounded</span>(path: &amp;<span class="ty">Path</span>, bound: <span class="ty">u64</span>) -&gt; <span class="ty">Result</span>&lt;Self&gt; {
+    <span class="kw">let</span> file = <span class="ty">File</span>::open(path)?;
+    <span class="hl">let end = file.metadata()?.len().min(bound); <span class="com">// bound 이상은 읽지 않는다</span></span>
+    <span class="kw">let mut</span> reader = <span class="ty">BufReader</span>::with_capacity(<span class="num">256</span> * <span class="num">1024</span>, file);
+    <span class="dim">if end &gt;= SEGMENT_HEADER as u64 { read_header(&amp;mut reader, path)?; }</span>
+    <span class="ty">Ok</span>(<span class="ty">Self</span> { <span class="dim">path, reader,</span> offset: <span class="ty">SEGMENT_HEADER</span>.min(end as usize) as u64,
+               <span class="hl">end</span> <span class="com">/* 읽기는 여기까지 */</span> })
+}</code></pre>
+
+<p>왜 이것이 중요할까요? append가 파일 끝에 바이트를 추가하는 중에도, 스냅샷 리더는 <code>bound</code>까지만 봅니다. 반쯤 쓰인 프레임(BufWriter가 아직 flush하지 않은 것)을 볼 일이 없습니다. 읽기와 쓰기가 같은 파일을 공유하지만, 경계가 명확하게 나뉩니다.</p>
+
+<h2>스캔은 호출자 스레드에서</h2>
+
+<p>파이프라인 모드에서 <code>AuditHandle::snapshot()</code>을 부르면, 스냅샷 객체 생성만 writer 스레드에서 일어납니다(인덱스 클론). 그 뒤 스냅샷은 호출자에게 반환되고, <code>snapshot.query()</code>는 호출자 스레드에서 실행됩니다. writer 스레드는 그 사이에도 <code>emit()</code>된 이벤트를 계속 씁니다. 느린 쿼리가 emit을 막지 않습니다.</p>
+
+<p>README의 Snapshots 섹션 설명:</p>
+<blockquote>
+<p>Queries run on a read snapshot (<code>handle.snapshot(&amp;role)?</code>): it clones the in-memory registry indexes and scans on the caller's thread, never blocking writes.</p>
+</blockquote>
+
+<p>이것이 Quipu-Log의 "MVCC"입니다. 버전 체인 없이, 인덱스 클론 + 파일 bound로 읽기-쓰기 격리를 달성합니다.</p>
+
+<h2>MVCC와의 비교: 무엇이 같고 무엇이 다른가</h2>
+
+<table>
+  <tr>
+    <th>속성</th>
+    <th>DB MVCC</th>
+    <th>Quipu-Log ReadSnapshot</th>
+  </tr>
+  <tr>
+    <td>목적</td>
+    <td>읽기와 쓰기 비차단</td>
+    <td>읽기와 쓰기 비차단</td>
+  </tr>
+  <tr>
+    <td>구현 방법</td>
+    <td>행마다 버전 체인, undolog</td>
+    <td>인덱스 클론 + 파일 bound</td>
+  </tr>
+  <tr>
+    <td>스냅샷 비용</td>
+    <td>낮음(트랜잭션 ID 부여)</td>
+    <td>인덱스 클론 (O(엔티티 수))</td>
+  </tr>
+  <tr>
+    <td>스냅샷 이후 변경</td>
+    <td>버전 체인으로 가려진다</td>
+    <td>bound 이후 파일은 읽지 않는다</td>
+  </tr>
+  <tr>
+    <td>vacuum 필요</td>
+    <td>있음 (오래된 버전 청소)</td>
+    <td>없음 (retention이 세그먼트 단위로 삭제)</td>
+  </tr>
+</table>
+
+<div class="callout analogy"><span class="lab">비유</span><p>도서관에 새 책이 계속 들어옵니다. "지금 보유 목록"을 인쇄해서 나눠줬다고 하면, 그 이후에 새 책이 들어와도 내 인쇄물은 바뀌지 않습니다. 나는 인쇄 시점의 목록으로 책을 찾습니다. Quipu-Log의 스냅샷도 마찬가지입니다 — 인덱스 클론이 그 "인쇄물"입니다.</p></div>
+
+<h2>스냅샷의 한계</h2>
+
+<div class="callout warn"><span class="lab">주의</span><p>인덱스 클론 비용은 등록된 엔티티 수에 비례한다. 엔티티가 수백만 건이면 클론 자체가 수십 밀리초가 될 수 있다. 또 스냅샷은 불변이므로 스캔 중에 append된 레코드는 보이지 않는다 — 이것이 의도된 "스냅샷 격리" 동작이지만, "방금 append한 것이 왜 안 보이지?"로 혼란스러울 수 있다. flush()를 호출하고 새 스냅샷을 얻으면 반드시 보인다.</p></div>
+
+<h2>정리</h2>
+<ul>
+  <li>DB의 MVCC와 같은 목적(읽기-쓰기 비차단)을, Quipu-Log는 copy-on-read 스냅샷으로 달성한다.</li>
+  <li><code>ReadSnapshot</code>은 레지스트리 인덱스 클론 + 세그먼트 파일의 bound 기록으로 만들어진다. 이후 append가 파일을 늘려도 스냅샷은 bound 이전만 본다.</li>
+  <li>스캔은 호출자 스레드에서 실행된다. Writer 스레드는 스캔을 기다리지 않는다.</li>
+  <li>버전 체인, undolog, vacuum이 없다. 단순하지만 스냅샷 비용이 인덱스 크기에 선형 비례한다.</li>
+</ul>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① DB MVCC와 Quipu-Log ReadSnapshot이 "같은 목적"을 달성하는 방법의 차이를 한 문단으로 설명해 보세요.<br>② 스냅샷을 찍은 직후에 append가 일어났습니다. 그 append를 스냅샷으로 읽을 수 있나요? 없다면 왜인가요?<br>③ 쿼리 스캔이 Writer 스레드가 아닌 호출자 스레드에서 실행되어야 하는 이유를 파이프라인 관점에서 설명해 보세요.</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="13-single-writer-lock.html"><span class="dir">← 이전</span><span class="t">13 · 동시성 제어 ①: single-writer와 파일 락</span></a><a class="next" href="15-indexing.html"><span class="dir">다음 →</span><span class="t">15 · 인덱싱: 인메모리 인덱스 + 디스크 토큰</span></a></div>
+</div>
+</main>
+</div>
+<script src="../assets/textbook.js"></script>
+</body>
+</html>

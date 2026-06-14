@@ -1,0 +1,209 @@
+<article>
+
+<p class="lead">"최근 1시간 동안 alice가 건드린 문서를 최신순으로 20건 보여줘" — 이 한 줄 질문을 처리하는 경로를 따라가 봅시다. 어디서 스캔을 건너뛰고, 어떻게 커서가 다음 페이지를 가리키며, 왜 느린 쿼리가 빠른 쓰기를 막지 않는지가 보입니다. DB의 table scan vs index scan, LIMIT/OFFSET vs keyset pagination과 비교하면 설계 의도가 더 선명해집니다.</p>
+
+<div class="callout"><span class="lab">한 문장 요약</span><p>Quipu-Log 쿼리는 세 단계로 작동합니다: (1) 레지스트리 인덱스에서 조건에 맞는 log_id 집합을 추출, (2) 시간 범위로 세그먼트를 가지치기한 뒤 순차 스캔, (3) 물리 위치 기반 keyset 커서로 페이지를 이어갑니다.</p></div>
+
+<h2>당신이 아는 것: table scan, index scan, OFFSET vs keyset</h2>
+
+<p>DB에서 쿼리 플랜은 크게 두 가지입니다. <strong>table scan</strong>(heap scan): 테이블 전체를 읽고 필터를 적용합니다. <strong>index scan</strong>: 보조 인덱스에서 조건에 맞는 행 주소를 먼저 꺼낸 뒤, 그 주소로 테이블을 직접 조회합니다.</p>
+
+<p>페이지네이션도 마찬가지입니다. <code>LIMIT 20 OFFSET 1000</code>은 앞 1000건을 읽고 버립니다 — O(offset) 비용이 뒤로 갈수록 불어납니다. 대신 keyset pagination(커서 기반)은 마지막으로 받은 행의 키를 기억해 두고, <code>WHERE id &gt; 마지막id LIMIT 20</code>처럼 정확히 다음 건부터 가져옵니다. 어느 페이지든 O(1) 비용.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ 파일시스템</span><p><strong>DB의 index scan</strong>: 보조 인덱스 → 행 heap pointer → 테이블 랜덤 읽기. <strong>Quipu-Log</strong>: 레지스트리 인덱스(인메모리) → log_id 집합 → 로그 세그먼트 순차 스캔. "랜덤 읽기"를 "순차 스캔 + 필터"로 대체한 것이다 — 세그먼트 파일은 순차 읽기에 최적화되어 있으므로, 스캔 대상 세그먼트를 시간 범위로 줄이는 것이 핵심 최적화.</p></div>
+
+<h2>쿼리 선언: LogQuery</h2>
+
+<p>사용자는 <code>LogQuery</code>를 만들어서 전달합니다. 모든 조건은 AND로 묶입니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/query.rs</span><code><span class="kw">pub struct</span> <span class="ty">LogQuery</span> {
+    <span class="dim">pub from_micros: Option&lt;u64&gt;,   // 시간 범위 (inclusive)</span>
+    <span class="dim">pub to_micros:   Option&lt;u64&gt;,</span>
+    <span class="dim">pub method:      Option&lt;String&gt;, // HTTP 메서드</span>
+    <span class="dim">pub url_prefix:  Option&lt;String&gt;,</span>
+    <span class="dim">pub actor:       Option&lt;TargetFilter&gt;, // 행위자 조건</span>
+<span class="hl">    pub targets:     Vec&lt;TargetFilter&gt;,  // 타깃 조건들 (AND)</span>
+    <span class="dim">pub custom:      BTreeMap&lt;String, Value&gt;,</span>
+    <span class="dim">pub limit:       Option&lt;usize&gt;,</span>
+<span class="hl">    pub order:       Order,              // Asc | Desc (기본 Desc=최신순)</span>
+<span class="hl">    pub cursor:      Option&lt;String&gt;,     // keyset 커서</span>
+}</code></pre>
+
+<p><code>TargetFilter</code>에는 <code>MatchMode</code>가 있습니다 — <code>Exact</code>(정확 일치), <code>ExactCi</code>(대소문자 무시), <code>Prefix</code>(접두사), <code>Contains</code>(부분문자열). 각 모드는 <span class="pill">15장 인덱싱</span>의 인덱스 타입과 짝을 이룹니다.</p>
+
+<h2>3단계 실행 경로</h2>
+
+<p>쿼리를 실행하면 <code>ReadSnapshot::query_page()</code>가 세 단계를 밟습니다.</p>
+
+<figure>
+<svg viewBox="0 0 720 300" role="img" aria-label="Quipu-Log 쿼리 실행 3단계">
+  <defs>
+    <marker id="arr16" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .t16{fill:#e6e8ee;font:600 13px -apple-system,sans-serif}
+    .s16{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .bx16{fill:#161922;stroke:#2a2f3d;stroke-width:1.5;rx:6}
+    .idx16{fill:#1a2535;stroke:#7aa2ff;stroke-width:1.5;rx:6}
+    .seg16{fill:#0e1c14;stroke:#8be9c0;stroke-width:1.5;rx:4}
+    .skip16{fill:#1c1200;stroke:#ffd479;stroke-width:1;rx:4;opacity:0.7}
+    .ar16{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#arr16)}
+    .lab16{fill:#8be9c0;font:bold 11px -apple-system,sans-serif}
+    .dim16{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+  </style>
+
+  <!-- 단계 1: 인덱스 조회 -->
+  <rect x="10" y="10" width="160" height="100" class="idx16"/>
+  <text x="20" y="30" class="t16">① 인덱스 조회</text>
+  <text x="20" y="50" class="s16">레지스트리 인메모리 인덱스</text>
+  <text x="20" y="68" class="s16">TargetFilter 매칭</text>
+  <text x="20" y="86" class="lab16">→ log_id 집합</text>
+  <text x="20" y="104" class="dim16">(타깃 필터 없으면 생략)</text>
+
+  <line x1="172" y1="60" x2="210" y2="60" class="ar16"/>
+
+  <!-- 단계 2: 세그먼트 가지치기 + 스캔 -->
+  <rect x="212" y="10" width="290" height="165" class="bx16"/>
+  <text x="222" y="30" class="t16">② 세그먼트 프루닝 + 스캔</text>
+
+  <rect x="222" y="40" width="75" height="38" class="skip16"/>
+  <text x="228" y="54" class="s16" fill="#ffd479">seg-0</text>
+  <text x="228" y="70" class="s16" fill="#ffd479">건너뜀</text>
+
+  <rect x="302" y="40" width="75" height="38" class="skip16"/>
+  <text x="308" y="54" class="s16" fill="#ffd479">seg-1</text>
+  <text x="308" y="70" class="s16" fill="#ffd479">건너뜀</text>
+
+  <rect x="382" y="40" width="80" height="38" class="seg16"/>
+  <text x="388" y="54" class="lab16">seg-2</text>
+  <text x="388" y="70" class="s16">스캔 중</text>
+
+  <text x="222" y="105" class="s16">각 레코드: 프레임 ts로 시간 체크 →</text>
+  <text x="222" y="122" class="s16">역직렬화 → 필터 적용 (method, url, log_id 집합)</text>
+  <text x="222" y="142" class="s16">Desc 방향: 세그먼트별 버퍼→역방향 배출</text>
+  <text x="222" y="162" class="lab16">limit+1번째 히트 → more=true</text>
+
+  <line x1="504" y1="80" x2="540" y2="80" class="ar16"/>
+
+  <!-- 단계 3: 커서 + 관계 해석 -->
+  <rect x="542" y="10" width="168" height="165" class="bx16"/>
+  <text x="552" y="30" class="t16">③ 커서 + 렌더링</text>
+  <text x="552" y="52" class="s16">last_pos → cursor</text>
+  <text x="552" y="70" class="s16">(seq, idx, order)</text>
+  <text x="552" y="92" class="s16">Page hits의</text>
+  <text x="552" y="110" class="s16">relation만 조회</text>
+  <text x="552" y="132" class="lab16">QueryPage {</text>
+  <text x="552" y="150" class="lab16">  logs,</text>
+  <text x="552" y="168" class="lab16">  next_cursor?</text>
+
+  <!-- 화살표 설명 -->
+  <text x="10" y="200" class="s16" fill="#ffd479">■ 노란 세그먼트: min/max_ts가 from..to 밖 → 파일도 열지 않음</text>
+  <text x="10" y="220" class="lab16">■ 초록 세그먼트: 범위 내 → PositionedScan으로 순차 읽기</text>
+  <text x="10" y="244" class="s16">Desc 쿼리: 최신 세그먼트부터 역순 순회, limit 히트 즉시 종료</text>
+  <text x="10" y="264" class="s16">슬로우 쿼리가 writer를 막지 않는 이유: ReadSnapshot 클론 후 독립 스레드에서 스캔</text>
+</svg>
+<figcaption>쿼리 실행 3단계. 인덱스 조회로 후보 log_id를 좁히고, 시간 범위로 세그먼트를 가지치기하며, 물리 위치 커서로 다음 페이지를 이어간다.</figcaption>
+</figure>
+
+<h3>단계 1: 레지스트리 인덱스 조회</h3>
+
+<p><code>targets</code> 필터가 있으면, 먼저 레지스트리 인덱스에서 조건에 맞는 모든 entity_id를 찾고, 그 엔티티 버전들이 등장하는 log_id 집합을 관계(relation) 로그에서 추출합니다. 여러 타깃 필터는 교집합(AND)으로 좁혀집니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs (ReadSnapshot)</span><code><span class="kw">fn</span> <span class="fn">resolve_filters</span>(&amp;<span class="kw">mut</span> <span class="kw">self</span>, q: &amp;<span class="ty">LogQuery</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">ResolvedFilters</span>&gt; {
+    <span class="kw">let mut</span> allowed_by_target: <span class="ty">Option</span>&lt;<span class="ty">HashSet</span>&lt;<span class="ty">Uid</span>&gt;&gt; = <span class="ty">None</span>;
+    <span class="kw">for</span> f <span class="kw">in</span> &amp;q.targets {
+        <span class="kw">let</span> ids = self.<span class="fn">log_ids_for_filter</span>(f, q.from_micros, q.to_micros)?;
+<span class="hl">        allowed_by_target = <span class="ty">Some</span>(<span class="kw">match</span> allowed_by_target {</span>
+<span class="hl">            <span class="ty">Some</span>(prev) =&gt; prev.intersection(&amp;ids).copied().collect(), <span class="com">// AND</span></span>
+<span class="hl">            <span class="ty">None</span> =&gt; ids,</span>
+<span class="hl">        });</span>
+    }
+    <span class="dim">// actor 조건도 비슷하게...</span>
+}</code></pre>
+
+<p>타깃 필터가 없으면 이 단계를 통째로 건너뜁니다. 있으면 log_id 집합을 미리 확보하여 스캔 중 행별로 집합 멤버십만 확인하면 됩니다.</p>
+
+<h3>단계 2: PositionedScan — 세그먼트 가지치기와 시간 필터</h3>
+
+<p>로그 스캔의 핵심은 <code>PositionedScan</code>입니다. 이 구조체는 세 수준의 최적화를 담당합니다.</p>
+
+<p><strong>세그먼트 프루닝</strong>: 각 sealed 세그먼트는 <code>min_ts / max_ts</code>를 사이드카(<code>.meta</code> 파일)에 기록해 두었습니다. <code>from_micros</code> / <code>to_micros</code>와 비교해 범위 밖인 세그먼트는 파일 자체를 열지 않습니다. "최근 1시간" 쿼리가 1년치 세그먼트를 건너뛰는 것이 이 덕분입니다.</p>
+
+<p><strong>커서 프루닝</strong>: 이전 페이지의 마지막 위치(세그먼트 seq, 레코드 idx)를 저장한 커서가 있으면, 그 위치 이전 세그먼트 전체를 건너뜁니다.</p>
+
+<p><strong>Desc 방향</strong>: 파일 포맷이 순방향 프레임이라 직접 역방향 읽기는 불가합니다. 대신 한 세그먼트를 앞에서부터 읽어 버퍼에 쌓고, 버퍼를 뒤에서부터 꺼냅니다. 메모리는 한 세그먼트 크기(<code>max_segment_bytes</code>, 기본 64 MB)에 의해 상한이 결정됩니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/table.rs (PositionedScan)</span><code><span class="kw">fn</span> <span class="fn">prune</span>(&amp;<span class="kw">self</span>, s: &amp;<span class="ty">SegmentSlice</span>) -&gt; <span class="ty">bool</span> {
+<span class="hl">    <span class="com">// 시간 범위 밖인 세그먼트는 열지도 않는다</span></span>
+<span class="hl">    <span class="kw">if</span> s.max_ts &lt; self.from || s.min_ts &gt; self.to { <span class="kw">return</span> <span class="kw">true</span>; }</span>
+    <span class="com">// 커서로 소비된 쪽 세그먼트도 건너뜀</span>
+    <span class="kw">match</span> self.after {
+        <span class="ty">Some</span>(p) <span class="kw">if</span> !self.desc &amp;&amp; s.seq &lt; p.seq =&gt; <span class="kw">true</span>,
+        <span class="ty">Some</span>(p) <span class="kw">if</span>  self.desc &amp;&amp; s.seq &gt; p.seq =&gt; <span class="kw">true</span>,
+        _ =&gt; <span class="kw">false</span>,
+    }
+}</code></pre>
+
+<h3>단계 3: QueryPage — 커서와 렌더링</h3>
+
+<p>스캔이 limit+1번째 히트를 만나면 즉시 멈추고 <code>more = true</code>로 표시합니다. 마지막으로 수집된 레코드의 물리 위치(Position)가 커서로 인코딩됩니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/query.rs</span><code><span class="kw">const</span> CURSOR_LEN: <span class="ty">usize</span> = 1 + 1 + 8 + 8; <span class="com">// version + order + seq + idx</span>
+
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="fn">encode_cursor</span>(order: <span class="ty">Order</span>, pos: <span class="ty">Position</span>) -&gt; <span class="ty">String</span> {
+    <span class="kw">let mut</span> b = [<span class="num">0u8</span>; CURSOR_LEN];
+    b[<span class="num">0</span>] = CURSOR_V1;
+    b[<span class="num">1</span>] = (order == <span class="ty">Order</span>::Desc) <span class="kw">as</span> <span class="ty">u8</span>;
+<span class="hl">    b[<span class="num">2</span>..<span class="num">10</span>].copy_from_slice(&amp;pos.seq.to_le_bytes()); <span class="com">// 세그먼트 번호</span></span>
+<span class="hl">    b[<span class="num">10</span>..<span class="num">18</span>].copy_from_slice(&amp;pos.idx.to_le_bytes()); <span class="com">// 세그먼트 내 인덱스</span></span>
+    URL_SAFE_NO_PAD.encode(b)
+}</code></pre>
+
+<p>커서는 URL-safe base64로 인코딩된 불투명 토큰입니다. 클라이언트는 이걸 다음 요청의 <code>LogQuery::cursor</code>에 넣을 뿐, 해석하지 않습니다. 서버가 디코딩해서 "이 위치부터 다시 시작"합니다.</p>
+
+<div class="callout analogy"><span class="lab">비유</span><p>책갈피를 떠올리세요. "247페이지"라는 책갈피는 그 책의 어느 인쇄본(스냅샷)을 열어도 항상 같은 자리를 가리킵니다. append-only 로그에서 (seq, idx)도 마찬가지입니다 — 레코드는 절대 이동하지 않으므로 커서가 다른 스냅샷에도 유효합니다. 중간에 새 레코드가 추가되어도 커서 위치의 레코드는 그 자리에 그대로입니다.</p></div>
+
+<h2>느린 쿼리가 빠른 쓰기를 막지 않는 이유</h2>
+
+<p>DB에서 느린 전체 테이블 스캔은 공유 버퍼 풀과 I/O를 독점해 다른 트랜잭션을 느리게 만들 수 있습니다. Quipu-Log는 이 문제를 스냅샷으로 완전히 분리합니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs</span><code><span class="kw">pub fn</span> <span class="fn">snapshot</span>(&amp;<span class="kw">mut</span> self) -&gt; <span class="ty">Result</span>&lt;<span class="ty">ReadSnapshot</span>&gt; {
+<span class="hl">    <span class="ty">Ok</span>(<span class="ty">ReadSnapshot</span> {</span>
+<span class="hl">        keys: self.cfg.keys.clone(),</span>
+<span class="hl">        registries: self.registries.iter().map(|(k, v)| (k.clone(), v.idx.clone())).collect(),</span>
+<span class="hl">        logs: self.logs.slices()?,     <span class="com">// 경로 + 바이트 경계만 복사</span></span>
+<span class="hl">        relations: self.relations.slices()?,</span>
+<span class="hl">    })</span>
+}</code></pre>
+
+<p><code>snapshot()</code>은 레지스트리 인덱스(HashMap 클론)와 세그먼트 경로 목록만 복사합니다. 실제 파일 데이터는 복사하지 않습니다. 이 <code>ReadSnapshot</code>은 <code>Send</code>라서 다른 스레드에서 스캔해도 됩니다. 스냅샷 이후의 append는 새 레코드 / 새 세그먼트에만 가고, 스냅샷이 잡은 경계 밖이라 스캔에 보이지 않습니다.</p>
+
+<p>이것이 <span class="pill">14장 읽기 스냅샷과 MVCC</span>에서 다룬 "읽기가 쓰기를 막지 않는" 원리가 쿼리 경로에서도 그대로 적용되는 예입니다.</p>
+
+<h2>QueryPage의 observability: segments_scanned</h2>
+
+<p>응답 구조 <code>QueryPage</code>에는 <code>segments_scanned</code> 필드가 있습니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/query.rs</span><code><span class="kw">pub struct</span> <span class="ty">QueryPage</span> {
+    <span class="dim">pub logs: Vec&lt;LogView&gt;,</span>
+    <span class="dim">pub next_cursor: Option&lt;String&gt;,</span>
+<span class="hl">    /// 이 쿼리가 실제로 연 세그먼트 파일 수 — 프루닝 효과의 관측 지표.</span>
+<span class="hl">    pub segments_scanned: u64,</span>
+}</code></pre>
+
+<p>"최근 1시간" 쿼리인데 <code>segments_scanned</code>가 전체 세그먼트 수와 같다면, 시간 범위가 인덱스로 표현되지 못하고 있다는 신호입니다(레코드 타임스탬프가 단조 증가하지 않는 경우, DLQ 재투입 등). 이 숫자로 쿼리 성능을 진단할 수 있습니다.</p>
+
+<h2>정리</h2>
+
+<ul>
+  <li>쿼리는 세 단계: 인덱스로 log_id 집합 추출 → 시간 범위 프루닝으로 세그먼트 가지치기 → 순차 스캔 + limit 종료.</li>
+  <li>keyset 커서는 마지막 레코드의 물리 위치(세그먼트 seq, 레코드 idx)를 담아, OFFSET처럼 앞 N건을 읽을 필요 없이 어느 페이지에서나 O(1)로 시작합니다.</li>
+  <li>커서는 append-only 덕분에 스냅샷을 가로질러 유효합니다 — 레코드는 영원히 같은 물리 위치에 있습니다.</li>
+  <li><code>ReadSnapshot</code> 클론으로 쿼리와 쓰기가 독립적으로 진행되어, 느린 전체 스캔이 emit을 차단하지 않습니다.</li>
+</ul>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① <code>LIMIT 20 OFFSET 1000</code>과 keyset 커서가 큰 오프셋에서 성능이 갈리는 이유를 설명해 보세요. Quipu-Log의 커서는 어떤 값을 저장하나요?<br>② "최근 1주일" 범위를 쿼리할 때, 1년치 세그먼트 중 몇 개나 파일을 열 것 같습니까? 어떤 조건이어야 최소화됩니까?<br>③ append 중에 동시에 쿼리가 실행되어도 안전한 이유는? (힌트: snapshot()이 하는 일)</p></div>
+
+</article>

@@ -1,0 +1,91 @@
+{
+  "title_en": "The Quipu-Log Book",
+  "title_ko": "Quipu-Log 교과서",
+  "subtitle_en": "Storage engines and tamper-evident audit logs, built on nothing but the filesystem — explained from the ground up",
+  "subtitle_ko": "파일시스템만으로 짓는 저장 엔진과 변조-탐지 감사 로그 — 밑바닥부터",
+  "parts": [
+    {
+      "name_en": "Part 1 · Starting point: files, not a DB",
+      "name_ko": "파트 1 · 출발점: DB 없이, 파일로",
+      "chapters": [
+        {"n": "01", "slug": "audit-log-and-why-files", "title_en": "What an audit log is, and why “files, no DB”", "title_ko": "감사 로그란, 그리고 왜 'DB 없이 파일로'인가"},
+        {"n": "02", "slug": "map-and-db-fs-bridge", "title_en": "The map, and the DB↔filesystem correspondence", "title_ko": "Quipu-Log 지도와 DB↔파일시스템 대응표"}
+      ]
+    },
+    {
+      "name_en": "Part 2 · Filesystem basics",
+      "name_ko": "파트 2 · 파일시스템 기본기",
+      "chapters": [
+        {"n": "03", "slug": "fs-basics", "title_en": "Filesystem basics: files, directories, inodes, descriptors", "title_ko": "파일시스템의 기본: 파일·디렉토리·inode·디스크립터"},
+        {"n": "04", "slug": "read-write-rename", "title_en": "Reading & writing, and the atomicity of rename", "title_ko": "읽고 쓰기, 그리고 rename의 원자성"},
+        {"n": "05", "slug": "durability-fsync", "title_en": "When data really hits disk: the page cache and fsync", "title_ko": "데이터는 언제 진짜 디스크에 남나: page cache와 fsync"},
+        {"n": "06", "slug": "std-fs-toolbox", "title_en": "The std::fs toolbox: handling files in Rust", "title_ko": "std::fs 도구상자: Rust로 파일 다루기"}
+      ]
+    },
+    {
+      "name_en": "Part 3 · The heart of the engine: the append-only log",
+      "name_ko": "파트 3 · 저장 엔진의 심장: append-only 로그",
+      "chapters": [
+        {"n": "07", "slug": "append-only-wal", "title_en": "Append-only log = the WAL is the database", "title_ko": "append-only 로그 = WAL이 곧 데이터베이스"},
+        {"n": "08", "slug": "segments", "title_en": "Segment files and rollover", "title_ko": "세그먼트 파일과 롤오버"},
+        {"n": "09", "slug": "record-framing-crc", "title_en": "Record framing: length, CRC32, magic/version", "title_ko": "레코드 프레이밍: 길이·CRC32·magic/version"},
+        {"n": "10", "slug": "serialization", "title_en": "Serialization: turning structs into bytes", "title_ko": "직렬화: 구조체를 바이트로"}
+      ]
+    },
+    {
+      "name_en": "Part 4 · Re-creating what a DB gave you for free, on files",
+      "name_ko": "파트 4 · DB가 공짜로 주던 보장을 파일로 재현",
+      "chapters": [
+        {"n": "11", "slug": "durability-policy", "title_en": "Durability: fsync policy and group commit", "title_ko": "내구성: fsync 정책과 group commit"},
+        {"n": "12", "slug": "crash-recovery", "title_en": "Atomicity and crash recovery: torn writes and tail detection", "title_ko": "원자성과 크래시 복구: torn write와 꼬리 탐지"},
+        {"n": "13", "slug": "single-writer-lock", "title_en": "Concurrency I: single-writer and the file lock", "title_ko": "동시성 제어 ①: single-writer와 파일 락"},
+        {"n": "14", "slug": "read-snapshot-mvcc", "title_en": "Concurrency II: read snapshots and MVCC", "title_ko": "동시성 제어 ②: 읽기 스냅샷과 MVCC"},
+        {"n": "15", "slug": "indexing", "title_en": "Indexing: in-memory index + on-disk tokens", "title_ko": "인덱싱: 인메모리 인덱스 + 디스크 토큰"},
+        {"n": "16", "slug": "query-execution", "title_en": "Query execution: segment scans and cursor pagination", "title_ko": "쿼리 실행: 세그먼트 스캔과 커서 페이지네이션"},
+        {"n": "17", "slug": "retention-delete", "title_en": "Deletion and retention: segment unlink vs DELETE", "title_ko": "삭제와 보존: 세그먼트 unlink vs DELETE"},
+        {"n": "18", "slug": "layout-versioning", "title_en": "Store layout and format versioning", "title_ko": "저장소 레이아웃과 포맷 버저닝"}
+      ]
+    },
+    {
+      "name_en": "Part 5 · Integrity: making tampering evident (Security I)",
+      "name_ko": "파트 5 · 무결성: 고치면 티가 나게 (보안 ①)",
+      "chapters": [
+        {"n": "19", "slug": "hash-sha256", "title_en": "Hash functions and SHA-256: a digital fingerprint", "title_ko": "해시 함수와 SHA-256: 디지털 지문"},
+        {"n": "20", "slug": "merkle-tree", "title_en": "The Merkle history tree: committing the log to 32 bytes", "title_ko": "머클 히스토리 트리: 로그를 32바이트로 커밋"},
+        {"n": "21", "slug": "proofs", "title_en": "Inclusion proofs and consistency proofs", "title_ko": "포함 증명·일관성 증명"},
+        {"n": "22", "slug": "checkpoint-anchoring", "title_en": "Checkpoints and external anchoring", "title_ko": "체크포인트와 외부 앵커링"},
+        {"n": "23", "slug": "threat-model", "title_en": "Tamper-evident vs tamper-proof, and the threat model", "title_ko": "tamper-evident vs tamper-proof, 그리고 위협 모델"}
+      ]
+    },
+    {
+      "name_en": "Part 6 · Confidentiality: searching while keeping secrets (Security II)",
+      "name_ko": "파트 6 · 기밀성: 비밀을 지키면서 검색하기 (보안 ②)",
+      "chapters": [
+        {"n": "24", "slug": "field-protection", "title_en": "Field protection in four levels: plaintext/SHA-256/HMAC/RSA", "title_ko": "필드 보호 4단계: 평문/SHA-256/HMAC/RSA"},
+        {"n": "25", "slug": "crypto-internals", "title_en": "Symmetric, asymmetric, hybrid encryption and AEAD", "title_ko": "대칭·비대칭·하이브리드 암호와 AEAD"},
+        {"n": "26", "slug": "blind-index", "title_en": "Blind indexes: searching without plaintext", "title_ko": "블라인드 인덱스: 평문 없이 검색"},
+        {"n": "27", "slug": "write-only-deploy", "title_en": "Write-only deployment: a server without the private key", "title_ko": "쓰기 전용 배포: 개인키 없는 서버"},
+        {"n": "28", "slug": "key-management", "title_en": "Key management: keyring, versioning, rotation vs re-keying", "title_ko": "키 관리: 키링·버저닝·로테이션 vs 리키"}
+      ]
+    },
+    {
+      "name_en": "Part 7 · The write & read paths",
+      "name_ko": "파트 7 · 쓰기·읽기 경로",
+      "chapters": [
+        {"n": "29", "slug": "async-pipeline", "title_en": "The async pipeline: non-blocking emit and backpressure", "title_ko": "비동기 파이프라인: 논블로킹 emit과 백프레셔"},
+        {"n": "30", "slug": "reliability-dlq", "title_en": "Reliability: retries, backoff, DLQ, idempotency", "title_ko": "신뢰성: 재시도·백오프·DLQ·멱등성"},
+        {"n": "31", "slug": "tower-middleware", "title_en": "The tower middleware: auto-recording HTTP requests", "title_ko": "tower 미들웨어: HTTP 요청 자동 기록"},
+        {"n": "32", "slug": "permissions-meta-audit", "title_en": "Permissions (RBAC), filters, and meta-audit", "title_ko": "권한(RBAC)·필터·메타 감사"}
+      ]
+    },
+    {
+      "name_en": "Part 8 · Distribution, operations, scaling",
+      "name_ko": "파트 8 · 분산·운영·확장",
+      "chapters": [
+        {"n": "33", "slug": "availability-spool", "title_en": "Single point of failure and availability: the client spool", "title_ko": "단일 장애점과 가용성: 클라이언트 스풀"},
+        {"n": "34", "slug": "sharding-scaling", "title_en": "Horizontal scaling: sharding, consistent hashing, read replicas", "title_ko": "수평 확장: 샤딩·일관성 해싱·읽기 복제"},
+        {"n": "35", "slug": "server-client-mcp-obs", "title_en": "Server, client, MCP, and observability", "title_ko": "서버·클라이언트·MCP·관측성"}
+      ]
+    }
+  ]
+}

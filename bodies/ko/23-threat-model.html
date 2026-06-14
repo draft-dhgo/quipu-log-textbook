@@ -1,0 +1,153 @@
+<article>
+
+<p class="lead">파트 5를 마무리할 때가 됐습니다. 지금까지 SHA-256, 머클 트리, 포함·일관성 증명, 체크포인트와 외부 앵커를 배웠습니다. 이제 한 발짝 물러서서 물어봅시다 — 이 모든 것이 <em>실제로</em> 무엇을 막고, 무엇을 막지 <em>못하나요</em>? 보안 설계에서 "무엇을 못 막는지"를 정확히 아는 것이 "무엇을 막는지"만큼 중요합니다.</p>
+
+<div class="callout"><span class="lab">한 문장 요약</span><p>Quipu-Log는 tamper-evident(들키게) 시스템이지, tamper-proof(막는) 시스템이 아니다. 이 차이가 설계 전체를 규정한다.</p></div>
+
+<h2>tamper-proof vs tamper-evident: 결정적 차이</h2>
+
+<p>보안 시스템에는 두 가지 철학이 있습니다.</p>
+
+<table>
+  <tr><th></th><th>tamper-proof (막기)</th><th>tamper-evident (들키게)</th></tr>
+  <tr><td>목표</td><td>변조 자체를 불가능하게</td><td>변조 시 반드시 탐지되게</td></tr>
+  <tr><td>예시</td><td>HSM 칩셋, 물리 잠금장치</td><td>봉인 스티커, 머클 트리</td></tr>
+  <tr><td>디스크 접근자 대응</td><td>하드웨어 없이는 불가</td><td>외부 앵커로 들킴</td></tr>
+  <tr><td>Quipu-Log 방식</td><td>❌ (소프트웨어 라이브러리 한계)</td><td>✅ (설계 목표)</td></tr>
+</table>
+
+<p>감사 로그에서 tamper-proof를 소프트웨어만으로 달성하는 건 불가능합니다. 파일이 디스크에 있는 한, 루트 권한을 가진 누군가는 언제나 그 파일을 고칠 수 있습니다. Quipu-Log의 목표는 그 고침이 <strong>반드시 들키게</strong> 만드는 것입니다.</p>
+
+<div class="callout analogy"><span class="lab">비유</span><p>봉인 스티커를 떠올리세요. 스티커가 붙은 상자는 열 수 있습니다 — 스티커가 내용물을 지키는 자물쇠가 아니니까요. 하지만 스티커를 뜯고 다시 붙이면 흔적이 남습니다. 감사원은 "이 스티커가 뜯겼다"를 보는 순간 이상을 압니다. Quipu-Log의 머클 트리 + 외부 앵커가 정확히 이 역할입니다.</p></div>
+
+<h2>위협 모델: 누가 무엇을 할 수 있나</h2>
+
+<figure>
+<svg viewBox="0 0 740 340" role="img" aria-label="위협 모델: 공격자 유형별 Quipu-Log의 대응 범위">
+  <defs>
+    <marker id="arr23" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .t23{fill:#e6e8ee;font:600 13px -apple-system,sans-serif}
+    .s23{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .ok23{fill:#16241d;stroke:#8be9c0;stroke-width:1.5;rx:6}
+    .no23{fill:#241616;stroke:#ff8b8b;stroke-width:1.5;rx:6}
+    .partial23{fill:#241f12;stroke:#ffd479;stroke-width:1.5;rx:6}
+  </style>
+
+  <!-- 헤더 -->
+  <rect x="10" y="10" width="720" height="32" fill="#161922" stroke="#2a2f3d" rx="4"/>
+  <text x="190" y="30" class="t23" fill="#9aa3b2">공격자 유형</text>
+  <text x="410" y="30" class="t23" fill="#9aa3b2">능력</text>
+  <text x="590" y="30" class="t23" fill="#9aa3b2">Quipu-Log 대응</text>
+
+  <!-- 행 1: 네트워크 도청자 -->
+  <rect x="10" y="54" width="380" height="56" class="ok23" rx="6"/>
+  <text x="26" y="74" class="t23">네트워크 패킷 감청자</text>
+  <text x="26" y="92" class="s23">TLS 아래에서 패킷 캡처</text>
+  <rect x="400" y="54" width="330" height="56" class="ok23" rx="6"/>
+  <text x="416" y="74" class="t23" fill="#8be9c0">✅ TLS 인-프로세스 종료</text>
+  <text x="416" y="92" class="s23">transport 범위 내</text>
+
+  <!-- 행 2: 앱 레벨 공격자 -->
+  <rect x="10" y="122" width="380" height="56" class="ok23" rx="6"/>
+  <text x="26" y="142" class="t23">API 레벨 공격자</text>
+  <text x="26" y="160" class="s23">인증 토큰 도용, 레코드 위조 시도</text>
+  <rect x="400" y="122" width="330" height="56" class="ok23" rx="6"/>
+  <text x="416" y="142" class="t23" fill="#8be9c0">✅ RBAC, 머클 트리</text>
+  <text x="416" y="160" class="s23">위조 레코드는 트리에 포함될 수 없음</text>
+
+  <!-- 행 3: 디스크 접근 공격자 (키 없음) -->
+  <rect x="10" y="190" width="380" height="70" class="partial23" rx="6"/>
+  <text x="26" y="210" class="t23">디스크 접근자 (개인키 없음)</text>
+  <text x="26" y="228" class="s23">파일 직접 편집, 세그먼트 삭제</text>
+  <text x="26" y="248" class="s23">스파인+체크포인트 교체 시도</text>
+  <rect x="400" y="190" width="330" height="70" class="partial23" rx="6"/>
+  <text x="416" y="210" class="t23" fill="#ffd479">⚠️ 체크포인트+외부 앵커로 탐지</text>
+  <text x="416" y="228" class="s23">재서명 불가 → 서명 불일치</text>
+  <text x="416" y="248" class="s23">앵커된 루트와 consistency 실패</text>
+
+  <!-- 행 4: 키 보유 내부자 -->
+  <rect x="10" y="272" width="380" height="56" class="no23" rx="6"/>
+  <text x="26" y="292" class="t23">키 보유 내부자</text>
+  <text x="26" y="310" class="s23">디스크 접근 + RSA 개인키 보유</text>
+  <rect x="400" y="272" width="330" height="56" class="no23" rx="6"/>
+  <text x="416" y="292" class="t23" fill="#ff8b8b">❌ 방어 불가 (범위 밖)</text>
+  <text x="416" y="310" class="s23">재작성 후 재서명 가능 → 외부 앵커만 남음</text>
+</svg>
+<figcaption>공격자 유형별 Quipu-Log의 대응 범위. 키를 가진 내부자는 소프트웨어 레벨에서 막을 수 없다 — 외부 앵커의 앵커가 기준점이 된다.</figcaption>
+</figure>
+
+<h2>각 계층이 잡는 것과 못 잡는 것</h2>
+
+<p>3계층 방어를 순서대로 살펴봅시다:</p>
+
+<p><strong>계층 1 — 머클 스파인 (직접 검증):</strong></p>
+<ul>
+  <li>잡는 것: 레코드 in-place 수정, 세그먼트 파일 교체, 리프 순서 변경</li>
+  <li>못 잡는 것: 스파인 파일 자체를 세그먼트와 함께 재작성</li>
+</ul>
+
+<p><strong>계층 2 — 서명 체크포인트:</strong></p>
+<ul>
+  <li>잡는 것: 꼬리 절단(tree_size 감소), 개인키 없는 재작성(서명 불일치)</li>
+  <li>못 잡는 것: 체크포인트 파일 자체 삭제 후 재서명(개인키 있는 경우), 내부자의 전체 재작성+재서명</li>
+</ul>
+
+<p><strong>계층 3 — 외부 앵커:</strong></p>
+<ul>
+  <li>잡는 것: 키 보유 내부자의 전체 재작성 포함 — 앵커된 과거 루트와 현재 루트의 일관성 증명 실패로 탐지</li>
+  <li>못 잡는 것: 외부 앵커 시스템 자체 침해(다른 신뢰 도메인의 문제)</li>
+</ul>
+
+<h2>blast radius: 탐지되기 전까지의 피해 범위</h2>
+
+<p>보안에서 <strong>blast radius</strong>는 "공격이 성공했을 때 피해가 어디까지 퍼지는가"입니다. Quipu-Log에서는:</p>
+
+<ul>
+  <li><strong>단일 레코드 변조</strong>: 다음 <code>verify_integrity()</code> 실행 시 즉시 탐지. blast radius는 그 한 건.</li>
+  <li><strong>세그먼트 교체</strong>: 체크포인트가 다음 봉인 시점에 불일치. blast radius는 마지막 체크포인트~현재 세그먼트 사이.</li>
+  <li><strong>전체 재작성</strong>: 외부 앵커 대조 시 탐지. 탐지까지 걸리는 시간이 blast radius. 앵커 주기가 짧을수록 좁아집니다.</li>
+</ul>
+
+<div class="callout key"><span class="lab">보안 포인트</span><p>blast radius를 줄이는 두 가지 레버: (1) 체크포인트 주기 — 세그먼트 봉인을 자주 하면 체크포인트도 자주 찍힙니다. (2) 외부 앵커 확인 주기 — 앵커를 받은 쪽이 일관성 증명을 주기적으로 돌리면, 재작성 탐지까지 걸리는 시간을 최소화할 수 있습니다. 감사 주기를 어떻게 설정하느냐가 운영 매개변수입니다.</p></div>
+
+<h2>범위 밖: 설계 선택으로 제외된 것</h2>
+
+<p>SECURITY.md는 이 부분을 솔직하게 명시하고 있습니다. 다음은 의도적으로 범위 밖입니다:</p>
+
+<p><strong>가용성(Availability)은 Quipu-Log의 책임이 아닙니다.</strong> 단일 writer 데몬이 다운되면 로그가 멈춥니다. 이건 "취약점"이 아니라 설계 결정입니다 — 가용성은 클라이언트(<code>quipu-client</code>의 스풀·재전송)가 담당합니다. 33장에서 다룹니다.</p>
+
+<p><strong>실시간 차단은 Quipu-Log의 역할이 아닙니다.</strong> 감사 로그는 "이미 일어난 일을 기록"합니다. 악의적 행동이 로그에 기록되더라도 Quipu-Log가 그 행동을 실시간으로 막지는 않습니다. 실시간 차단은 애플리케이션 레벨 권한 제어의 역할입니다.</p>
+
+<p><strong>물리 접근·인증 토큰 탈취는 별도 문제입니다.</strong> SECURITY.md: "Out of scope: denial of service from an authenticated admin token, physical access to key files." 키 파일이 탈취되면 외부 앵커만 남는 방어선이 됩니다.</p>
+
+<p><strong>SHA-256 필드의 저엔트로피 취약성은 알려진 트레이드오프입니다.</strong> SHA-256으로 보호된 필드(예: SSN)는 공격자가 가능한 값 전체를 해시해 비교(brute-force)할 수 있습니다 — 이건 설계상 알려진 한계이고, HMAC 보호가 이를 막습니다. 24장 이후에서 다룹니다.</p>
+
+<h2>요약: 위협 모델 한 장으로</h2>
+
+<table>
+  <tr><th>공격 시나리오</th><th>탐지 방법</th><th>전제 조건</th></tr>
+  <tr><td>레코드 in-place 수정</td><td>머클 스파인 루트 불일치</td><td>-</td></tr>
+  <tr><td>세그먼트 파일 통째 교체</td><td>머클 스파인 루트 불일치</td><td>-</td></tr>
+  <tr><td>꼬리 세그먼트 삭제</td><td>체크포인트 tree_size > 현재 크기</td><td>체크포인트 있음</td></tr>
+  <tr><td>키 없는 전체 재작성</td><td>체크포인트 서명 불일치</td><td>개인키가 데이터 노드 밖</td></tr>
+  <tr><td>키 있는 전체 재작성+재서명</td><td>외부 앵커 일관성 증명 실패</td><td>외부 앵커가 다른 도메인에</td></tr>
+  <tr><td>가용성 공격(서비스 중단)</td><td>범위 밖</td><td>클라이언트 스풀로 대응</td></tr>
+  <tr><td>실시간 악의적 행동 차단</td><td>범위 밖</td><td>앱 레벨 권한 제어로 대응</td></tr>
+</table>
+
+<h2>정리</h2>
+
+<ul>
+  <li>Quipu-Log는 <strong>tamper-evident</strong>(들키게) 시스템입니다. tamper-proof(막기)는 소프트웨어 레벨에서 불가능합니다.</li>
+  <li>3계층(스파인·체크포인트·외부 앵커)이 각각 다른 공격자 모델을 커버합니다.</li>
+  <li>가용성, 실시간 차단, 물리 접근은 설계 범위 밖입니다 — 보안 취약점이 아니라 의도된 경계입니다.</li>
+  <li>blast radius는 앵커 주기와 체크포인트 주기로 조절합니다.</li>
+</ul>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① "tamper-evident이지 tamper-proof가 아니다"를 봉인 스티커 비유 말고, 자신만의 비유로 설명해 보세요.<br>② 키 보유 내부자가 로그를 재작성했습니다. 탐지하려면 어떤 조건이 갖춰져야 할까요? 세 가지 조건을 나열해 보세요.<br>③ Quipu-Log에 "실시간으로 악의적 API 호출을 차단하는 기능을 추가해 달라"는 요청을 받았습니다. 이 요청이 왜 Quipu-Log의 설계 범위 밖인지, 어떤 레이어에서 처리하는 게 맞는지 설명해 보세요.</p></div>
+
+</article>

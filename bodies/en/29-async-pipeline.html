@@ -1,0 +1,117 @@
+<article>
+
+<p class="lead">If handling an HTTP request takes tens of microseconds, you can't afford to spend hundreds of microseconds writing an audit log to disk. This chapter walks through how Quipu-Log turns <code>emit</code> into a <strong>non-blocking path that queues the event and returns immediately</strong>.</p>
+
+<div class="callout"><span class="lab">In one sentence</span><p><code>emit</code> pushes an event into a bounded channel and returns right away. The actual disk write is handled by a dedicated writer thread.</p></div>
+
+<h2>The producer-consumer pattern</h2>
+
+<p>This is exactly the queue you already know. A single channel sits between the <strong>producers</strong> (the app threads handling requests) and the <strong>consumer</strong> (the writer thread that writes to disk). A producer's job ends the moment it drops the event into the channel; the consumer picks events out one by one and writes them to disk in order.</p>
+
+<p>Rust's standard library <code>sync_channel</code> is that channel. <strong>Bounded</strong> means there's a cap on how many events can wait inside it (4096 by default). Without a cap, memory usage would be unbounded.</p>
+
+<figure>
+<svg viewBox="0 0 680 260" role="img" aria-label="AuditPipeline queue flow: app threads emit into a bounded channel, and a dedicated writer thread drains it into AuditStore">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .lbl{fill:#e6e8ee;font:600 13px -apple-system,sans-serif}
+    .sub{fill:#9aa3b2;font:12px -apple-system,sans-serif}
+    .box{fill:#161922;stroke:#2a2f3d;stroke-width:1.5}
+    .thr{fill:#16241d;stroke:#2c4a3a;stroke-width:1.5}
+    .ch{fill:#241f12;stroke:#4a3f1f;stroke-width:1.5}
+    .stor{fill:#1a1228;stroke:#3d2c5a;stroke-width:1.5}
+    .arr{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#arr)}
+    .hlline{stroke:#7aa2ff;stroke-width:2;marker-end:url(#arr)}
+  </style>
+
+  <!-- App threads (producers) -->
+  <rect x="20" y="30" width="130" height="50" rx="6" class="thr"/>
+  <text x="85" y="52" class="lbl" text-anchor="middle">Request thread A</text>
+  <text x="85" y="70" class="sub" text-anchor="middle">handle.emit()</text>
+
+  <rect x="20" y="100" width="130" height="50" rx="6" class="thr"/>
+  <text x="85" y="122" class="lbl" text-anchor="middle">Request thread B</text>
+  <text x="85" y="140" class="sub" text-anchor="middle">handle.emit()</text>
+
+  <rect x="20" y="170" width="130" height="50" rx="6" class="thr"/>
+  <text x="85" y="192" class="lbl" text-anchor="middle">Request thread C</text>
+  <text x="85" y="210" class="sub" text-anchor="middle">handle.emit()</text>
+
+  <!-- Bounded channel -->
+  <rect x="200" y="50" width="160" height="155" rx="6" class="ch"/>
+  <text x="280" y="74" class="lbl" text-anchor="middle" fill="#ffd479">Bounded channel</text>
+  <text x="280" y="92" class="sub" text-anchor="middle">capacity: 4096</text>
+  <rect x="220" y="102" width="120" height="18" rx="3" fill="#0b0d12"/>
+  <rect x="220" y="126" width="120" height="18" rx="3" fill="#0b0d12"/>
+  <rect x="220" y="150" width="120" height="18" rx="3" fill="#0b0d12"/>
+  <rect x="220" y="174" width="80" height="18" rx="3" fill="#0b0d12"/>
+  <text x="280" y="207" class="sub" text-anchor="middle">↑ try_send</text>
+
+  <!-- Writer thread (consumer) -->
+  <rect x="420" y="70" width="120" height="60" rx="6" fill="#1a1e2e" stroke="#3d5a8a" stroke-width="1.5"/>
+  <text x="480" y="96" class="lbl" text-anchor="middle" fill="#7aa2ff">writer thread</text>
+  <text x="480" y="116" class="sub" text-anchor="middle">audit-writer</text>
+
+  <!-- AuditStore -->
+  <rect x="420" y="160" width="120" height="55" rx="6" class="stor"/>
+  <text x="480" y="185" class="lbl" text-anchor="middle" fill="#c792ea">AuditStore</text>
+  <text x="480" y="203" class="sub" text-anchor="middle">disk write</text>
+
+  <!-- Arrows: producers → channel -->
+  <line x1="150" y1="55" x2="198" y2="105" class="arr"/>
+  <line x1="150" y1="125" x2="198" y2="140" class="arr"/>
+  <line x1="150" y1="195" x2="198" y2="175" class="arr"/>
+
+  <!-- channel → writer -->
+  <line x1="360" y1="128" x2="418" y2="100" class="hlline"/>
+
+  <!-- writer → store -->
+  <line x1="480" y1="130" x2="480" y2="158" class="arr"/>
+
+  <!-- QueueFull label -->
+  <text x="340" y="240" class="sub" fill="#ff8b8b">← returns QueueFull when channel is full</text>
+</svg>
+<figcaption>Producers (request threads) drop events into the channel and return immediately. Only the dedicated writer thread ever touches AuditStore.</figcaption>
+</figure>
+
+<h2>The core code: what emit actually does</h2>
+
+<p><code>AuditHandle</code> is the cloneable handle that app code holds directly. Looking at <code>emit_unchecked</code> shows just how short the hot path really is.</p>
+
+<pre><span class="filename">crates/quipu-middleware/src/pipeline.rs</span><code><span class="kw">pub fn</span> <span class="fn">emit_unchecked</span>(&amp;self, event: AuditEvent) -&gt; Result&lt;(), MiddlewareError&gt; {
+    <span class="dim">if self.reject_emit_when_disk_full &amp;&amp; self.health.disk_full() { ... }</span>
+    self.metrics.queue_inc();
+    <span class="hl">match self.tx.try_send(Command::Emit(Box::new(event))) {</span>
+<span class="hl">        Ok(()) =&gt; Ok(()),</span>
+<span class="hl">        Err(TrySendError::Full(Command::Emit(ev))) =&gt; {</span>
+            self.metrics.rejected_queue_full();
+            Err(MiddlewareError::QueueFull(ev))
+        }
+        <span class="dim">Err(_) =&gt; Err(MiddlewareError::WorkerGone),</span>
+    }
+}</code></pre>
+
+<p><code>try_send</code> returns <code>Err</code> immediately — without blocking — when the channel is full. That produces a <code>QueueFull</code> error, and the event comes back to the caller (so the caller can drop it or route it to a separate fallback). This is <strong>backpressure</strong> — the system's way of saying "I'm too busy right now, I can't take any more."</p>
+
+<div class="callout analogy"><span class="lab">Analogy</span><p>Think of a restaurant handing out numbered tickets. The guest (producer) takes a ticket and immediately goes to find a seat — no waiting. The kitchen (writer thread) processes orders in ticket order. When the tickets run out (channel full), no more can be issued — that's QueueFull.</p></div>
+
+<h2>AuditPipeline and AuditHandle</h2>
+
+<p><code>AuditPipeline</code> owns the writer thread. Exactly one exists for the lifetime of the server; at shutdown you call <code>shutdown()</code> to drain whatever's left in the queue and clean up the thread. <code>AuditHandle</code> is the lightweight clone you get by calling <code>handle()</code> on the pipeline. It wraps an <code>Arc&lt;SyncSender&gt;</code>, so cloning is essentially free — pass it wherever you need it.</p>
+
+<pre><span class="filename">crates/quipu-middleware/src/pipeline.rs</span><code><span class="dim">// Start the pipeline once, at server initialization</span>
+<span class="kw">let</span> pipeline = <span class="ty">AuditPipeline</span>::<span class="fn">start</span>(store, root, permissions, cfg, fallback)?;
+
+<span class="hl">let handle = pipeline.handle(); // cloneable AuditHandle</span>
+<span class="dim">// pass handle anywhere via axum State, Arc, etc.</span>
+handle.<span class="fn">emit</span>(&amp;role, event)?;   <span class="com">// non-blocking</span></code></pre>
+
+<div class="callout why"><span class="lab">Why this design?</span><p>quipu-core's <code>AuditStore</code> follows the single-writer principle (Ch. 13). If multiple request threads called <code>AuditStore</code> directly in a multi-threaded server, you'd get lock contention or consistency issues. Serializing through a channel to a single thread lets the store keep its single-writer guarantee while keeping the app completely non-blocking.</p></div>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① What would go wrong if <code>send</code> (blocking send) were used instead of <code>try_send</code>?<br>② Why does a <code>QueueFull</code> error return the event to the caller rather than simply dropping it?<br>③ Why is <code>AuditHandle</code> designed to implement <code>Clone</code>?</p></div>
+
+</article>

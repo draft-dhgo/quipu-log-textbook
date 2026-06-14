@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quipu-Log 교과서</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ 목차</button><b>Quipu-Log 교과서</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn" href="../index.html">EN</a><a class="langbtn active" href="index.html">한국어</a></div>
+<a class="home" href="index.html">Quipu-Log 교과서</a>
+<div class="sub">파일시스템만으로 짓는 저장 엔진과 변조-탐지 감사 로그 — 밑바닥부터</div>
+<div class="part">파트 1 · 출발점: DB 없이, 파일로</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>감사 로그란, 그리고 왜 &#x27;DB 없이 파일로&#x27;인가</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>Quipu-Log 지도와 DB↔파일시스템 대응표</a>
+<div class="part">파트 2 · 파일시스템 기본기</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>파일시스템의 기본: 파일·디렉토리·inode·디스크립터</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>읽고 쓰기, 그리고 rename의 원자성</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>데이터는 언제 진짜 디스크에 남나: page cache와 fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>std::fs 도구상자: Rust로 파일 다루기</a>
+<div class="part">파트 3 · 저장 엔진의 심장: append-only 로그</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>append-only 로그 = WAL이 곧 데이터베이스</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>세그먼트 파일과 롤오버</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>레코드 프레이밍: 길이·CRC32·magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>직렬화: 구조체를 바이트로</a>
+<div class="part">파트 4 · DB가 공짜로 주던 보장을 파일로 재현</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>내구성: fsync 정책과 group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>원자성과 크래시 복구: torn write와 꼬리 탐지</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>동시성 제어 ①: single-writer와 파일 락</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>동시성 제어 ②: 읽기 스냅샷과 MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>인덱싱: 인메모리 인덱스 + 디스크 토큰</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>쿼리 실행: 세그먼트 스캔과 커서 페이지네이션</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>삭제와 보존: 세그먼트 unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>저장소 레이아웃과 포맷 버저닝</a>
+<div class="part">파트 5 · 무결성: 고치면 티가 나게 (보안 ①)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>해시 함수와 SHA-256: 디지털 지문</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>머클 히스토리 트리: 로그를 32바이트로 커밋</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>포함 증명·일관성 증명</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>체크포인트와 외부 앵커링</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>tamper-evident vs tamper-proof, 그리고 위협 모델</a>
+<div class="part">파트 6 · 기밀성: 비밀을 지키면서 검색하기 (보안 ②)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>필드 보호 4단계: 평문/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>대칭·비대칭·하이브리드 암호와 AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>블라인드 인덱스: 평문 없이 검색</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>쓰기 전용 배포: 개인키 없는 서버</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>키 관리: 키링·버저닝·로테이션 vs 리키</a>
+<div class="part">파트 7 · 쓰기·읽기 경로</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>비동기 파이프라인: 논블로킹 emit과 백프레셔</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>신뢰성: 재시도·백오프·DLQ·멱등성</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>tower 미들웨어: HTTP 요청 자동 기록</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>권한(RBAC)·필터·메타 감사</a>
+<div class="part">파트 8 · 분산·운영·확장</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>단일 장애점과 가용성: 클라이언트 스풀</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>수평 확장: 샤딩·일관성 해싱·읽기 복제</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>서버·클라이언트·MCP·관측성</a>
+</nav>
+<main>
+<div class="inner">
+<header class="hero"><div class="eyebrow">Quipu-Log 교과서</div><h1>변조-탐지 감사 로그와<br>파일시스템 저장 엔진</h1><p>파일시스템만으로 짓는 저장 엔진과 변조-탐지 감사 로그 — 밑바닥부터. 비유로 직관을 잡고, 실제 코드로 확인하며, DB가 주던 보장이 파일 위에서 어떻게 다시 만들어지는지 짚어갑니다.</p></header><div class="toc-grid">
+<div class="toc-part">파트 1 · 출발점: DB 없이, 파일로</div>
+<a class="toc-item" href="01-audit-log-and-why-files.html"><span class="num">01</span><span class="t">감사 로그란, 그리고 왜 &#x27;DB 없이 파일로&#x27;인가</span></a>
+<a class="toc-item" href="02-map-and-db-fs-bridge.html"><span class="num">02</span><span class="t">Quipu-Log 지도와 DB↔파일시스템 대응표</span></a>
+<div class="toc-part">파트 2 · 파일시스템 기본기</div>
+<a class="toc-item" href="03-fs-basics.html"><span class="num">03</span><span class="t">파일시스템의 기본: 파일·디렉토리·inode·디스크립터</span></a>
+<a class="toc-item" href="04-read-write-rename.html"><span class="num">04</span><span class="t">읽고 쓰기, 그리고 rename의 원자성</span></a>
+<a class="toc-item" href="05-durability-fsync.html"><span class="num">05</span><span class="t">데이터는 언제 진짜 디스크에 남나: page cache와 fsync</span></a>
+<a class="toc-item" href="06-std-fs-toolbox.html"><span class="num">06</span><span class="t">std::fs 도구상자: Rust로 파일 다루기</span></a>
+<div class="toc-part">파트 3 · 저장 엔진의 심장: append-only 로그</div>
+<a class="toc-item" href="07-append-only-wal.html"><span class="num">07</span><span class="t">append-only 로그 = WAL이 곧 데이터베이스</span></a>
+<a class="toc-item" href="08-segments.html"><span class="num">08</span><span class="t">세그먼트 파일과 롤오버</span></a>
+<a class="toc-item" href="09-record-framing-crc.html"><span class="num">09</span><span class="t">레코드 프레이밍: 길이·CRC32·magic/version</span></a>
+<a class="toc-item" href="10-serialization.html"><span class="num">10</span><span class="t">직렬화: 구조체를 바이트로</span></a>
+<div class="toc-part">파트 4 · DB가 공짜로 주던 보장을 파일로 재현</div>
+<a class="toc-item" href="11-durability-policy.html"><span class="num">11</span><span class="t">내구성: fsync 정책과 group commit</span></a>
+<a class="toc-item" href="12-crash-recovery.html"><span class="num">12</span><span class="t">원자성과 크래시 복구: torn write와 꼬리 탐지</span></a>
+<a class="toc-item" href="13-single-writer-lock.html"><span class="num">13</span><span class="t">동시성 제어 ①: single-writer와 파일 락</span></a>
+<a class="toc-item" href="14-read-snapshot-mvcc.html"><span class="num">14</span><span class="t">동시성 제어 ②: 읽기 스냅샷과 MVCC</span></a>
+<a class="toc-item" href="15-indexing.html"><span class="num">15</span><span class="t">인덱싱: 인메모리 인덱스 + 디스크 토큰</span></a>
+<a class="toc-item" href="16-query-execution.html"><span class="num">16</span><span class="t">쿼리 실행: 세그먼트 스캔과 커서 페이지네이션</span></a>
+<a class="toc-item" href="17-retention-delete.html"><span class="num">17</span><span class="t">삭제와 보존: 세그먼트 unlink vs DELETE</span></a>
+<a class="toc-item" href="18-layout-versioning.html"><span class="num">18</span><span class="t">저장소 레이아웃과 포맷 버저닝</span></a>
+<div class="toc-part">파트 5 · 무결성: 고치면 티가 나게 (보안 ①)</div>
+<a class="toc-item" href="19-hash-sha256.html"><span class="num">19</span><span class="t">해시 함수와 SHA-256: 디지털 지문</span></a>
+<a class="toc-item" href="20-merkle-tree.html"><span class="num">20</span><span class="t">머클 히스토리 트리: 로그를 32바이트로 커밋</span></a>
+<a class="toc-item" href="21-proofs.html"><span class="num">21</span><span class="t">포함 증명·일관성 증명</span></a>
+<a class="toc-item" href="22-checkpoint-anchoring.html"><span class="num">22</span><span class="t">체크포인트와 외부 앵커링</span></a>
+<a class="toc-item" href="23-threat-model.html"><span class="num">23</span><span class="t">tamper-evident vs tamper-proof, 그리고 위협 모델</span></a>
+<div class="toc-part">파트 6 · 기밀성: 비밀을 지키면서 검색하기 (보안 ②)</div>
+<a class="toc-item" href="24-field-protection.html"><span class="num">24</span><span class="t">필드 보호 4단계: 평문/SHA-256/HMAC/RSA</span></a>
+<a class="toc-item" href="25-crypto-internals.html"><span class="num">25</span><span class="t">대칭·비대칭·하이브리드 암호와 AEAD</span></a>
+<a class="toc-item" href="26-blind-index.html"><span class="num">26</span><span class="t">블라인드 인덱스: 평문 없이 검색</span></a>
+<a class="toc-item" href="27-write-only-deploy.html"><span class="num">27</span><span class="t">쓰기 전용 배포: 개인키 없는 서버</span></a>
+<a class="toc-item" href="28-key-management.html"><span class="num">28</span><span class="t">키 관리: 키링·버저닝·로테이션 vs 리키</span></a>
+<div class="toc-part">파트 7 · 쓰기·읽기 경로</div>
+<a class="toc-item" href="29-async-pipeline.html"><span class="num">29</span><span class="t">비동기 파이프라인: 논블로킹 emit과 백프레셔</span></a>
+<a class="toc-item" href="30-reliability-dlq.html"><span class="num">30</span><span class="t">신뢰성: 재시도·백오프·DLQ·멱등성</span></a>
+<a class="toc-item" href="31-tower-middleware.html"><span class="num">31</span><span class="t">tower 미들웨어: HTTP 요청 자동 기록</span></a>
+<a class="toc-item" href="32-permissions-meta-audit.html"><span class="num">32</span><span class="t">권한(RBAC)·필터·메타 감사</span></a>
+<div class="toc-part">파트 8 · 분산·운영·확장</div>
+<a class="toc-item" href="33-availability-spool.html"><span class="num">33</span><span class="t">단일 장애점과 가용성: 클라이언트 스풀</span></a>
+<a class="toc-item" href="34-sharding-scaling.html"><span class="num">34</span><span class="t">수평 확장: 샤딩·일관성 해싱·읽기 복제</span></a>
+<a class="toc-item" href="35-server-client-mcp-obs.html"><span class="num">35</span><span class="t">서버·클라이언트·MCP·관측성</span></a>
+</div>
+
+</div>
+</main>
+</div>
+<script src="../assets/textbook.js"></script>
+</body>
+</html>

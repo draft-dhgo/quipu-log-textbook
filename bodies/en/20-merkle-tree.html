@@ -1,0 +1,184 @@
+<article>
+
+<p class="lead">How can you prove that millions of audit records haven't changed by a single character? Re-reading the entire log every time is too slow, and attaching a hash to each record individually leaves them open to piecemeal forgery. A Merkle tree solves both problems at once — it "commits" millions of records into a single 32-byte root, and changing even one byte flips that root.</p>
+
+<div class="callout"><span class="lab">In one sentence</span><p>A Merkle tree is a binary tree of recursively stacked hashes. Leaves hold record hashes, interior nodes hold hashes of their two children, and a single 32-byte root "locks" the entire log.</p></div>
+
+<h2>Intuition first: hashing the hashes</h2>
+
+<p>Recall the key property of a hash function (<span class="pill">Ch. 19, SHA-256</span>) — change even 1 bit of input and the output changes completely. What if we apply that property recursively?</p>
+
+<ol>
+  <li>Compute the hash of each of 4 records → <code>H(R0), H(R1), H(R2), H(R3)</code></li>
+  <li>Pair adjacent hashes and hash again → <code>H(H(R0)||H(R1))</code>, <code>H(H(R2)||H(R3))</code></li>
+  <li>Hash those two together → a single root</li>
+</ol>
+
+<p>Now, flip 1 bit in R0 and H(R0) changes, its parent node changes, and the root changes. <strong>Comparing that one root tells you whether anything, anywhere, has changed.</strong></p>
+
+<figure>
+<svg viewBox="0 0 720 340" role="img" aria-label="n=4 Merkle tree structure: leaves, interior nodes, root">
+  <defs>
+    <marker id="arr20" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .t20{fill:#e6e8ee;font:600 13px -apple-system,sans-serif;text-anchor:middle}
+    .s20{fill:#9aa3b2;font:11px -apple-system,sans-serif;text-anchor:middle}
+    .code20{fill:#8be9c0;font:600 11px monospace;text-anchor:middle}
+    .lf{fill:#16241d;stroke:#2c4a3a;stroke-width:1.5;rx:8}
+    .in{fill:#1a1f2e;stroke:#7aa2ff;stroke-width:1.5;rx:8}
+    .rt{fill:#241f12;stroke:#ffd479;stroke-width:2;rx:8}
+    .edge{stroke:#2a2f3d;stroke-width:1.5;marker-end:url(#arr20)}
+    .prefix{fill:#ffd479;font:700 11px monospace;text-anchor:middle}
+  </style>
+
+  <!-- Root -->
+  <rect x="270" y="20" width="180" height="56" class="rt" rx="8"/>
+  <text x="360" y="44" class="t20">Root</text>
+  <text x="360" y="62" class="code20">SHA-256(0x01 || L || R)</text>
+
+  <!-- Interior nodes L, R -->
+  <rect x="90" y="130" width="180" height="56" class="in" rx="8"/>
+  <text x="180" y="154" class="t20">Interior node L</text>
+  <text x="180" y="172" class="s20">SHA-256(0x01||H0||H1)</text>
+
+  <rect x="450" y="130" width="180" height="56" class="in" rx="8"/>
+  <text x="540" y="154" class="t20">Interior node R</text>
+  <text x="540" y="172" class="s20">SHA-256(0x01||H2||H3)</text>
+
+  <!-- Root → interior node edges -->
+  <line x1="310" y1="76" x2="215" y2="130" class="edge"/>
+  <line x1="410" y1="76" x2="505" y2="130" class="edge"/>
+
+  <!-- 4 leaves -->
+  <rect x="20" y="240" width="140" height="76" class="lf" rx="8"/>
+  <text x="90" y="264" class="t20">Leaf 0</text>
+  <text x="90" y="281" class="s20">H0 = SHA-256(</text>
+  <text x="90" y="295" class="prefix">0x00</text>
+  <text x="90" y="309" class="s20">|| Record0)</text>
+
+  <rect x="175" y="240" width="140" height="76" class="lf" rx="8"/>
+  <text x="245" y="264" class="t20">Leaf 1</text>
+  <text x="245" y="281" class="s20">H1 = SHA-256(</text>
+  <text x="245" y="295" class="prefix">0x00</text>
+  <text x="245" y="309" class="s20">|| Record1)</text>
+
+  <rect x="380" y="240" width="140" height="76" class="lf" rx="8"/>
+  <text x="450" y="264" class="t20">Leaf 2</text>
+  <text x="450" y="281" class="s20">H2 = SHA-256(</text>
+  <text x="450" y="295" class="prefix">0x00</text>
+  <text x="450" y="309" class="s20">|| Record2)</text>
+
+  <rect x="535" y="240" width="140" height="76" class="lf" rx="8"/>
+  <text x="605" y="264" class="t20">Leaf 3</text>
+  <text x="605" y="281" class="s20">H3 = SHA-256(</text>
+  <text x="605" y="295" class="prefix">0x00</text>
+  <text x="605" y="309" class="s20">|| Record3)</text>
+
+  <!-- Interior → leaf edges -->
+  <line x1="150" y1="186" x2="100" y2="240" class="edge"/>
+  <line x1="200" y1="186" x2="235" y2="240" class="edge"/>
+  <line x1="500" y1="186" x2="460" y2="240" class="edge"/>
+  <line x1="575" y1="186" x2="590" y2="240" class="edge"/>
+
+  <!-- Prefix legend -->
+  <rect x="10" y="9" width="230" height="18" fill="none"/>
+  <text x="14" y="22" style="fill:#ffd479;font:11px monospace">0x00</text>
+  <text x="48" y="22" style="fill:#9aa3b2;font:11px -apple-system,sans-serif"> = leaf prefix (RFC 6962)</text>
+  <text x="14" y="36" style="fill:#7aa2ff;font:11px monospace">0x01</text>
+  <text x="48" y="36" style="fill:#9aa3b2;font:11px -apple-system,sans-serif"> = interior node prefix</text>
+</svg>
+<figcaption>n=4 Merkle tree. Leaves use <code>SHA-256(0x00 || record)</code>; interior nodes use <code>SHA-256(0x01 || left child || right child)</code>. The different prefixes make it impossible to confuse a leaf with an interior node (RFC 6962 §2.1).</figcaption>
+</figure>
+
+<h2>RFC 6962 rules: prefixes matter</h2>
+
+<p>Quipu-Log follows the hashing rules from Google's Certificate Transparency standard, RFC 6962, exactly. The key rule is using <strong>different prefixes for leaves and interior nodes</strong>:</p>
+
+<pre><span class="filename">RFC 6962 §2.1 (excerpt from quipu-log/crates/quipu-core/src/merkle.rs docs)</span><code>MTH({})        = <span class="fn">SHA-256</span>()               <span class="com">// empty tree</span>
+<span class="hl">leaf hash      = <span class="fn">SHA-256</span>(<span class="num">0x00</span> || record)  // leaf: raw record bytes</span>
+<span class="hl">interior node  = <span class="fn">SHA-256</span>(<span class="num">0x01</span> || left || right) // interior node</span></code></pre>
+
+<p>Why do we need prefixes? Without them, using <code>SHA-256(H0 || H1)</code> would make it impossible to distinguish "the hash of the concatenation of two leaves H0 and H1 treated as a single leaf" from "H0||H1 hashed as a new interior node." This ambiguity enables what's called a <em>second-preimage confusion attack</em>. Prepending <code>0x00</code> to leaves and <code>0x01</code> to interior nodes makes these cases mathematically impossible to collide.</p>
+
+<p>Following the standard has another benefit: anyone familiar with RFC 6962 can write their own external verifier. This isn't Quipu-Log's own proprietary rule, so legal audits or third-party verification have a published reference document.</p>
+
+<h2>Quipu-Log's implementation: leaf_hash / node_hash / mth</h2>
+
+<p>Here is the code that directly translates the RFC's recursive definition:</p>
+
+<pre><span class="filename">crates/quipu-core/src/merkle.rs</span><code><span class="kw">pub fn</span> <span class="fn">leaf_hash</span>(record: <span class="ty">&amp;[u8]</span>) -&gt; <span class="ty">Hash</span> {
+    <span class="kw">let mut</span> h = <span class="ty">Sha256</span>::new();
+<span class="hl">    h.update([LEAF_PREFIX]);  <span class="com">// 0x00</span></span>
+    h.update(record);
+    h.finalize().into()
+}
+
+<span class="kw">pub fn</span> <span class="fn">node_hash</span>(left: <span class="ty">&amp;Hash</span>, right: <span class="ty">&amp;Hash</span>) -&gt; <span class="ty">Hash</span> {
+    <span class="kw">let mut</span> h = <span class="ty">Sha256</span>::new();
+<span class="hl">    h.update([NODE_PREFIX]);  <span class="com">// 0x01</span></span>
+    h.update(left);
+    h.update(right);
+    h.finalize().into()
+}
+
+<span class="com">/// Recursive definition: root of D[n]</span>
+<span class="kw">pub fn</span> <span class="fn">mth</span>(leaves: <span class="ty">&amp;[Hash]</span>) -&gt; <span class="ty">Hash</span> {
+    <span class="kw">match</span> leaves.len() {
+        <span class="dim"><span class="num">0</span> =&gt; <span class="fn">empty_root</span>(),     <span class="com">// SHA-256()</span>
+        <span class="num">1</span> =&gt; leaves[<span class="num">0</span>],          <span class="com">// single leaf, return as-is</span></span>
+        n =&gt; {
+<span class="hl">            <span class="kw">let</span> k = <span class="fn">split</span>(n);  <span class="com">// largest power of 2 less than n (RFC split point)</span></span>
+            <span class="fn">node_hash</span>(&amp;<span class="fn">mth</span>(&amp;leaves[..k]), &amp;<span class="fn">mth</span>(&amp;leaves[k..]))
+        }
+    }
+}</code></pre>
+
+<p><code>split(n)</code> is worth noting. For n=4, k=2; for n=5, k=4; for n=6, k=4. RFC 6962 always uses the largest power of 2 less than n as the size of the left perfect subtree. This ensures the left subtree is always a perfect binary tree, which makes incremental updates (see <code>Roots</code> below) efficient.</p>
+
+<h2>Incremental root tracking: Roots</h2>
+
+<p>Recomputing the whole tree from scratch every time a new record arrives is O(n) — too slow. The <code>Roots</code> struct maintains only a list of "peaks" of perfect binary subtrees, making appends <strong>amortized O(1)</strong>:</p>
+
+<pre><span class="filename">crates/quipu-core/src/merkle.rs — Roots::push</span><code><span class="kw">pub fn</span> <span class="fn">push</span>(&amp;<span class="kw">mut self</span>, leaf: <span class="ty">Hash</span>) {
+    <span class="kw">let mut</span> carry = (<span class="num">0u32</span>, leaf);
+<span class="hl">    <span class="kw">while let</span> Some(&amp;(h, _)) = <span class="kw">self</span>.peaks.last() {</span>
+<span class="hl">        <span class="kw">if</span> h != carry.<span class="num">0</span> { <span class="kw">break</span>; }</span>
+<span class="hl">        <span class="kw">let</span> (_, left) = <span class="kw">self</span>.peaks.pop().unwrap();</span>
+<span class="hl">        carry = (carry.<span class="num">0</span> + <span class="num">1</span>, <span class="fn">node_hash</span>(&amp;left, &amp;carry.<span class="num">1</span>));</span>
+    }
+    <span class="kw">self</span>.peaks.push(carry);
+    <span class="kw">self</span>.size += <span class="num">1</span>;
+}</code></pre>
+
+<p>When two peaks of the same height are found, they are merged into one peak one level up. This is exactly the carry propagation of binary addition. Even with a million records, the peak list has at most 20 entries (log₂(1,000,000) ≈ 20).</p>
+
+<div class="callout analogy"><span class="lab">Analogy</span><p>Picture a Merkle tree as a stack of receipt bundles. First you bundle receipts two-by-two into "subtotal envelopes," then bundle pairs of those into "section envelopes," and finally the one remaining "grand-total envelope" is the root. Change any receipt and every envelope up the chain changes — and ultimately the grand-total envelope changes. An auditor only has to compare that one envelope.</p></div>
+
+<h2>The Merkle spine file: provable even after retention</h2>
+
+<p>Segment files are deleted according to the retention policy (<span class="pill">Ch. 17, deletion and preservation</span>). When records are deleted, do their leaf hashes disappear too?</p>
+
+<p>That's why there is a separate spine file called <code>MerkleLog</code> (<code>merkle.spine</code>). It persists only the 32-byte leaf hash of each record, independently of retention. Even after a record's payload is gone, its hash remains:</p>
+
+<pre><span class="filename">crates/quipu-core/src/merkle_log.rs — file format</span><code><span class="com">// [ "QMKL" magic ][ u8 version ][ leaf_0 (32B) ][ leaf_1 (32B) ] ...</span>
+<span class="hl"><span class="com">// The spine is not subject to retention — hashes carry no payload,</span></span>
+<span class="hl"><span class="com">// so keeping them forever leaks no secrets, and inclusion/consistency</span></span>
+<span class="hl"><span class="com">// proofs remain generatable even after a purge.</span></span></code></pre>
+
+<div class="callout key"><span class="lab">Security note</span><p>A hash cannot be reversed to recover the original (one-wayness), so keeping leaf hashes indefinitely does not leak confidential information. Keeping the records themselves indefinitely, on the other hand, could violate regulations like GDPR. Retaining only the hashes achieves the ideal balance: "provable, but not readable."</p></div>
+
+<h2>Recap</h2>
+
+<ul>
+  <li>Merkle tree: leaves (record hashes) → interior nodes (hash of two child hashes) → one root (32 bytes) that commits the entire log.</li>
+  <li>RFC 6962 rules: leaves use <code>SHA-256(0x00 || record)</code>, interior nodes use <code>SHA-256(0x01 || left || right)</code>. The prefixes block confusion attacks.</li>
+  <li><code>Roots</code> keeps only peaks, making appends amortized O(1) with O(log n) space.</li>
+  <li>The <code>merkle.spine</code> file preserves leaf hashes separately → proofs remain possible after retention.</li>
+</ul>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① In a Merkle tree with n=5, split(5)=4. The left subtree has 4 leaves and the right has 1. What is the root of the right subtree?<br>② What attack becomes possible if you remove the leaf prefix <code>0x00</code> and interior node prefix <code>0x01</code>? Explain.<br>③ Why can the <code>Roots</code> struct compute the current root in O(log n) space and time while maintaining only a list of peaks?</p></div>
+
+</article>

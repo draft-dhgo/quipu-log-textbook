@@ -1,0 +1,204 @@
+<article>
+
+<p class="lead">"이 파일이 어떤 포맷인지, 어디에 무엇이 있는지" — DB라면 시스템 카탈로그(pg_catalog, information_schema)가 테이블·컬럼·인덱스 위치를 관리합니다. 파일 위에서 직접 만드는 저장소도 같은 문제를 풀어야 합니다. Quipu-Log의 디렉토리 레이아웃이 카탈로그 역할을 하고, magic 바이트와 FORMAT_VERSION이 포맷 식별을 담당합니다. 그리고 v1→v2 단절이 왜 일어났는지가 이 챕터의 마지막 이야기입니다.</p>
+
+<div class="callout"><span class="lab">한 문장 요약</span><p>저장소 레이아웃은 디렉토리 이름이 곧 "테이블 이름"이고, 세그먼트 헤더의 magic(ALOG)과 FORMAT_VERSION(2)이 "이 파일이 어떤 포맷인지"를 식별합니다. 버전이 다르면 미스파싱 없이 즉시 거부합니다.</p></div>
+
+<h2>당신이 아는 것: DB의 카탈로그와 온디스크 포맷 버전</h2>
+
+<p>PostgreSQL을 설치하고 클러스터를 만들면 <code>PG_VERSION</code>이라는 파일이 생깁니다. 여기에 메이저 버전("16")이 적혀 있어, 다른 버전의 프로세스가 이 디렉토리를 열려 할 때 즉시 오류를 냅니다. 내부 데이터 페이지에도 버전 번호와 magic 값이 있어, 페이지가 실제로 Postgres 포맷인지 — 다른 DB 엔진의 파일이 아닌지 — 를 확인합니다.</p>
+
+<p>카탈로그(<code>pg_class</code>, <code>pg_attribute</code>)는 "어떤 테이블이 있고, 각 컬럼의 타입과 위치가 무엇인지"를 메타데이터로 저장합니다. 데이터 파일을 열기 전에 카탈로그를 먼저 읽어야 파싱할 수 있습니다.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ 파일시스템</span><p><strong>DB의 카탈로그</strong>: 별도 시스템 테이블이 스키마·인덱스·파일 위치를 관리. <strong>Quipu-Log</strong>: 디렉토리 이름 자체가 "테이블 이름" — <code>logs/</code>, <code>registry/user/</code> 등. 별도 카탈로그 파일이 없고 OS 파일시스템 디렉토리가 카탈로그다. 단, 타입 스키마(어떤 필드가 있는지)는 <code>meta/</code> 테이블에 append-only로 저장되어 재시작 시 replay된다.</p></div>
+
+<h2>루트 디렉토리 레이아웃</h2>
+
+<p><code>AuditStore::open()</code>의 주석이 레이아웃을 선언합니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs</span><code><span class="com">/// root/</span>
+<span class="hl"><span class="com">///   meta/         type schemas + custom column registry (replayed on open)</span></span>
+<span class="hl"><span class="com">///   logs/         AuditLog rows</span></span>
+<span class="hl"><span class="com">///   relations/    log -> target-entity-version relations</span></span>
+<span class="hl"><span class="com">///   registry/&lt;t&gt;/ one versioned registry table per entity/actor type</span></span>
+<span class="com">///   access/       (optional) meta-audit table</span>
+<span class="com">///   checkpoints/  signed integrity checkpoints</span>
+<span class="com">///   LOCK          advisory OS lock file</span></code></pre>
+
+<p>실제 열어보면 이런 구조입니다.</p>
+
+<figure>
+<svg viewBox="0 0 720 320" role="img" aria-label="Quipu-Log 저장소 디렉토리 레이아웃">
+  <defs>
+    <marker id="arr18" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .t18{fill:#e6e8ee;font:600 13px -apple-system,sans-serif}
+    .s18{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .d18{fill:#161922;stroke:#2a2f3d;stroke-width:1.5;rx:6}
+    .dir18{fill:#1a2535;stroke:#7aa2ff;stroke-width:1.5;rx:4}
+    .file18{fill:#0b0d12;stroke:#2a2f3d;stroke-width:1;rx:3}
+    .lbl18a{fill:#7aa2ff;font:bold 12px monospace}
+    .lbl18b{fill:#8be9c0;font:11px monospace}
+    .lbl18c{fill:#ffd479;font:11px monospace}
+    .lbl18d{fill:#c792ea;font:11px monospace}
+    .ar18{stroke:#2a2f3d;stroke-width:1}
+  </style>
+
+  <rect x="10" y="10" width="700" height="295" class="d18"/>
+
+  <!-- root -->
+  <text x="20" y="36" class="lbl18a">root/</text>
+
+  <!-- LOCK -->
+  <line x1="30" y1="50" x2="30" y2="60" class="ar18"/>
+  <rect x="42" y="52" width="80" height="16" class="file18"/>
+  <text x="46" y="64" class="s18" fill="#ff8b8b">LOCK</text>
+  <text x="130" y="64" class="s18">advisory 파일 락 (single-writer 보장)</text>
+
+  <!-- meta/ -->
+  <line x1="30" y1="68" x2="30" y2="80" class="ar18"/>
+  <rect x="42" y="72" width="50" height="16" class="dir18"/>
+  <text x="46" y="84" class="lbl18a">meta/</text>
+  <text x="100" y="84" class="s18">타입 스키마 + 커스텀 컬럼 정의 (replay on open)</text>
+  <rect x="110" y="90" width="120" height="14" class="file18"/>
+  <text x="114" y="101" class="lbl18b">seg-0000000000.log</text>
+  <rect x="234" y="90" width="120" height="14" class="file18"/>
+  <text x="238" y="101" class="lbl18b">merkle.spine</text>
+
+  <!-- logs/ -->
+  <line x1="30" y1="106" x2="30" y2="118" class="ar18"/>
+  <rect x="42" y="110" width="46" height="16" class="dir18"/>
+  <text x="46" y="122" class="lbl18a">logs/</text>
+  <text x="96" y="122" class="s18">AuditLog rows — 로그의 본체, retention 대상</text>
+  <rect x="110" y="128" width="120" height="14" class="file18"/>
+  <text x="114" y="139" class="lbl18b">seg-0000000000.log</text>
+  <rect x="234" y="128" width="120" height="14" class="file18"/>
+  <text x="238" y="139" class="lbl18c">seg-0000000000.meta</text>
+  <rect x="358" y="128" width="120" height="14" class="file18"/>
+  <text x="362" y="139" class="lbl18b">seg-0000000001.log</text>
+  <text x="484" y="139" class="s18">...</text>
+  <rect x="502" y="128" width="80" height="14" class="file18"/>
+  <text x="506" y="139" class="lbl18b">merkle.spine</text>
+
+  <!-- relations/ -->
+  <line x1="30" y1="145" x2="30" y2="158" class="ar18"/>
+  <rect x="42" y="150" width="80" height="16" class="dir18"/>
+  <text x="46" y="162" class="lbl18a">relations/</text>
+  <text x="130" y="162" class="s18">log_id → 타깃 엔티티 버전 uid 매핑</text>
+
+  <!-- registry/ -->
+  <line x1="30" y1="168" x2="30" y2="180" class="ar18"/>
+  <rect x="42" y="172" width="72" height="16" class="dir18"/>
+  <text x="46" y="184" class="lbl18a">registry/</text>
+  <text x="122" y="184" class="s18">엔티티 타입별 서브디렉토리 (retention 대상 아님)</text>
+  <rect x="110" y="190" width="60" height="16" class="dir18"/>
+  <text x="114" y="202" class="lbl18d">user/</text>
+  <rect x="174" y="190" width="60" height="16" class="dir18"/>
+  <text x="178" y="202" class="lbl18d">document/</text>
+  <text x="238" y="202" class="s18">각 타입마다 독립 append-only 로그</text>
+
+  <!-- access/, checkpoints/ -->
+  <line x1="30" y1="208" x2="30" y2="220" class="ar18"/>
+  <rect x="42" y="212" width="64" height="16" class="dir18"/>
+  <text x="46" y="224" class="lbl18a">access/</text>
+  <text x="114" y="224" class="s18">(opt-in) 메타 감사 — 누가 언제 쿼리했나</text>
+
+  <line x1="30" y1="228" x2="30" y2="240" class="ar18"/>
+  <rect x="42" y="232" width="98" height="16" class="dir18"/>
+  <text x="46" y="244" class="lbl18a">checkpoints/</text>
+  <text x="148" y="244" class="s18">서명된 무결성 체크포인트 목록</text>
+
+  <!-- 범례 -->
+  <rect x="10" y="264" width="700" height="36" rx="4" fill="#111418"/>
+  <rect x="20" y="272" width="12" height="12" rx="2" fill="#7aa2ff" opacity="0.5"/>
+  <text x="36" y="282" class="s18" fill="#7aa2ff">디렉토리</text>
+  <rect x="110" y="272" width="12" height="12" rx="2" fill="#8be9c0" opacity="0.4"/>
+  <text x="126" y="282" class="s18" fill="#8be9c0">.log 세그먼트</text>
+  <rect x="230" y="272" width="12" height="12" rx="2" fill="#ffd479" opacity="0.4"/>
+  <text x="246" y="282" class="s18" fill="#ffd479">.meta 사이드카 (힌트, 없어도 복구)</text>
+  <rect x="460" y="272" width="12" height="12" rx="2" fill="#c792ea" opacity="0.4"/>
+  <text x="476" y="282" class="s18" fill="#c792ea">타입별 서브디렉토리</text>
+</svg>
+<figcaption>루트 디렉토리 레이아웃. 디렉토리 이름이 곧 "테이블 이름"이다. meta/, logs/, relations/가 핵심 3개 테이블, registry/&lt;type&gt;/이 타입당 레지스트리다.</figcaption>
+</figure>
+
+<p>이 레이아웃의 특징은 <strong>자기 서술적(self-describing)</strong>이라는 점입니다. 디렉토리를 열어서 <code>ls registry/</code>를 하면 어떤 엔티티 타입이 등록되어 있는지 바로 알 수 있습니다. <code>meta/</code>를 replay하면 각 타입의 스키마를 알 수 있고요. 별도 카탈로그 파일 없이 디렉토리 구조 자체가 카탈로그입니다.</p>
+
+<h2>magic + FORMAT_VERSION: 파일 식별</h2>
+
+<p>각 세그먼트 파일은 14바이트 헤더로 시작합니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs</span><code><span class="com">/// Segment file header: magic + format version + base index.</span>
+<span class="hl"><span class="kw">pub const</span> MAGIC: [<span class="ty">u8</span>; 4] = *<span class="str">b"ALOG"</span>;     // 매직 — "이 파일이 Quipu-Log 세그먼트다"</span>
+<span class="hl"><span class="kw">pub const</span> FORMAT_VERSION: <span class="ty">u8</span> = 2;         // 현재 포맷 버전</span>
+<span class="kw">pub const</span> SEGMENT_HEADER: <span class="ty">usize</span> = MAGIC.len() + 1 + 8;
+<span class="dim">//                                     ^4      ^1  ^8(base_index)  = 13바이트</span></code></pre>
+
+<p>헤더를 파싱할 때 magic이 "ALOG"가 아니거나 FORMAT_VERSION이 2가 아니면 즉시 오류를 반환합니다. 이것이 "미스파싱 없이 즉시 거부"를 보장하는 장치입니다.</p>
+
+<div class="callout analogy"><span class="lab">비유</span><p>편지봉투 앞면에 "국내 우편"과 우편번호 형식이 찍혀 있다고 상상해 보세요. 우체국 직원이 봉투를 열기 전에 "이게 국내용인지 국제용인지"를 먼저 확인하고, 형식이 맞지 않으면 반송합니다. magic과 version이 그 역할입니다 — 내용을 읽기 전에 "이 파일을 열 수 있는지"를 먼저 확인합니다.</p></div>
+
+<h2>base_index: 세그먼트 헤더에 박힌 절대 좌표</h2>
+
+<p>헤더의 <code>base_index</code>(8바이트)는 이 세그먼트의 첫 번째 레코드가 전체 머클 트리에서 몇 번째 잎인지를 나타냅니다. 이 값이 세그먼트 생성 시 한 번 기록되고 이후 절대 바뀌지 않는다는 점이 핵심입니다.</p>
+
+<p>왜 헤더에 박아 두나요? retention이 앞쪽 세그먼트를 삭제하면 "이 세그먼트의 레코드가 전체에서 몇 번째인지"를 별도 카운터로 추적해야 합니다. 카운터를 별도 파일에 영속하면 "카운터 갱신 ↔ 세그먼트 삭제" 사이 크래시가 불일치를 낳습니다. 절대 인덱스를 세그먼트 헤더에 박으면 세그먼트 자체가 "내 레코드는 spine의 몇 번째부터 시작"을 항상 알고 있으므로, 어떤 세그먼트가 지워지더라도 살아남은 레코드의 spine 인덱스는 <code>base_index + offset</code>으로 항상 정확합니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — 설명 주석</span><code><span class="com">// `base_index` is the spine leaf index of this segment's first record —</span>
+<span class="com">// the count of all records appended to the table before this segment opened.</span>
+<span class="hl">// Storing it per-segment (not as a mutable counter) is what makes the mapping</span>
+<span class="hl">// crash-safe across a partial purge.</span></code></pre>
+
+<h2>포맷 진화: v0 → v1 → v2 단절</h2>
+
+<p>Quipu-Log의 세그먼트 포맷은 세 번의 버전을 거쳤습니다.</p>
+
+<table>
+  <tr><th>버전</th><th>헤더 구성</th><th>변경 내용</th><th>호환성</th></tr>
+  <tr><td>v0</td><td>magic 4 + ver 1 + seed 8</td><td>초기 포맷</td><td>—</td></tr>
+  <tr><td>v1</td><td>magic 4 + ver 1 + seed 8</td><td>프레임 마다 32B chain-hash 추가</td><td>v0 비호환</td></tr>
+  <tr><td><strong>v2</strong></td><td>magic 4 + ver 1 + <strong>base_index 8</strong></td><td>chain-hash 제거, 머클 spine으로 이관. seed 자리에 base_index</td><td><strong>v1 비호환</strong></td></tr>
+</table>
+
+<p>v1에서는 각 프레임에 "이전 레코드의 해시를 포함한 체인 해시"를 32바이트씩 박았습니다. 직관적으로 tamper-evident해 보이지만 문제가 있었습니다. retention이 앞쪽 레코드를 지우면 체인이 끊겨 검증이 불가능해졌습니다. 무결성 증거가 retention-safe하려면 별도의 구조가 필요했습니다.</p>
+
+<p>v2는 per-frame chain-hash를 완전히 제거하고, 대신 <strong>retention에서 지워지지 않는 별도 머클 spine 파일</strong>(<code>merkle.spine</code>)에 잎 해시를 쌓습니다. 세그먼트 파일은 "빠른 순차 읽기 + CRC 우연 손상 감지"만 담당하고, 무결성은 spine이 담당합니다. 이 분리 덕분에 "세그먼트는 지워도, 루트 해시와 포함 증명은 계속 유효"합니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — 설명 주석</span><code><span class="com">// Format v2 dropped the per-record hash chain entirely</span>
+<span class="com">// (no header seed, no per-frame chain hash).</span>
+<span class="hl">// Tamper-evidence now lives in the retention-independent Merkle spine;</span>
+<span class="hl">// a segment carries only payloads plus a CRC for accidental-corruption detection.</span></code></pre>
+
+<div class="callout warn"><span class="lab">주의</span><p>v1 스토어를 v2 바이너리로 열면 즉시 거부됩니다 — 마이그레이션 도구가 없으므로 재익스포트가 필요합니다. 이것은 의도적인 설계입니다. 프리-1.0 단계에서 실데이터가 적은 지금은 포맷 단절을 수용하고, 본격 채택 후에는 마이그레이션 경로를 제공할 계획입니다.</p></div>
+
+<h2>사이드카: 포맷 단절 없이 메타데이터 추가</h2>
+
+<p>세그먼트 헤더를 고치지 않고 메타데이터를 추가하는 방법이 있습니다 — <strong>사이드카 파일</strong>입니다. <code>seg-0000000000.meta</code>는 그 세그먼트의 min/max timestamp와 레코드 수, base_index를 담습니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/table.rs</span><code><span class="kw">struct</span> <span class="ty">SegmentMeta</span> {
+<span class="hl">    min_timestamp: <span class="ty">u64</span>,   <span class="com">// 세그먼트 안 레코드의 최소 타임스탬프</span></span>
+<span class="hl">    max_timestamp: <span class="ty">u64</span>,   <span class="com">// 최대 타임스탬프 (retention + pruning에 사용)</span></span>
+    records:       <span class="ty">u64</span>,
+    base_index:    <span class="ty">u64</span>,
+}</code></pre>
+
+<p>사이드카의 핵심 속성은 <strong>힌트 전용</strong>이라는 것입니다. 없거나 손상되어도 세그먼트를 skim(처음부터 읽기)해 재구축할 수 있습니다. 머클 검증도 사이드카를 전혀 참조하지 않으므로, 사이드카가 변조되어도 무결성 증거에 영향이 없습니다. 이 덕분에 세그먼트 포맷을 변경(FORMAT_VERSION 올림)하지 않고 새 메타데이터를 추가할 수 있었습니다.</p>
+
+<div class="callout why"><span class="lab">왜 이렇게?</span><p>헤더 확장은 FORMAT_VERSION을 올려야 하고, 그러면 기존 세그먼트와 호환성이 끊깁니다. 사이드카는 없어도 되는 힌트이므로 "항상 있다고 가정"하지 않아도 됩니다. min/max timestamp 같은 "재계산 가능한" 정보는 사이드카에, "재계산 불가능한" 정보(base_index)는 헤더에 — 이 원칙으로 포맷 단절 없이 기능을 추가했습니다.</p></div>
+
+<h2>정리</h2>
+
+<ul>
+  <li>Quipu-Log의 <strong>디렉토리 레이아웃</strong>이 DB 카탈로그 역할을 한다. <code>meta/</code>: 스키마 이벤트 로그, <code>logs/</code>: 로그 행, <code>registry/&lt;type&gt;/</code>: 레지스트리, <code>relations/</code>: log-entity 매핑.</li>
+  <li>각 세그먼트 헤더의 <strong>magic(<code>ALOG</code>) + FORMAT_VERSION(2)</strong>이 파일 식별을 담당한다. 불일치 시 즉시 거부.</li>
+  <li><strong>base_index</strong>는 헤더에 생성 시 한 번만 기록하는 절대 좌표 — retention으로 앞 세그먼트가 지워져도 살아남은 레코드의 spine 인덱스는 항상 정확.</li>
+  <li>v1 → v2 단절: per-frame chain-hash 제거, 무결성 전담을 retention-safe한 별도 merkle.spine으로 이관.</li>
+  <li><strong>사이드카(.meta)</strong>는 재계산 가능한 메타데이터를 세그먼트 포맷 변경 없이 추가하는 패턴 — 힌트 전용이므로 손실·변조가 무결성에 영향 없음.</li>
+</ul>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① DB 카탈로그(pg_class 등)와 Quipu-Log 레이아웃의 공통점은 무엇인가요? "어떤 테이블이 있는지"를 Quipu-Log에서는 어떻게 알 수 있나요?<br>② 세그먼트 헤더에 <code>base_index</code>를 넣은 이유를 "별도 카운터 파일 접근법의 문제점"과 비교해 설명해 보세요.<br>③ v1→v2 포맷 단절이 필요했던 이유를 "retention + 무결성 증명"의 관점에서 설명해 보세요. per-frame chain-hash의 어떤 한계 때문이었나요?</p></div>
+
+</article>

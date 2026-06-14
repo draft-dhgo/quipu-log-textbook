@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>04 · 읽고 쓰기, 그리고 rename의 원자성 — Quipu-Log 교과서</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ 목차</button><b>Quipu-Log 교과서</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn" href="../04-read-write-rename.html">EN</a><a class="langbtn active" href="04-read-write-rename.html">한국어</a></div>
+<a class="home" href="index.html">Quipu-Log 교과서</a>
+<div class="sub">파일시스템만으로 짓는 저장 엔진과 변조-탐지 감사 로그 — 밑바닥부터</div>
+<div class="part">파트 1 · 출발점: DB 없이, 파일로</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>감사 로그란, 그리고 왜 &#x27;DB 없이 파일로&#x27;인가</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>Quipu-Log 지도와 DB↔파일시스템 대응표</a>
+<div class="part">파트 2 · 파일시스템 기본기</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>파일시스템의 기본: 파일·디렉토리·inode·디스크립터</a>
+<a class="lnk active" href="04-read-write-rename.html"><span class="n">04</span>읽고 쓰기, 그리고 rename의 원자성</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>데이터는 언제 진짜 디스크에 남나: page cache와 fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>std::fs 도구상자: Rust로 파일 다루기</a>
+<div class="part">파트 3 · 저장 엔진의 심장: append-only 로그</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>append-only 로그 = WAL이 곧 데이터베이스</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>세그먼트 파일과 롤오버</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>레코드 프레이밍: 길이·CRC32·magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>직렬화: 구조체를 바이트로</a>
+<div class="part">파트 4 · DB가 공짜로 주던 보장을 파일로 재현</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>내구성: fsync 정책과 group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>원자성과 크래시 복구: torn write와 꼬리 탐지</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>동시성 제어 ①: single-writer와 파일 락</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>동시성 제어 ②: 읽기 스냅샷과 MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>인덱싱: 인메모리 인덱스 + 디스크 토큰</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>쿼리 실행: 세그먼트 스캔과 커서 페이지네이션</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>삭제와 보존: 세그먼트 unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>저장소 레이아웃과 포맷 버저닝</a>
+<div class="part">파트 5 · 무결성: 고치면 티가 나게 (보안 ①)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>해시 함수와 SHA-256: 디지털 지문</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>머클 히스토리 트리: 로그를 32바이트로 커밋</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>포함 증명·일관성 증명</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>체크포인트와 외부 앵커링</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>tamper-evident vs tamper-proof, 그리고 위협 모델</a>
+<div class="part">파트 6 · 기밀성: 비밀을 지키면서 검색하기 (보안 ②)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>필드 보호 4단계: 평문/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>대칭·비대칭·하이브리드 암호와 AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>블라인드 인덱스: 평문 없이 검색</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>쓰기 전용 배포: 개인키 없는 서버</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>키 관리: 키링·버저닝·로테이션 vs 리키</a>
+<div class="part">파트 7 · 쓰기·읽기 경로</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>비동기 파이프라인: 논블로킹 emit과 백프레셔</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>신뢰성: 재시도·백오프·DLQ·멱등성</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>tower 미들웨어: HTTP 요청 자동 기록</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>권한(RBAC)·필터·메타 감사</a>
+<div class="part">파트 8 · 분산·운영·확장</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>단일 장애점과 가용성: 클라이언트 스풀</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>수평 확장: 샤딩·일관성 해싱·읽기 복제</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>서버·클라이언트·MCP·관측성</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">파트 2 · 파일시스템 기본기</span><h1><span class="chno">04</span> · 읽고 쓰기, 그리고 rename의 원자성</h1></div><article>
+
+<p class="lead">파일을 읽고 쓰는 건 단순해 보입니다 — "바이트 쓰면 끝" 아닌가요? 하지만 "파일이 깨지지 않게 갱신하기"는 생각보다 까다롭습니다. 이 챕터에서는 Quipu-Log가 세그먼트를 여는 방법(OpenOptions)과, 안전한 파일 교체에 쓰는 <code>rename(2)</code>의 원자성을 다룹니다. DB에서는 엔진이 해주던 것을 여기선 우리가 직접 합니다.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ 파일시스템</span><p><strong>DB의 atomic commit</strong>은 "트랜잭션이 커밋되거나, 아니면 아무것도 안 일어난 것처럼 보이거나" 둘 중 하나다. <strong>Quipu-Log에서는</strong> 파일 수준 원자성이 필요할 때 <code>rename(2)</code>를 사용한다 — 새 파일을 임시 이름으로 다 쓴 다음, 한 번의 rename으로 교체. "다 완성됐을 때만 보이게 된다"는 원자성을.</p></div>
+
+<h2>파일 열기: OpenOptions의 옵션들</h2>
+
+<p>Rust에서 파일을 열 때는 <code>std::fs::OpenOptions</code>로 "어떻게 열 것인가"를 지정합니다. Quipu-Log 세그먼트를 여는 코드를 보면 각 옵션이 왜 필요한지 명확해집니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — Segment::open()</span><code><span class="kw">let</span> file = <span class="ty">OpenOptions</span>::new()
+<span class="hl">    .create(<span class="kw">true</span>)         <span class="com">// 없으면 새로 만들어라</span></span>
+<span class="hl">    .truncate(<span class="kw">false</span>)     <span class="com">// 있어도 비우지 마라 — 기존 내용 보존!</span></span>
+    .read(<span class="kw">true</span>)          <span class="com">// 읽기도 가능하게 (recovery 때 필요)</span>
+    .write(<span class="kw">true</span>)         <span class="com">// 쓰기 가능</span>
+    .open(path)?;</code></pre>
+
+<p><code>truncate(false)</code>가 핵심입니다. <code>truncate(true)</code>로 열면 파일을 열자마자 내용을 지워버립니다. 세그먼트를 재시작할 때 이 옵션이 잘못되면 이전에 쌓인 감사 기록이 모두 날아갑니다. append-only 저장소에서는 <em>절대</em> <code>truncate(true)</code>를 쓰면 안 됩니다.</p>
+
+<table>
+  <tr><th>OpenOptions 옵션</th><th>뜻</th><th>Quipu-Log에서</th></tr>
+  <tr><td><code>create(true)</code></td><td>파일이 없으면 새로 만든다</td><td>첫 세그먼트 생성 시 사용</td></tr>
+  <tr><td><code>truncate(false)</code></td><td>이미 있는 파일 내용 보존</td><td>필수 — 기존 로그 보존</td></tr>
+  <tr><td><code>truncate(true)</code></td><td>열자마자 파일 비우기</td><td>절대 사용 금지</td></tr>
+  <tr><td><code>append(true)</code></td><td>모든 write가 끝에 추가</td><td>테스트 코드에서 사용</td></tr>
+  <tr><td><code>read(true)</code></td><td>읽기 가능</td><td>skim(복구)·snapshot 읽기</td></tr>
+  <tr><td><code>write(true)</code></td><td>쓰기 가능</td><td>append + set_len(복구)</td></tr>
+</table>
+
+<h2>seek: 파일 어디서든 읽고 쓰기</h2>
+
+<p>파일 디스크립터는 "현재 위치"를 기억합니다. <code>seek()</code>로 이 위치를 바꿀 수 있습니다. Quipu-Log에서 세그먼트를 열 때, 기존 파일이 있으면 유효한 끝 위치까지 seek해서 append를 거기서 시작합니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — 기존 파일 재개</span><code><span class="kw">let mut</span> writer = <span class="ty">BufWriter</span>::with_capacity(<span class="num">256</span> * <span class="num">1024</span>, file);
+<span class="hl">writer.seek(<span class="ty">SeekFrom</span>::Start(s.valid_len))?;   <span class="com">// 유효한 끝으로 이동</span></span>
+<span class="com">// 이후 append는 이 위치부터 시작된다</span></code></pre>
+
+<p><code>SeekFrom::Start(n)</code>은 파일 처음부터 n 바이트 위치. <code>SeekFrom::End(0)</code>은 파일 끝. <code>SeekFrom::Current(n)</code>은 현재 위치 기준 ±n. Quipu-Log는 항상 <code>Start(valid_len)</code>을 씁니다 — 크래시로 꼬리가 깨진 경우, 유효한 끝이 파일 크기와 다를 수 있으니까요.</p>
+
+<h2>torn write와 꼬리 truncate</h2>
+
+<p>append 중에 전원이 끊기면 어떻게 될까요? 마지막 레코드가 절반만 써진 채 파일에 남습니다. 이것을 <strong>torn write(찢어진 쓰기)</strong>라고 합니다.</p>
+
+<p>Quipu-Log는 시작 시 <code>skim()</code> 함수로 세그먼트를 훑어서 CRC가 깨진 프레임을 찾습니다. 유효한 마지막 위치(valid_len)를 확인한 뒤, 파일을 거기까지 잘라냅니다:</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — 꼬리 truncate</span><code><span class="kw">if</span> file.metadata()?.len() &gt; s.valid_len {
+<span class="hl">    file.set_len(s.valid_len)?;   <span class="com">// 깨진 꼬리를 잘라낸다</span></span>
+}
+<span class="kw">let mut</span> writer = <span class="ty">BufWriter</span>::with_capacity(<span class="num">256</span> * <span class="num">1024</span>, file);
+writer.seek(<span class="ty">SeekFrom</span>::Start(s.valid_len))?;</code></pre>
+
+<p><code>set_len(n)</code>은 파일 크기를 n 바이트로 맞춥니다. 현재보다 작은 값을 주면 truncate(잘라내기), 큰 값을 주면 hole(빈 공간)이 생깁니다. 크래시 복구에서는 전자만 씁니다.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ 파일시스템</span><p><strong>DB의 WAL replay</strong>는 정전 후 재시작 시 WAL을 읽어 "완성된 트랜잭션"만 적용하고 미완성은 무시(undo)한다. <strong>Quipu-Log에서는</strong> skim으로 CRC가 맞는 프레임까지만 valid_len으로 잡고, 나머지를 truncate한다 — append-only라 undo할 내용이 없고 redo만 있어서 이렇게 단순하다. <span class="pill">12장</span>에서 자세히.</p></div>
+
+<h2>rename(2)의 원자성</h2>
+
+<p>이제 이 챕터의 핵심입니다. 파일을 "안전하게 교체"하는 패턴이 있습니다 — <strong>임시 파일에 다 쓰고, rename으로 교체</strong>.</p>
+
+<p>왜 직접 덮어쓰면 안 되나? 기존 파일을 열어서 새 내용을 쓰다가 전원이 끊기면, 절반만 쓰인 파일이 남습니다. 이것을 피하는 방법이 rename 패턴입니다:</p>
+
+<ol>
+  <li>새 내용을 임시 파일에 완전히 씁니다 (<code>target.rewrite</code>).</li>
+  <li>임시 파일을 fsync합니다.</li>
+  <li><strong><code>rename(tmp, target)</code></strong> — 이 연산은 POSIX에서 원자적(atomic)입니다. 완성되거나 아무것도 안 일어나거나 둘 중 하나. 중간 상태가 없습니다.</li>
+</ol>
+
+<figure>
+<svg viewBox="0 0 680 220" role="img" aria-label="rename을 이용한 원자적 파일 교체 패턴">
+  <defs><marker id="ar4" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/></marker></defs>
+  <style>
+    .l4{fill:#e6e8ee;font:600 12px -apple-system,sans-serif}
+    .s4{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .bx4a{fill:#241f12;stroke:#ffd479;stroke-width:1.5;rx:5}
+    .bx4b{fill:#16241d;stroke:#8be9c0;stroke-width:1.5;rx:5}
+    .bx4c{fill:#1a2133;stroke:#7aa2ff;stroke-width:2;rx:5}
+    .ar4{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#ar4)}
+    .step{fill:#ffd479;font:700 11px -apple-system,sans-serif}
+  </style>
+
+  <!-- 단계 1: 임시 파일에 쓰기 -->
+  <text x="20" y="28" class="step">① 임시 파일에 새 내용 전체 쓰기 + fsync</text>
+  <rect x="20" y="38" width="200" height="50" rx="5" fill="#241f12" stroke="#ffd479" stroke-width="1.5"/>
+  <text x="36" y="60" class="l4" fill="#ffd479">registry.rewrite/</text>
+  <text x="36" y="76" class="s4">새 내용 완성됨 ✓</text>
+  <rect x="280" y="38" width="200" height="50" rx="5" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="296" y="60" class="l4">registry/patient/</text>
+  <text x="296" y="76" class="s4">기존 내용 그대로</text>
+
+  <!-- 단계 2: rename -->
+  <text x="20" y="130" class="step">② rename(tmp, target) — 원자적</text>
+  <rect x="20" y="140" width="200" height="50" rx="5" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="36" y="162" class="l4" fill="#9aa3b2">registry.pre-rewrite/</text>
+  <text x="36" y="178" class="s4">기존 내용 (백업)</text>
+  <rect x="280" y="140" width="200" height="50" rx="5" fill="#16241d" stroke="#8be9c0" stroke-width="2"/>
+  <text x="296" y="162" class="l4" fill="#8be9c0">registry/patient/ ← 새 내용</text>
+  <text x="296" y="178" class="s4">rename으로 교체됨 ✓</text>
+
+  <line x1="550" y1="63" x2="600" y2="63" class="ar4"/>
+  <text x="610" y="58" class="s4">다른</text>
+  <text x="610" y="74" class="s4">프로세스</text>
+  <text x="610" y="90" class="s4">여기서만</text>
+  <text x="610" y="106" class="s4">새 파일을 봄</text>
+</svg>
+<figcaption>rename 패턴: 임시 파일에 완성한 뒤 한 번에 교체. 정전이 rename 전에 일어나면 기존 파일이 그대로 남는다.</figcaption>
+</figure>
+
+<p>Quipu-Log에서 re-key 시 테이블 전체를 재작성할 때 이 패턴을 씁니다:</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/table.rs — rewrite_table()</span><code><span class="kw">let</span> tmp = dir.with_file_name(<span class="fn">format!</span>(<span class="str">"{name}.rewrite"</span>));
+<span class="kw">let</span> backup = dir.with_file_name(<span class="fn">format!</span>(<span class="str">"{name}.pre-rewrite"</span>));
+<span class="com">// ... 새 테이블을 tmp에 다 씁니다 ...</span>
+fresh.sync()?;          <span class="com">// 먼저 fsync</span>
+<span class="dim">drop(old); drop(fresh); <span class="com">// 핸들 반납</span></span>
+<span class="hl">std::fs::rename(dir, &amp;backup)?;   <span class="com">// 기존 → 백업</span></span>
+<span class="hl">std::fs::rename(&amp;tmp, dir)?;      <span class="com">// 새것 → 실제 경로</span></span>
+std::fs::remove_dir_all(&amp;backup)?; <span class="com">// 백업 삭제</span></code></pre>
+
+<div class="callout warn"><span class="lab">주의</span><p><code>rename(2)</code>의 원자성은 <strong>같은 파일시스템 내</strong>에서만 보장됩니다. 임시 파일을 다른 파티션에 만든 다음 rename하면 OS가 복사+삭제로 대체하고, 이건 원자적이지 않습니다. Quipu-Log의 <code>rewrite_table</code>이 임시 디렉토리를 대상 디렉토리의 <em>형제</em>로 만드는 이유(같은 부모 = 같은 파일시스템)가 여기 있습니다.</p></div>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① <code>OpenOptions::truncate(false)</code>가 없으면 어떤 문제가 생기나요?<br>② rename 패턴에서 임시 파일을 먼저 fsync한 뒤 rename하는 이유는 무엇인가요?<br>③ torn write는 어떻게 발생하고, Quipu-Log는 어떻게 탐지하고 회복하나요?</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="03-fs-basics.html"><span class="dir">← 이전</span><span class="t">03 · 파일시스템의 기본: 파일·디렉토리·inode·디스크립터</span></a><a class="next" href="05-durability-fsync.html"><span class="dir">다음 →</span><span class="t">05 · 데이터는 언제 진짜 디스크에 남나: page cache와 fsync</span></a></div>
+</div>
+</main>
+</div>
+<script src="../assets/textbook.js"></script>
+</body>
+</html>

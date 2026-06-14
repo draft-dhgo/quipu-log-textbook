@@ -1,0 +1,106 @@
+<article>
+
+<p class="lead">애플리케이션에서 일어나는 일을 기록하는 방법은 많습니다 — syslog, ELK 스택, 관계형 DB. 그런데 Quipu-Log는 데이터베이스도 외부 스택도 아닌, 프로세스 안에 내장된 파일로 감사 로그를 남깁니다. 이 챕터에서는 "왜 하필 파일인가"를 규제·보안·운영 세 가지 관점에서 살펴봅니다.</p>
+
+<div class="callout"><span class="lab">한 문장 요약</span><p>감사 로그는 <em>"누가, 무엇을, 언제 했는가"를 나중에 증명할 수 있어야</em> 한다. 그 요건을 가장 단순하게 충족하는 구현이 바로 <strong>외부 의존 없는, 프로세스 내장 append-only 파일</strong>이다.</p></div>
+
+<h2>감사 로그 vs 일반 애플리케이션 로그</h2>
+
+<p>먼저 용어를 구분합시다. 우리가 보통 말하는 <strong>애플리케이션 로그</strong>는 디버깅을 위한 것입니다. "쿼리 실행 시간 12ms", "연결 풀 70% 사용 중" — 이런 기록은 문제를 찾고 나면 지워도 됩니다. 몇 주치면 충분하고, 정확히 언제 썼는지 나중에 바뀌어도 큰 문제가 아닙니다.</p>
+
+<p><strong>감사 로그(audit log)</strong>는 목적이 다릅니다. "2026-06-14 09:42 UTC, alice가 patient-record #4821을 열람했다." 이 사실은:</p>
+
+<ul>
+  <li>6개월 뒤 감사(audit) 때 <em>그대로 남아 있어야</em> 합니다.</li>
+  <li>누군가 고쳤다면 <em>그 흔적이 보여야</em> 합니다.</li>
+  <li>alice가 "나는 본 적 없다"고 우기더라도 <em>반박할 근거</em>가 되어야 합니다.</li>
+</ul>
+
+<p>이 세 가지 성질을 전문 용어로 <strong>tamper-evidence(변조 탐지)</strong>·<strong>부인 방지(non-repudiation)</strong>라고 합니다. 일반 로그에는 없는, 감사 로그만의 핵심 요건입니다.</p>
+
+<figure>
+<svg viewBox="0 0 680 220" role="img" aria-label="일반 로그와 감사 로그의 목적 비교">
+  <defs><marker id="arr1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/></marker></defs>
+  <style>
+    .lbl{fill:#e6e8ee;font:600 14px -apple-system,sans-serif}
+    .sub{fill:#9aa3b2;font:12px -apple-system,sans-serif}
+    .box{fill:#161922;stroke:#2a2f3d;stroke-width:1.5;rx:8}
+    .tag{fill:#7aa2ff;font:700 11px -apple-system,sans-serif}
+    .tag2{fill:#8be9c0;font:700 11px -apple-system,sans-serif}
+  </style>
+
+  <!-- 일반 로그 -->
+  <rect x="20" y="30" width="290" height="160" rx="8" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="36" y="56" class="lbl">일반 애플리케이션 로그</text>
+  <text x="36" y="76" class="sub">목적: 디버깅 / 운영 관찰</text>
+  <text x="36" y="98" class="sub">보존: 수 주 ~ 수 개월</text>
+  <text x="36" y="118" class="sub">변조 탐지: 불필요</text>
+  <text x="36" y="138" class="sub">주 소비자: 개발자·SRE</text>
+  <text x="36" y="162" class="tag">예) "쿼리 12ms", "연결 끊김"</text>
+
+  <!-- 감사 로그 -->
+  <rect x="370" y="30" width="290" height="160" rx="8" fill="#16241d" stroke="#2c4a3a" stroke-width="1.5"/>
+  <text x="386" y="56" class="lbl" fill="#8be9c0">감사 로그</text>
+  <text x="386" y="76" class="sub">목적: 규제 준수 / 부인 방지</text>
+  <text x="386" y="98" class="sub">보존: 수 년 (법정 기간)</text>
+  <text x="386" y="118" class="sub" fill="#ffd479">변조 탐지: 필수</text>
+  <text x="386" y="138" class="sub">주 소비자: 감사자·규제기관</text>
+  <text x="386" y="162" class="tag2">예) "alice, #4821 열람, 09:42 UTC"</text>
+</svg>
+<figcaption>두 로그는 목적부터 다르다. 감사 로그는 변조 탐지와 장기 보존이 설계 요건이다.</figcaption>
+</figure>
+
+<h2>규제가 요구하는 것: HIPAA · SOX · GDPR</h2>
+
+<p>감사 로그가 "있으면 좋은 것"이 아니라 법적 의무인 경우가 많습니다.</p>
+
+<ul>
+  <li><strong>HIPAA</strong>(미국 의료정보 보호법) — 환자 데이터에 누가 접근했는지 6년간 보존하고, 기록 무결성을 유지해야 합니다.</li>
+  <li><strong>SOX</strong>(기업 회계 투명성법) — 재무 시스템의 변경 이력을 7년간 보존해야 합니다.</li>
+  <li><strong>GDPR</strong>(유럽 개인정보보호법) — 개인정보 처리 활동 기록, 접근 로그 보존 의무가 있습니다.</li>
+</ul>
+
+<p>이 규제들의 공통 요건: 기록이 <em>나중에 바뀌지 않았음</em>을 증명할 수 있어야 합니다. 단순히 "기록이 있다"가 아니라, "기록이 처음 쓰인 그대로다"를 보여야 하죠.</p>
+
+<div class="callout why"><span class="lab">왜 이렇게?</span><p>Quipu-Log의 tamper-evidence 설계가 바로 이 요건에서 출발합니다. 파트 5(19~23장)에서 다룰 머클 트리는, 기록이 <em>"고치면 티가 나게"</em> 만들어줍니다 — 고치는 걸 막는 게 아니라, 고쳤을 때 흔적이 남게. 이것이 규제가 원하는 것입니다.</p></div>
+
+<h2>왜 DB나 ELK가 아닌가</h2>
+
+<p>DB에 감사 로그를 넣는 것, 직관적으로 보입니다. 트랜잭션이 있고, 쿼리가 쉽고, 권한도 있으니까요. 하지만 몇 가지 문제가 있습니다.</p>
+
+<table>
+  <tr><th>방식</th><th>장점</th><th>감사 로그에서의 문제</th></tr>
+  <tr><td>관계형 DB (같은 DB)</td><td>트랜잭션, SQL 쿼리</td><td>애플리케이션과 <em>같은 DB면 DBA가 DELETE 가능</em> — 내부자가 지울 수 있다. 서비스 다운 시 감사 기록도 같이 멈춘다.</td></tr>
+  <tr><td>외부 DB (별도 인스턴스)</td><td>분리된 신뢰 경계</td><td>운영 부담. 감사 로그를 위해 DB를 하나 더 관리해야 한다. 네트워크 장애 시 감사 공백.</td></tr>
+  <tr><td>ELK / 로그 스택</td><td>검색·시각화</td><td>Elasticsearch는 인덱스를 <em>덮어쓴다.</em> 변조 탐지가 본질적으로 어렵다. 비용·운영 부담도 크다.</td></tr>
+  <tr><td><strong>Quipu-Log (파일, 내장)</strong></td><td>의존 없음, 단순, 내장</td><td>OS 파일시스템만 있으면 동작. 서비스 안에서 돌아 네트워크 장애 무관.</td></tr>
+</table>
+
+<p>핵심은 <strong>신뢰 경계</strong>입니다. 감사 로그가 서비스와 같은 프로세스·DB에 있으면, 그 서비스를 운영하는 사람(내부자)이 기록을 지울 수 있습니다. Quipu-Log는 이 문제를 두 가지로 다룹니다. 첫째, 파일에 직접 append-only로 씁니다 (코드가 덮어쓰기를 지원하지 않습니다). 둘째, 머클 트리와 외부 앵커링으로 디스크 수준 변조를 탐지합니다.</p>
+
+<div class="callout analogy"><span class="lab">비유</span><p>은행에서 창구 직원이 현금을 다루는 방을 생각해 보세요. 그 방에서 이루어지는 모든 거래는 <em>별도의 잠긴 금고</em>에 기록이 들어갑니다 — 직원도, 지점장도 이미 쓰인 기록을 지울 수 없는 금고. 감사 로그가 "같은 시스템 안에 있지만 고칠 수 없는" 구조여야 한다는 게 이 아이디어입니다.</p></div>
+
+<h2>임베디드 모드: 프로세스 안으로</h2>
+
+<p>Quipu-Log는 <strong>임베디드(embedded)</strong>로 동작합니다. 별도 데몬이나 서비스가 아니라, 여러분의 Rust 서비스 프로세스 안에서 함께 실행됩니다. `quipu-core` 라이브러리를 `cargo add` 하고 `AuditStore::open()`을 호출하면 끝입니다.</p>
+
+<pre><span class="filename">README.md — Quick start</span><code><span class="kw">let</span> root = std::path::PathBuf::from(<span class="str">"/var/lib/myapp/audit"</span>);
+<span class="kw">let</span> cfg = <span class="ty">StoreConfig</span>::new(&amp;root)
+    .retention(<span class="ty">RetentionPolicy</span>::days(<span class="num">90</span>))
+    .sync_policy(<span class="ty">SyncPolicy</span>::EveryN(<span class="num">32</span>));
+<span class="hl"><span class="kw">let mut</span> store = <span class="ty">AuditStore</span>::open(cfg)?;</span>
+<span class="com">// 이게 전부 — 데몬도, 별도 DB도 없다.</span></code></pre>
+
+<p>물론 여러 서비스가 공유하는 중앙 감사 저장소가 필요하다면 <code>quipu-server</code>를 별도 프로세스로 실행하는 <strong>서버 모드</strong>도 있습니다. 임베디드 모드와 서버 모드, 언제 어떻게 선택하는지는 <span class="pill">2장 지도</span>에서 자세히 다룹니다.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ 파일시스템</span><p><strong>DB에서는</strong> 감사 로그도 테이블에 INSERT하는 경우가 많다 — 같은 DB 관리자가 DELETE할 수 있다는 게 약점이다. <strong>Quipu-Log에서는</strong> 스토리지 엔진 자체가 append-only 파일이고, 코드 수준에서 덮어쓰기 경로가 없다. "막는다"가 아니라 "고치면 티가 난다"는 설계다.</p></div>
+
+<h2>무엇을 기록하나: 이벤트 구조</h2>
+
+<p>Quipu-Log의 감사 이벤트는 <strong>액터(actor)</strong>가 <strong>타깃(target)</strong>에 어떤 행동(<code>method</code>, <code>url</code>)을 했는지를 담습니다. 액터는 "누가" — 사용자, 서비스 계정. 타깃은 "무엇에" — 문서, 환자 레코드, 계정. 이 구조 덕분에 "이 문서에 누가 뭘 했나"와 "이 사용자가 뭘 건드렸나" 두 방향으로 같은 기록을 조회할 수 있습니다.</p>
+
+<div class="callout warn"><span class="lab">주의</span><p>Quipu-Log는 tamper-<em>evidence</em>이지 tamper-<em>prevention</em>이 아닙니다. 디스크에 물리적 접근 권한이 있는 공격자는 파일을 고칠 수 있습니다. Quipu-Log는 그 변조를 <em>탐지</em>합니다. SECURITY.md는 이것을 설계 범위로 명확히 선언합니다: "an attacker with write access to the store changed a record" — 이게 verify_integrity에서 잡히지 않는다면 그건 취약점이지만, 막지 못한다는 자체는 설계다.</p></div>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① 감사 로그와 애플리케이션 로그의 결정적 차이 두 가지를 말해보세요.<br>② "같은 DB에 감사 로그를 넣는 것"의 신뢰 경계 문제는 무엇인가요?<br>③ tamper-evidence와 tamper-prevention은 어떻게 다른가요? Quipu-Log는 어느 쪽인가요?</p></div>
+
+</article>

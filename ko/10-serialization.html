@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>10 · 직렬화: 구조체를 바이트로 — Quipu-Log 교과서</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ 목차</button><b>Quipu-Log 교과서</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn" href="../10-serialization.html">EN</a><a class="langbtn active" href="10-serialization.html">한국어</a></div>
+<a class="home" href="index.html">Quipu-Log 교과서</a>
+<div class="sub">파일시스템만으로 짓는 저장 엔진과 변조-탐지 감사 로그 — 밑바닥부터</div>
+<div class="part">파트 1 · 출발점: DB 없이, 파일로</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>감사 로그란, 그리고 왜 &#x27;DB 없이 파일로&#x27;인가</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>Quipu-Log 지도와 DB↔파일시스템 대응표</a>
+<div class="part">파트 2 · 파일시스템 기본기</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>파일시스템의 기본: 파일·디렉토리·inode·디스크립터</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>읽고 쓰기, 그리고 rename의 원자성</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>데이터는 언제 진짜 디스크에 남나: page cache와 fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>std::fs 도구상자: Rust로 파일 다루기</a>
+<div class="part">파트 3 · 저장 엔진의 심장: append-only 로그</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>append-only 로그 = WAL이 곧 데이터베이스</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>세그먼트 파일과 롤오버</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>레코드 프레이밍: 길이·CRC32·magic/version</a>
+<a class="lnk active" href="10-serialization.html"><span class="n">10</span>직렬화: 구조체를 바이트로</a>
+<div class="part">파트 4 · DB가 공짜로 주던 보장을 파일로 재현</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>내구성: fsync 정책과 group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>원자성과 크래시 복구: torn write와 꼬리 탐지</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>동시성 제어 ①: single-writer와 파일 락</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>동시성 제어 ②: 읽기 스냅샷과 MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>인덱싱: 인메모리 인덱스 + 디스크 토큰</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>쿼리 실행: 세그먼트 스캔과 커서 페이지네이션</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>삭제와 보존: 세그먼트 unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>저장소 레이아웃과 포맷 버저닝</a>
+<div class="part">파트 5 · 무결성: 고치면 티가 나게 (보안 ①)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>해시 함수와 SHA-256: 디지털 지문</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>머클 히스토리 트리: 로그를 32바이트로 커밋</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>포함 증명·일관성 증명</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>체크포인트와 외부 앵커링</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>tamper-evident vs tamper-proof, 그리고 위협 모델</a>
+<div class="part">파트 6 · 기밀성: 비밀을 지키면서 검색하기 (보안 ②)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>필드 보호 4단계: 평문/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>대칭·비대칭·하이브리드 암호와 AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>블라인드 인덱스: 평문 없이 검색</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>쓰기 전용 배포: 개인키 없는 서버</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>키 관리: 키링·버저닝·로테이션 vs 리키</a>
+<div class="part">파트 7 · 쓰기·읽기 경로</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>비동기 파이프라인: 논블로킹 emit과 백프레셔</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>신뢰성: 재시도·백오프·DLQ·멱등성</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>tower 미들웨어: HTTP 요청 자동 기록</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>권한(RBAC)·필터·메타 감사</a>
+<div class="part">파트 8 · 분산·운영·확장</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>단일 장애점과 가용성: 클라이언트 스풀</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>수평 확장: 샤딩·일관성 해싱·읽기 복제</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>서버·클라이언트·MCP·관측성</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">파트 3 · 저장 엔진의 심장: append-only 로그</span><h1><span class="chno">10</span> · 직렬화: 구조체를 바이트로</h1></div><article>
+
+<p class="lead">프레임이 경계와 무결성을 잡아준다면, 그 안에 담기는 payload는 어떻게 만들어질까요? Rust 구조체를 바이트 배열로 바꾸는 작업 — <strong>직렬화(serialization)</strong> — 이 챕터의 주제입니다. 어떤 포맷을 쓸지, 왜 JSON은 아닌지, 그리고 "해시나 인덱스 키로 쓰기 위한 정규 바이트"는 왜 따로 필요한지까지 설명합니다.</p>
+
+<div class="callout"><span class="lab">한 문장 요약</span><p>구조체 → 바이트는 <strong>bincode</strong>로, 해시·인덱스 키용 정규 표현은 <strong><code>canonical_bytes()</code></strong>로 따로 관리한다. JSON처럼 생긴 값도 <em>문자열</em>로 감싸 저장하는 이유는 bincode의 비자기서술적(non-self-describing) 특성 때문이다.</p></div>
+
+<h2>당신이 아는 것: DB의 타입별 인코딩</h2>
+
+<p>관계형 DB에서 <code>INSERT INTO logs (id, timestamp, message) VALUES (1, now(), 'hello')</code>를 실행하면, DB 엔진은 <code>INTEGER</code>는 고정 바이트(4바이트)로, <code>TIMESTAMP</code>는 내부 시각 포맷으로, <code>TEXT</code>는 길이+데이터로 페이지에 직접 씁니다. 이 인코딩은 엔진 내부에 숨어 있어 우리가 신경 쓸 필요가 없었죠.</p>
+
+<p>하지만 우리는 DB 엔진이 없습니다. <strong>우리가 직접 "구조체 → 바이트"를 결정해야 합니다.</strong></p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ 파일시스템</span><p><strong>DB에서는</strong> 타입별 온디스크 인코딩이 엔진 내부에 박혀 있다(Postgres의 heap tuple 포맷, MySQL의 InnoDB row 포맷 등). <strong>Quipu-Log에서는</strong> serde + bincode 조합으로 Rust 구조체를 바이트로 변환한다 — 이게 "엔진 없이 파일로" 할 때 우리가 직접 챙겨야 하는 부분이다.</p></div>
+
+<h2>왜 bincode인가 — JSON과의 비교</h2>
+
+<p>직렬화 포맷을 고를 때 가장 먼저 떠오르는 건 JSON입니다. 사람이 읽을 수 있고, 익숙하고, 도구도 많죠. 그런데 Quipu-Log는 bincode를 씁니다. 왜일까요?</p>
+
+<table>
+  <tr><th></th><th>JSON</th><th>bincode</th></tr>
+  <tr><td>사람 가독성</td><td>좋음</td><td>없음 (바이너리)</td></tr>
+  <tr><td>크기</td><td>큼 (필드명 반복, 따옴표, 쉼표)</td><td>작음 (필드명 없음, 타입 추론)</td></tr>
+  <tr><td>속도</td><td>느림 (파싱 비용)</td><td>빠름 (메모리 레이아웃에 가까움)</td></tr>
+  <tr><td>타입 정보</td><td>자기서술적 (key-value)</td><td>비자기서술적 (순서 기반)</td></tr>
+  <tr><td>serde 연동</td><td>가능</td><td>가능</td></tr>
+</table>
+
+<p>감사 로그는 수십만 건이 쌓입니다. 각 레코드가 100바이트씩 작아지면 디스크 사용량과 처리 속도 모두 유의미하게 달라집니다. bincode의 단점(비가독성)은 세그먼트 파일이 "사람이 직접 열어보는" 파일이 아니라는 점에서 큰 문제가 아닙니다 — 쿼리 API를 통해 읽으면 됩니다.</p>
+
+<div class="callout analogy"><span class="lab">비유</span><p>택배 박스를 생각해봅시다. 내용물을 일일이 라벨에 적는 방식(JSON)은 사람이 보기엔 좋지만 공간을 많이 씁니다. 내용물을 정해진 칸에 순서대로 넣는 방식(bincode)은 보내는 쪽과 받는 쪽이 "3번 칸엔 항상 타임스탬프"라고 약속했기 때문에 따로 라벨이 없어도 됩니다.</p></div>
+
+<h2>serde: 접착제 역할</h2>
+
+<p>bincode 자체는 어떤 구조체를 어떻게 직렬화할지 모릅니다. 그 역할은 <strong>serde</strong>가 합니다. <code>#[derive(Serialize, Deserialize)]</code>를 붙이면 Rust 컴파일러가 직렬화/역직렬화 코드를 자동 생성합니다. bincode는 그 인터페이스를 활용해 바이너리로 씁니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/model.rs</span><code><span class="dim">#[derive(Debug, Clone, Serialize, Deserialize)]</span>
+<span class="kw">pub struct</span> <span class="ty">AuditLog</span> {
+<span class="hl">    <span class="kw">pub</span> log_id: <span class="ty">Uid</span>,
+    <span class="kw">pub</span> timestamp: <span class="ty">u64</span>,
+    <span class="kw">pub</span> actor: <span class="ty">Uid</span>,
+    <span class="kw">pub</span> actor_type: <span class="ty">String</span>,
+    <span class="kw">pub</span> method: <span class="ty">String</span>,
+    <span class="kw">pub</span> url: <span class="ty">String</span>,
+    <span class="kw">pub</span> content: <span class="ty">Content</span>,
+    <span class="kw">pub</span> custom: <span class="ty">BTreeMap</span>&lt;<span class="ty">String</span>, <span class="ty">Value</span>&gt;,</span>
+}</code></pre>
+
+<p><code>derive</code> 매크로 덕분에 <code>bincode::serialize(&amp;log)</code> 한 줄로 바이트 배열을 얻습니다. 역으로 <code>bincode::deserialize(&amp;bytes)</code>로 구조체를 되돌립니다. 저장 엔진이 직접 하는 일은 이것뿐입니다.</p>
+
+<h2>비자기서술적 포맷의 함정: Json은 String으로 감싼다</h2>
+
+<p>bincode는 필드 이름을 기록하지 않습니다 — 대신 구조체 정의의 순서를 믿습니다. 이게 크기와 속도의 원천이지만, 한 가지 함정이 있습니다.</p>
+
+<p><code>serde_json::Value</code>는 "어떤 JSON 타입이든 될 수 있는" 타입입니다. <code>{"key": 1}</code>일 수도, <code>[1,2,3]</code>일 수도 있죠. bincode는 비자기서술적 포맷이라 역직렬화 시 "다음에 오는 게 정수인지 배열인지"를 런타임에 판단하지 못합니다. 구조체 정의를 보고 결정하는데, <code>serde_json::Value</code>는 그 형태가 런타임에서야 결정됩니다.</p>
+
+<p>Quipu-Log의 해결책이 흥미롭습니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/model.rs</span><code><span class="dim">// 공개 타입: 호출자는 Value::Json(serde_json::Value)로 넘긴다</span>
+<span class="dim">#[serde(try_from = "ValueRepr", into = "ValueRepr")]</span>
+<span class="kw">pub enum</span> <span class="ty">Value</span> {
+    <span class="ty">Text</span>(<span class="ty">String</span>),
+    <span class="ty">Number</span>(<span class="ty">f64</span>),
+<span class="hl">    <span class="ty">Json</span>(<span class="ty">serde_json::Value</span>),</span>
+}
+
+<span class="com">// 온디스크 표현: Json은 String으로 바꿔 저장</span>
+<span class="kw">enum</span> <span class="ty">ValueRepr</span> {
+    <span class="ty">Text</span>(<span class="ty">String</span>),
+    <span class="ty">Number</span>(<span class="ty">f64</span>),
+<span class="hl">    <span class="ty">Json</span>(<span class="ty">String</span>), <span class="com">// &lt;-- serde_json::Value 대신 String</span></span>
+}</code></pre>
+
+<p><code>serde(try_from, into)</code>로 <strong>공개 타입</strong>(<code>Value</code>)과 <strong>온디스크 표현</strong>(<code>ValueRepr</code>)을 분리했습니다. JSON 값은 <code>.to_string()</code>으로 문자열화해서 저장하고, 읽을 때 다시 <code>serde_json::from_str</code>로 파싱합니다. bincode가 다루기 어려운 부분을 <code>String</code>으로 단순화한 것입니다.</p>
+
+<p>같은 패턴이 <code>Content</code>(로그 본문)에도 적용됩니다.</p>
+
+<h2>canonical_bytes: 해시와 인덱스 키를 위한 정규 표현</h2>
+
+<p>직렬화와 별개로, 값을 "비교하거나 해시해야 할 때" 또 다른 바이트 표현이 필요합니다. 예를 들어 SHA-256으로 필드를 보호하면 쿼리 시 "probe 값의 SHA-256 == 저장된 SHA-256?"으로 검색합니다. 이때 probe 값도, 저장된 값도 동일한 방법으로 바이트로 변환해야 같은 해시가 나옵니다.</p>
+
+<p>bincode 직렬화를 그대로 쓰면 안 될까요? 문제가 있습니다 — bincode는 구조체 전체를 직렬화하는데, 필드 하나의 <em>값만</em> 바이트로 표현하고 싶은 것이니까요. 또한 bincode는 구조체 레이아웃 변경에 민감합니다.</p>
+
+<p>그래서 <code>Value</code>에는 별도 메서드가 있습니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/model.rs</span><code><span class="kw">impl</span> <span class="ty">Value</span> {
+    <span class="com">/// 해시와 인덱스 키에 쓰는 정규 바이트 표현.</span>
+    <span class="kw">pub fn</span> <span class="fn">canonical_bytes</span>(&amp;<span class="kw">self</span>) -&gt; <span class="ty">Vec</span>&lt;<span class="ty">u8</span>&gt; {
+<span class="hl">        match self {
+            <span class="ty">Value</span>::<span class="ty">Text</span>(s)   =&gt; s.as_bytes().to_vec(),
+            <span class="ty">Value</span>::<span class="ty">Number</span>(n) =&gt; format!(<span class="str">"{n}"</span>).into_bytes(),
+            <span class="ty">Value</span>::<span class="ty">Json</span>(v)   =&gt; v.to_string().into_bytes(),
+        }</span>
+    }
+}</code></pre>
+
+<p>단순하지만 중요한 계약입니다. <code>"hello"</code>라는 Text 값은 항상 UTF-8 바이트 5개, <code>42.0</code>이라는 Number는 항상 <code>"42"</code>의 UTF-8 바이트입니다. 이 계약이 유지되는 한, SHA-256 보호 필드의 검색이 올바르게 동작합니다. <span class="pill">26장 블라인드 인덱스</span>에서 이 canonical_bytes가 토큰 생성에 어떻게 쓰이는지 자세히 다룹니다.</p>
+
+<figure>
+<svg viewBox="0 0 720 240" role="img" aria-label="직렬화 두 가지 경로: 저장용 bincode vs 해시용 canonical_bytes">
+  <defs>
+    <marker id="arr10" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+
+  <!-- Value struct -->
+  <rect x="260" y="20" width="200" height="60" rx="8" fill="#161922" stroke="#7aa2ff" stroke-width="2"/>
+  <text x="360" y="45" text-anchor="middle" fill="#7aa2ff" font-size="14" font-weight="600" font-family="-apple-system,sans-serif">Value</text>
+  <text x="360" y="65" text-anchor="middle" fill="#9aa3b2" font-size="12" font-family="-apple-system,sans-serif">Text / Number / Json</text>
+
+  <!-- Left path: bincode -->
+  <line x1="310" y1="80" x2="180" y2="130" stroke="#9aa3b2" stroke-width="1.5" marker-end="url(#arr10)"/>
+  <text x="215" y="115" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">bincode::serialize</text>
+
+  <rect x="60" y="132" width="240" height="70" rx="8" fill="#161922" stroke="#8be9c0" stroke-width="1.5"/>
+  <text x="180" y="155" text-anchor="middle" fill="#8be9c0" font-size="13" font-weight="600" font-family="-apple-system,sans-serif">온디스크 저장 (payload)</text>
+  <text x="180" y="175" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">ValueRepr 경유 → JSON은 String</text>
+  <text x="180" y="192" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">세그먼트 프레임에 담긴다</text>
+
+  <!-- Right path: canonical_bytes -->
+  <line x1="410" y1="80" x2="540" y2="130" stroke="#9aa3b2" stroke-width="1.5" marker-end="url(#arr10)"/>
+  <text x="488" y="115" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">canonical_bytes()</text>
+
+  <rect x="420" y="132" width="240" height="70" rx="8" fill="#161922" stroke="#ffd479" stroke-width="1.5"/>
+  <text x="540" y="155" text-anchor="middle" fill="#ffd479" font-size="13" font-weight="600" font-family="-apple-system,sans-serif">해시 / 인덱스 키</text>
+  <text x="540" y="175" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">SHA-256 / HMAC / 블라인드 토큰</text>
+  <text x="540" y="192" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">정규화된 UTF-8 바이트</text>
+</svg>
+<figcaption>같은 <code>Value</code>에서 두 가지 바이트 표현이 나온다. 저장용(bincode)과 해시·인덱스용(canonical_bytes)은 목적이 다르기 때문에 분리한다.</figcaption>
+</figure>
+
+<h2>StoredValue: 보호가 적용된 온디스크 표현</h2>
+
+<p>레지스트리 필드는 스키마에 따라 평문, SHA-256 다이제스트, HMAC, RSA 암호문 중 하나로 저장될 수 있습니다. 이를 담는 타입이 <code>StoredValue</code>입니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/model.rs</span><code><span class="kw">pub enum</span> <span class="ty">StoredValue</span> {
+<span class="hl">    <span class="ty">Plain</span>(<span class="ty">Value</span>),
+    <span class="ty">Sha256</span>(<span class="ty">String</span>),
+    <span class="ty">Hmac</span> { key_version: <span class="ty">u32</span>, digest: <span class="ty">String</span> },
+    <span class="ty">Rsa</span>  { key_version: <span class="ty">u32</span>, wrapped_key: <span class="ty">String</span>, nonce: <span class="ty">String</span>, ciphertext: <span class="ty">String</span> },</span>
+}</code></pre>
+
+<p>이것도 <code>Serialize + Deserialize</code>를 구현하므로 bincode로 세그먼트에 저장됩니다. 어떤 보호 방식이 쓰였는지 enum 배리언트에 담겨 있어 역직렬화 시 스키마를 따로 조회하지 않아도 됩니다. <span class="pill">파트 6 기밀성</span>에서 각 변형의 암호학적 의미를 자세히 다룹니다.</p>
+
+<h2>포맷 안정성: 구조체를 바꾸면 어떻게 될까</h2>
+
+<p>bincode의 비자기서술적 특성은 강점이면서 주의사항이기도 합니다. 구조체에 필드를 추가하거나 순서를 바꾸면 기존 세그먼트를 역직렬화할 수 없게 됩니다. Quipu-Log가 FORMAT_VERSION을 세그먼트 헤더에 박아두는 이유 중 하나도 이것입니다 — 포맷이 바뀌면 버전을 올려 이전 파일을 "읽을 수 없음"으로 명확히 표시합니다. <span class="pill">18장 저장소 레이아웃과 포맷 버저닝</span></p>
+
+<div class="callout why"><span class="lab">왜 이렇게?</span><p>자기서술적 포맷(MessagePack, CBOR)은 필드 이름을 함께 저장해 구조체가 바뀌어도 부분 역직렬화가 가능합니다. bincode를 택한 것은 <em>크기·속도 우선</em>의 결정입니다. 감사 로그는 쓰기 집약적이고 레코드 수가 많으므로, 레코드당 수십 바이트 절감이 전체 디스크 사용량과 처리량에 의미 있게 영향을 줍니다. 포맷 안정성은 FORMAT_VERSION으로 관리하는 것으로 트레이드오프를 받아들입니다.</p></div>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① bincode가 "비자기서술적"이라는 말의 뜻은 무엇인가요? JSON과 무엇이 다른가요?<br>② <code>Value::Json(serde_json::Value)</code>를 직접 bincode로 저장하지 않고 <code>String</code>으로 변환해 저장하는 이유는 무엇인가요?<br>③ <code>canonical_bytes()</code>와 <code>bincode::serialize</code>는 같은 값에 대해 항상 같은 바이트를 만들까요? 두 함수의 목적 차이를 설명해보세요.</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="09-record-framing-crc.html"><span class="dir">← 이전</span><span class="t">09 · 레코드 프레이밍: 길이·CRC32·magic/version</span></a><a class="next" href="11-durability-policy.html"><span class="dir">다음 →</span><span class="t">11 · 내구성: fsync 정책과 group commit</span></a></div>
+</div>
+</main>
+</div>
+<script src="../assets/textbook.js"></script>
+</body>
+</html>

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>07 · Append-only log = the WAL is the database — The Quipu-Log Book</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ Contents</button><b>The Quipu-Log Book</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn active" href="07-append-only-wal.html">EN</a><a class="langbtn" href="ko/07-append-only-wal.html">한국어</a></div>
+<a class="home" href="index.html">The Quipu-Log Book</a>
+<div class="sub">Storage engines and tamper-evident audit logs, built on nothing but the filesystem — explained from the ground up</div>
+<div class="part">Part 1 · Starting point: files, not a DB</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>What an audit log is, and why “files, no DB”</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>The map, and the DB↔filesystem correspondence</a>
+<div class="part">Part 2 · Filesystem basics</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>Filesystem basics: files, directories, inodes, descriptors</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>Reading &amp; writing, and the atomicity of rename</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>When data really hits disk: the page cache and fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>The std::fs toolbox: handling files in Rust</a>
+<div class="part">Part 3 · The heart of the engine: the append-only log</div>
+<a class="lnk active" href="07-append-only-wal.html"><span class="n">07</span>Append-only log = the WAL is the database</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>Segment files and rollover</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>Record framing: length, CRC32, magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>Serialization: turning structs into bytes</a>
+<div class="part">Part 4 · Re-creating what a DB gave you for free, on files</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>Durability: fsync policy and group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>Atomicity and crash recovery: torn writes and tail detection</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>Concurrency I: single-writer and the file lock</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>Concurrency II: read snapshots and MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>Indexing: in-memory index + on-disk tokens</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>Query execution: segment scans and cursor pagination</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>Deletion and retention: segment unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>Store layout and format versioning</a>
+<div class="part">Part 5 · Integrity: making tampering evident (Security I)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>Hash functions and SHA-256: a digital fingerprint</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>The Merkle history tree: committing the log to 32 bytes</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>Inclusion proofs and consistency proofs</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>Checkpoints and external anchoring</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>Tamper-evident vs tamper-proof, and the threat model</a>
+<div class="part">Part 6 · Confidentiality: searching while keeping secrets (Security II)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>Field protection in four levels: plaintext/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>Symmetric, asymmetric, hybrid encryption and AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>Blind indexes: searching without plaintext</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>Write-only deployment: a server without the private key</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>Key management: keyring, versioning, rotation vs re-keying</a>
+<div class="part">Part 7 · The write &amp; read paths</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>The async pipeline: non-blocking emit and backpressure</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>Reliability: retries, backoff, DLQ, idempotency</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>The tower middleware: auto-recording HTTP requests</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>Permissions (RBAC), filters, and meta-audit</a>
+<div class="part">Part 8 · Distribution, operations, scaling</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>Single point of failure and availability: the client spool</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>Horizontal scaling: sharding, consistent hashing, read replicas</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>Server, client, MCP, and observability</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">Part 3 · The heart of the engine: the append-only log</span><h1><span class="chno">07</span> · Append-only log = the WAL is the database</h1></div><article>
+
+<p class="lead">If you’ve used a database, you already know the word “log” — the transaction log, the WAL (Write-Ahead Log). This chapter has exactly one goal: to plant a shift in perspective. <strong>In a database the log is a supporting actor that backs up the main table; in Quipu-Log the log is the lead — it <em>is</em> the database.</strong></p>
+
+<div class="callout"><span class="lab">In one sentence</span><p>Quipu-Log never <em>edits</em> data. It only <em>appends</em> to the end of a file. That one rule buys crash safety, tamper-evidence, and trivial backups almost for free.</p></div>
+
+<h2>First, what you already know: the DB’s WAL</h2>
+
+<p>When a relational database runs <code>UPDATE accounts SET balance = 100 WHERE id = 42</code>, it actually writes in two places.</p>
+
+<ol>
+  <li><strong>The WAL (the log)</strong> — it first appends the <em>intent</em> (“set account 42’s balance to 100”) sequentially to the end of a file. This is fast (just appending to the end).</li>
+  <li><strong>The data pages (the main body)</strong> — it then finds the B-tree page where the actual table lives and <em>overwrites</em> the value in place. This touches scattered spots on disk and is slow, so it happens later, lazily.</li>
+</ol>
+
+<p>The reason the WAL comes first (Write-<em>Ahead</em>) is crashes. If the power dies mid-overwrite, the “intent” still sits in the WAL, so after reboot the database can replay it to recover. <strong>The WAL is the source of truth; the data pages are closer to a cache that lets you read that truth quickly.</strong></p>
+
+<div class="callout analogy"><span class="lab">Analogy</span><p>Think of a bank passbook. Transactions are only ever <em>appended</em>, line by line — you never erase or edit a line that’s already printed. The “current balance” is shown on the bottom line, but that’s really just <em>the sum of every transaction</em>. The transaction history (the log) is the original; the balance (the current state) is a summary of it.</p></div>
+
+<h2>The shift: what if we drop the main body entirely?</h2>
+
+<p>Here is Quipu-Log’s decisive choice. <strong>“What if we don’t build data pages (the main body) at all, and keep only the WAL?”</strong></p>
+
+<p>An audit log exists to record things that happened. Things that happened don’t change later — “Alice deleted the document yesterday” is true forever. So there’s never a value to overwrite. <em>And if there’s nothing to overwrite, you don’t need the heavy B-tree body that exists to support overwriting.</em></p>
+
+<figure>
+<svg viewBox="0 0 720 300" role="img" aria-label="Comparing the storage structure of a database and Quipu-Log">
+  <style>
+    .lbl{fill:#e6e8ee;font:600 14px -apple-system,sans-serif}
+    .sub{fill:#9aa3b2;font:12px -apple-system,sans-serif}
+    .box{fill:#161922;stroke:#2a2f3d;stroke-width:1.5;rx:8}
+    .logrow{fill:#16241d;stroke:#2c4a3a}
+    .pagebox{fill:#241f12;stroke:#4a3f1f}
+    .acc{fill:#7aa2ff;font:600 12px -apple-system,sans-serif}
+    .arr{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#a)}
+  </style>
+  <defs><marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/></marker></defs>
+
+  <!-- DB side -->
+  <text x="20" y="28" class="lbl">A traditional DB</text>
+  <rect x="20" y="42" width="150" height="86" class="box logrow"/>
+  <text x="32" y="62" class="sub" fill="#8be9c0">WAL (the log)</text>
+  <rect x="32" y="72" width="126" height="14" rx="3" fill="#0b0d12"/>
+  <rect x="32" y="92" width="126" height="14" rx="3" fill="#0b0d12"/>
+  <rect x="32" y="112" width="80" height="14" rx="3" fill="#0b0d12"/>
+  <rect x="200" y="42" width="150" height="120" class="box pagebox"/>
+  <text x="212" y="62" class="sub" fill="#ffd479">Data pages (the body)</text>
+  <text x="212" y="84" class="sub">B-tree · edit in place</text>
+  <rect x="212" y="96" width="58" height="40" rx="4" fill="#0b0d12"/>
+  <rect x="278" y="96" width="58" height="40" rx="4" fill="#0b0d12"/>
+  <line x1="170" y1="90" x2="200" y2="100" class="arr"/>
+  <text x="120" y="185" class="sub">Reads hit the body fast;</text>
+  <text x="120" y="202" class="sub">the log is just for recovery</text>
+
+  <!-- Quipu side -->
+  <text x="430" y="28" class="lbl">Quipu-Log</text>
+  <rect x="430" y="42" width="270" height="180" class="box logrow"/>
+  <text x="444" y="62" class="acc" fill="#8be9c0">append-only log = the data itself</text>
+  <rect x="444" y="74" width="242" height="16" rx="3" fill="#0b0d12"/>
+  <rect x="444" y="96" width="242" height="16" rx="3" fill="#0b0d12"/>
+  <rect x="444" y="118" width="242" height="16" rx="3" fill="#0b0d12"/>
+  <rect x="444" y="140" width="180" height="16" rx="3" fill="#0b0d12"/>
+  <text x="444" y="180" class="sub">No B-tree body — nothing to overwrite.</text>
+  <text x="444" y="198" class="sub">Just append one line to the file’s end. ↓</text>
+  <line x1="565" y1="156" x2="565" y2="174" class="arr"/>
+</svg>
+<figcaption>A DB keeps both the log (the original) and the body (for fast reads). Quipu-Log drops the body and keeps only the log — audit records are never edited.</figcaption>
+</figure>
+
+<div class="callout dbfs"><span class="lab">DB ↔ Filesystem</span><p><strong>In a DB</strong>, the WAL is a helper for the main body (the tables). <strong>In Quipu-Log</strong>, that single WAL <em>is</em> the database. The equation “log = data” is the first pillar holding up this entire library.</p></div>
+
+<h2>How: appending frames to the end of a file</h2>
+
+<p>So what actually piles up in the file? Here is the storage engine’s own module description. Quipu-Log wraps every record in a fixed <strong>frame</strong> and appends it to the end of the file.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/mod.rs — module docs</span><code><span class="com">// A segment file starts with a header (ALOG magic + format version + base index),</span>
+<span class="com">// and every record is wrapped in this frame:</span>
+<span class="hl">[u32 LE payload length][u32 crc32(payload)][u64 timestamp][payload]</span>
+<span class="com">//   ↑ body length        ↑ body checksum     ↑ record time  ↑ the data</span></code></pre>
+
+<p>Take it field by field and you can see why these four pieces sit in this order.</p>
+
+<ul>
+  <li><strong><code>payload length</code></strong> — how many bytes the body is. When reading, it tells you “where does this record end?” It’s the signpost to the start of the next record.</li>
+  <li><strong><code>crc32(payload)</code></strong> — a checksum (a short fingerprint) of the body. If the disk corrupted a bit, or a write was left half-finished, the value you recompute on read won’t match — and you know “this record is damaged.” <span class="pill">Ch. 9 covers this</span></li>
+  <li><strong><code>timestamp</code></strong> — when it was recorded. The key point is it lives in the <em>frame header, not the body</em>. That way you can skim just the times — without deserializing the body — to decide things like “this file is March’s.” <span class="pill">Used by retention, Ch. 17</span></li>
+  <li><strong><code>payload</code></strong> — the actual audit record. <span class="pill">Ch. 10, serialization</span></li>
+</ul>
+
+<p>And all of this happens with only <code>std::fs</code> (Rust’s standard file API). No special OS features, no DB engine. Which is why the module docs proudly note:</p>
+
+<pre><code><span class="com">// Only std::fs / std::io are used, so behaviour is identical on every OS Rust targets.</span></code></pre>
+
+<h2>Why append-only — a perfect match for audit logs</h2>
+
+<p>The append-only rule looks simple, but it hands you the properties an audit log wants, one after another, for free.</p>
+
+<table>
+  <tr><th>Because it’s append-only…</th><th>You get</th></tr>
+  <tr><td>bytes already written are never touched</td><td><strong>Tamper-evidence becomes easy.</strong> Editing the past is not a “normal operation,” so traces of an edit are themselves evidence of an incident (Part 5).</td></tr>
+  <tr><td>a write is always “append to the end”</td><td><strong>It’s fast.</strong> Sequential writes — the disk head doesn’t jump around.</td></tr>
+  <tr><td>old data never changes</td><td><strong>Backups are safe.</strong> You can copy the old files even while the daemon runs (no lock worries).</td></tr>
+  <tr><td>only the last record can be incomplete</td><td><strong>Crash recovery is simple.</strong> Just trim the one broken piece at the end of the file (Ch. 12).</td></tr>
+</table>
+
+<div class="callout warn"><span class="lab">Not free — the trade-off</span><p>The price of dropping the body (the B-tree index) is <strong>reads</strong>. To find “records about document 42” you’d in principle have to scan the log. Quipu-Log solves this with secondary indexes — how that’s possible is in <span class="pill">Ch. 15 (indexing)</span> and <span class="pill">Ch. 16 (query execution)</span>. For now, just remember: “writes are simple and fast; reads need extra machinery.”</p></div>
+
+<div class="callout key"><span class="lab">Security note</span><p>“The code doesn’t even support overwriting” is a strong security property — there’s no path for a bug to corrupt past records. But this is only an <em>application-level</em> promise; an attacker with direct disk access can still edit the file. <em>Detecting</em> that is the Merkle tree’s job (Part 5) — append-only doesn’t <strong>prevent</strong> tampering, it makes tampering <strong>clearly abnormal</strong>.</p></div>
+
+<h2>Recap</h2>
+<ul>
+  <li>A DB keeps both <strong>the log (original) and the body (fast reads)</strong>.</li>
+  <li>Quipu-Log keeps <strong>only the log</strong>. Audit records are never edited, so the body is unnecessary.</li>
+  <li>Records are appended <strong>only to the end</strong> as <code>[length][CRC][time][body]</code> frames — with nothing but <code>std::fs</code>.</li>
+  <li>Append-only gives fast writes, easy backups, simple recovery, and tamper-evidence friendliness. The cost is that reads need a separate index.</li>
+</ul>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① Explain “the WAL is the database” in one sentence, using the passbook analogy.<br>② Why does Quipu-Log <em>not</em> build B-tree data pages? (Hint: one essential property of audit records.)<br>③ Why is the <code>timestamp</code> in the frame header rather than inside the body?</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="06-std-fs-toolbox.html"><span class="dir">← Prev</span><span class="t">06 · The std::fs toolbox: handling files in Rust</span></a><a class="next" href="08-segments.html"><span class="dir">Next →</span><span class="t">08 · Segment files and rollover</span></a></div>
+</div>
+</main>
+</div>
+<script src="assets/textbook.js"></script>
+</body>
+</html>

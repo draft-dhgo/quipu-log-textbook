@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>02 · Quipu-Log 지도와 DB↔파일시스템 대응표 — Quipu-Log 교과서</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ 목차</button><b>Quipu-Log 교과서</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn" href="../02-map-and-db-fs-bridge.html">EN</a><a class="langbtn active" href="02-map-and-db-fs-bridge.html">한국어</a></div>
+<a class="home" href="index.html">Quipu-Log 교과서</a>
+<div class="sub">파일시스템만으로 짓는 저장 엔진과 변조-탐지 감사 로그 — 밑바닥부터</div>
+<div class="part">파트 1 · 출발점: DB 없이, 파일로</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>감사 로그란, 그리고 왜 &#x27;DB 없이 파일로&#x27;인가</a>
+<a class="lnk active" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>Quipu-Log 지도와 DB↔파일시스템 대응표</a>
+<div class="part">파트 2 · 파일시스템 기본기</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>파일시스템의 기본: 파일·디렉토리·inode·디스크립터</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>읽고 쓰기, 그리고 rename의 원자성</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>데이터는 언제 진짜 디스크에 남나: page cache와 fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>std::fs 도구상자: Rust로 파일 다루기</a>
+<div class="part">파트 3 · 저장 엔진의 심장: append-only 로그</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>append-only 로그 = WAL이 곧 데이터베이스</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>세그먼트 파일과 롤오버</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>레코드 프레이밍: 길이·CRC32·magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>직렬화: 구조체를 바이트로</a>
+<div class="part">파트 4 · DB가 공짜로 주던 보장을 파일로 재현</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>내구성: fsync 정책과 group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>원자성과 크래시 복구: torn write와 꼬리 탐지</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>동시성 제어 ①: single-writer와 파일 락</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>동시성 제어 ②: 읽기 스냅샷과 MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>인덱싱: 인메모리 인덱스 + 디스크 토큰</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>쿼리 실행: 세그먼트 스캔과 커서 페이지네이션</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>삭제와 보존: 세그먼트 unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>저장소 레이아웃과 포맷 버저닝</a>
+<div class="part">파트 5 · 무결성: 고치면 티가 나게 (보안 ①)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>해시 함수와 SHA-256: 디지털 지문</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>머클 히스토리 트리: 로그를 32바이트로 커밋</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>포함 증명·일관성 증명</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>체크포인트와 외부 앵커링</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>tamper-evident vs tamper-proof, 그리고 위협 모델</a>
+<div class="part">파트 6 · 기밀성: 비밀을 지키면서 검색하기 (보안 ②)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>필드 보호 4단계: 평문/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>대칭·비대칭·하이브리드 암호와 AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>블라인드 인덱스: 평문 없이 검색</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>쓰기 전용 배포: 개인키 없는 서버</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>키 관리: 키링·버저닝·로테이션 vs 리키</a>
+<div class="part">파트 7 · 쓰기·읽기 경로</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>비동기 파이프라인: 논블로킹 emit과 백프레셔</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>신뢰성: 재시도·백오프·DLQ·멱등성</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>tower 미들웨어: HTTP 요청 자동 기록</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>권한(RBAC)·필터·메타 감사</a>
+<div class="part">파트 8 · 분산·운영·확장</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>단일 장애점과 가용성: 클라이언트 스풀</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>수평 확장: 샤딩·일관성 해싱·읽기 복제</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>서버·클라이언트·MCP·관측성</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">파트 1 · 출발점: DB 없이, 파일로</span><h1><span class="chno">02</span> · Quipu-Log 지도와 DB↔파일시스템 대응표</h1></div><article>
+
+<p class="lead">이 챕터는 이 책 전체의 지도입니다. Quipu-Log가 어떤 부품들로 이루어졌는지 5개 크레이트를 조감하고, 그보다 중요한 — DB가 당연하게 제공하던 개념들이 파일 위에서는 어떤 모습으로 나타나는지 — 대응표를 한 번에 보여드립니다. 이 표를 머릿속에 넣으면 뒤 챕터들이 훨씬 빨리 읽힙니다.</p>
+
+<div class="callout"><span class="lab">한 문장 요약</span><p>Quipu-Log는 DB 없이 파일만으로 WAL·인덱스·락·MVCC·파티션 삭제를 재현한다. <strong>DB 개념 → 파일 구현</strong>의 대응을 이해하면 이 라이브러리의 모든 설계 결정이 보인다.</p></div>
+
+<h2>5개 크레이트 한눈에 보기</h2>
+
+<p>Quipu-Log는 하나의 단일 크레이트가 아닙니다. 역할별로 5개 크레이트로 나뉩니다. 각각이 무슨 일을 하는지 먼저 보겠습니다.</p>
+
+<figure>
+<svg viewBox="0 0 720 320" role="img" aria-label="Quipu-Log 5개 크레이트 구조도">
+  <defs><marker id="ar2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/></marker></defs>
+  <style>
+    .lbl2{fill:#e6e8ee;font:600 13px -apple-system,sans-serif}
+    .sub2{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .cr{fill:#161922;stroke:#2a2f3d;stroke-width:1.5;rx:6}
+    .core{fill:#1a2133;stroke:#7aa2ff;stroke-width:2;rx:6}
+    .mid{fill:#1d1a28;stroke:#c792ea;stroke-width:1.5;rx:6}
+    .srv{fill:#1d2520;stroke:#8be9c0;stroke-width:1.5;rx:6}
+    .cli{fill:#241f12;stroke:#ffd479;stroke-width:1.5;rx:6}
+    .mcp{fill:#241818;stroke:#ff8b8b;stroke-width:1.5;rx:6}
+    .arr2{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#ar2)}
+    .ctag{fill:#7aa2ff;font:700 10px -apple-system,sans-serif}
+  </style>
+
+  <!-- quipu-core (center bottom) -->
+  <rect x="230" y="200" width="260" height="80" rx="6" fill="#1a2133" stroke="#7aa2ff" stroke-width="2"/>
+  <text x="248" y="228" class="lbl2" fill="#7aa2ff">quipu-core</text>
+  <text x="248" y="248" class="sub2">저장 엔진 · 레지스트리 · 암호화</text>
+  <text x="248" y="264" class="sub2">쿼리 · 리텐션 (동기 코어)</text>
+
+  <!-- quipu-middleware -->
+  <rect x="230" y="100" width="260" height="70" rx="6" fill="#1d1a28" stroke="#c792ea" stroke-width="1.5"/>
+  <text x="248" y="124" class="lbl2" fill="#c792ea">quipu-middleware</text>
+  <text x="248" y="144" class="sub2">비동기 파이프라인 · DLQ · 필터</text>
+  <text x="248" y="160" class="sub2">권한(RBAC) · tower 레이어 · 샤드 라우터</text>
+
+  <!-- quipu-server -->
+  <rect x="30" y="100" width="170" height="70" rx="6" fill="#1d2520" stroke="#8be9c0" stroke-width="1.5"/>
+  <text x="46" y="124" class="lbl2" fill="#8be9c0">quipu-server</text>
+  <text x="46" y="144" class="sub2">독립 데몬</text>
+  <text x="46" y="160" class="sub2">HTTP/JSON API + RBAC</text>
+
+  <!-- quipu-client -->
+  <rect x="520" y="100" width="170" height="70" rx="6" fill="#241f12" stroke="#ffd479" stroke-width="1.5"/>
+  <text x="536" y="124" class="lbl2" fill="#ffd479">quipu-client</text>
+  <text x="536" y="144" class="sub2">서버 모드 레퍼런스 클라이언트</text>
+  <text x="536" y="160" class="sub2">재시도 · 백오프 · 디스크 스풀</text>
+
+  <!-- quipu-mcp -->
+  <rect x="230" y="20" width="260" height="55" rx="6" fill="#241818" stroke="#ff8b8b" stroke-width="1.5"/>
+  <text x="248" y="44" class="lbl2" fill="#ff8b8b">quipu-mcp</text>
+  <text x="248" y="62" class="sub2">MCP 서버 — LLM 감사관 (query/history/verify)</text>
+
+  <!-- arrows -->
+  <line x1="360" y1="200" x2="360" y2="172" stroke="#c792ea" stroke-width="1.5" marker-end="url(#ar2)"/>
+  <line x1="200" y1="135" x2="230" y2="135" stroke="#8be9c0" stroke-width="1.5" marker-end="url(#ar2)"/>
+  <line x1="490" y1="135" x2="520" y2="135" stroke="#ffd479" stroke-width="1.5" marker-end="url(#ar2)"/>
+  <line x1="360" y1="100" x2="360" y2="78" stroke="#ff8b8b" stroke-width="1.5" marker-end="url(#ar2)"/>
+</svg>
+<figcaption>화살표는 의존 방향이다. quipu-core가 모든 것의 기반 — 저장·암호화·쿼리를 담당하고, quipu-middleware가 그 위에 비동기 파이프라인을 얹는다.</figcaption>
+</figure>
+
+<table>
+  <tr><th>크레이트</th><th>역할</th><th>핵심 타입</th></tr>
+  <tr><td><code>quipu-core</code></td><td>동기 저장 엔진 — 세그먼트 파일, 레지스트리, 암호화, 리텐션, 쿼리, 머클 트리</td><td><code>AuditStore</code>, <code>StoreConfig</code>, <code>Table&lt;T&gt;</code></td></tr>
+  <tr><td><code>quipu-middleware</code></td><td>비동기 파이프라인 — 논블로킹 emit, DLQ, 필터, RBAC, tower 레이어, 샤드 라우터</td><td><code>AuditPipeline</code>, <code>AuditHandle</code>, <code>AuditLayer</code></td></tr>
+  <tr><td><code>quipu-server</code></td><td>독립 데몬 — 토큰 인증 HTTP/JSON API, 쓰기 전용 모드</td><td>HTTP 핸들러, 설정 파일</td></tr>
+  <tr><td><code>quipu-client</code></td><td>서버 모드 레퍼런스 클라이언트 — 재시도, 지수 백오프, 디스크 스풀</td><td><code>QuipuClient</code>, <code>Backoff</code>, <code>Spool</code></td></tr>
+  <tr><td><code>quipu-mcp</code></td><td>LLM 감사관 — MCP 프로토콜로 LLM이 query·history·verify 호출</td><td>MCP 툴 핸들러</td></tr>
+</table>
+
+<h2>임베디드 모드 vs 서버 모드</h2>
+
+<p>Quipu-Log를 쓰는 방법은 크게 두 가지입니다.</p>
+
+<p><strong>임베디드 모드</strong>: <code>quipu-core</code> + <code>quipu-middleware</code>를 여러분의 Rust 서비스에 라이브러리로 추가합니다. 감사 저장소가 서비스 프로세스 안에서 실행됩니다. 별도 데몬, 네트워크, DB가 필요 없습니다. Rust 서비스 한 개에 감사 로그가 필요할 때 가장 간단한 선택입니다.</p>
+
+<p><strong>서버 모드</strong>: <code>quipu-server</code>를 독립 프로세스로 실행하고, 여러 서비스(언어 무관)가 HTTP/JSON API로 기록합니다. 한 곳에서 여러 서비스의 감사 기록을 모을 때, 또는 Rust 이외 언어 서비스에서 쓸 때 선택합니다.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ 파일시스템</span><p>관계형 DB에도 비슷한 구분이 있습니다. SQLite(임베디드)처럼 프로세스 안에서 돌거나, PostgreSQL(서버)처럼 별도 프로세스로 돌거나. Quipu-Log도 같은 선택지를 제공합니다 — 다만 내부 저장 엔진은 파일 위에 직접 구현되어 있습니다.</p></div>
+
+<h2>이 책의 뼈대: DB↔파일시스템 대응표</h2>
+
+<p>이제 이 챕터의 핵심입니다. DB를 써온 독자라면 다음 개념들을 이미 압니다: WAL, 인덱스, 락 매니저, MVCC, 파티션 삭제, 체크섬. Quipu-Log는 이것들을 DB 엔진 없이 파일 위에서 직접 구현합니다. <strong>대응 관계를 한 번에 보겠습니다.</strong></p>
+
+<table>
+  <tr><th>DB 개념</th><th>Quipu-Log 파일 구현</th><th>다루는 장</th></tr>
+  <tr>
+    <td><strong>WAL (Write-Ahead Log)</strong><br>트랜잭션 의도를 먼저 기록하는 순차 파일</td>
+    <td><strong>append-only 세그먼트 파일</strong><br>WAL이 곧 데이터베이스. 본체(B-tree) 없음.</td>
+    <td><span class="pill">7장</span></td>
+  </tr>
+  <tr>
+    <td><strong>데이터 파일 / 테이블스페이스</strong><br>테이블 데이터를 담는 파일 집합</td>
+    <td><strong>세그먼트 파일 묶음 (Table&lt;T&gt;)</strong><br><code>seg-0000000000.log</code>, <code>seg-0000000001.log</code>...</td>
+    <td><span class="pill">8장</span></td>
+  </tr>
+  <tr>
+    <td><strong>페이지 체크섬 / torn page 탐지</strong><br>디스크 비트 오류·부분 쓰기 탐지</td>
+    <td><strong>프레임 CRC32</strong><br><code>[len][crc32][ts][payload]</code> — 모든 레코드마다</td>
+    <td><span class="pill">9장</span></td>
+  </tr>
+  <tr>
+    <td><strong>락 매니저</strong><br>동시 쓰기 충돌 방지</td>
+    <td><strong>OS 파일 락 (<code>File::try_lock</code>)</strong><br>루트 디렉토리의 <code>LOCK</code> 파일 — 두 번째 프로세스가 열면 즉시 오류</td>
+    <td><span class="pill">13장</span></td>
+  </tr>
+  <tr>
+    <td><strong>MVCC (다중 버전 동시성 제어)</strong><br>읽기와 쓰기가 서로 안 막히게</td>
+    <td><strong>읽기 스냅샷 (ReadSnapshot)</strong><br>인메모리 인덱스를 클론 — 불변 세그먼트 + 인덱스 복제</td>
+    <td><span class="pill">14장</span></td>
+  </tr>
+  <tr>
+    <td><strong>B-tree 보조 인덱스</strong><br>특정 컬럼으로 빠른 조회</td>
+    <td><strong>인메모리 레지스트리 인덱스 + 디스크 토큰</strong><br>재시작 시 재구축; 블라인드 인덱스로 암호화 필드 검색</td>
+    <td><span class="pill">15장</span> <span class="pill">26장</span></td>
+  </tr>
+  <tr>
+    <td><strong>파티션 삭제 (partition drop)</strong><br>오래된 파티션을 파일 통째 삭제</td>
+    <td><strong>세그먼트 <code>unlink</code></strong><br>sealed 세그먼트 파일을 통째로 삭제 — O(1), 행 단위 재작성 없음</td>
+    <td><span class="pill">17장</span></td>
+  </tr>
+  <tr>
+    <td><strong>WAL replay / 크래시 복구</strong><br>정전 후 로그를 재실행해 복구</td>
+    <td><strong>세그먼트 skim + 꼬리 truncate</strong><br>CRC 실패 지점까지 유효, 나머지는 잘라낸다. redo-only.</td>
+    <td><span class="pill">12장</span></td>
+  </tr>
+</table>
+
+<p>이 표가 이해되면, 뒤 챕터들은 "DB에서 X라는 개념을 파일로는 Y로 구현했구나"라는 흐름으로 읽힙니다. 막힐 때마다 이 표로 돌아오세요.</p>
+
+<h2>저장소 레이아웃: 실제 파일 구조</h2>
+
+<p>Quipu-Log 스토어를 열면 루트 디렉토리 아래 다음과 같은 구조가 생깁니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs — AuditStore 레이아웃 주석</span><code>root/
+<span class="hl">  meta/          type schemas + custom column registry (replayed on open)</span>
+<span class="hl">  logs/          AuditLog rows</span>
+  relations/     log -&gt; target-entity-version relations
+<span class="hl">  registry/&lt;t&gt;/ one versioned registry table per entity/actor type</span>
+  access/        meta-audit (opt-in)
+  LOCK           advisory OS lock file</code></pre>
+
+<p>각 디렉토리는 <code>Table&lt;T&gt;</code> 하나에 대응합니다 — 즉, 세그먼트 파일 여러 개로 이루어진 append-only 로그 하나. DB로 치면 테이블 하나가 테이블스페이스(파일 집합)에 저장되는 것과 같습니다. <span class="pill">18장</span>에서 포맷 버저닝까지 포함해 자세히 다룹니다.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ 파일시스템</span><p><strong>DB에서는</strong> 데이터 딕셔너리(시스템 카탈로그)가 테이블·컬럼 정보를 관리한다. <strong>Quipu-Log에서는</strong> <code>meta/</code> 디렉토리가 그 역할을 한다 — 타입 스키마 정의가 append-only로 기록되고, 재시작 시 순서대로 재실행(replay)된다. DB의 DDL 로그와 같은 원리다.</p></div>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① quipu-core와 quipu-middleware의 역할 차이를 한 문장씩 말해보세요.<br>② DB의 "파티션 drop"이 Quipu-Log에서는 어떻게 구현되나요? 왜 "행 단위 DELETE + vacuum"보다 효율적인가요?<br>③ DB의 MVCC와 Quipu-Log의 읽기 스냅샷은 어떤 문제를 공통으로 해결하나요?</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="01-audit-log-and-why-files.html"><span class="dir">← 이전</span><span class="t">01 · 감사 로그란, 그리고 왜 &#x27;DB 없이 파일로&#x27;인가</span></a><a class="next" href="03-fs-basics.html"><span class="dir">다음 →</span><span class="t">03 · 파일시스템의 기본: 파일·디렉토리·inode·디스크립터</span></a></div>
+</div>
+</main>
+</div>
+<script src="../assets/textbook.js"></script>
+</body>
+</html>

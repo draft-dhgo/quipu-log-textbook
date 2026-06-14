@@ -1,0 +1,213 @@
+<article>
+
+<p class="lead">암호화된 SSN을 저장했는데, 나중에 특정 SSN을 가진 환자의 기록을 찾아야 합니다. 평문이 디스크에 없으니 일반적인 검색은 불가능합니다. 그렇다고 전체 기록을 복호화해서 비교하는 건 느리고 — 그 순간 평문이 서버 메모리에 올라오니 비밀이 새어나갑니다. 이 딜레마를 푸는 것이 <strong>블라인드 인덱스(blind index)</strong>입니다. 평문을 디스크에 남기지 않으면서도 검색이 가능한 비법을 살펴봅시다.</p>
+
+<div class="callout"><span class="lab">한 문장 요약</span><p>블라인드 인덱스는 평문에서 검색 토큰을 만들어 <em>쓰기 시점에</em> 다이제스트로 변환해 저장합니다. 평문이 없는 서버도 같은 계산을 질의어에 적용해 일치 여부를 확인할 수 있습니다.</p></div>
+
+<h2>DB에서는 어떻게 했나 — 암호화와 검색의 딜레마</h2>
+
+<p>관계형 DB에서 컬럼을 암호화하면 <code>WHERE ssn = '123-45-6789'</code> 쿼리가 동작하지 않습니다. DB는 저장된 값이 같은지 비교해야 하는데, 암호화된 칼럼의 값이 매번 다르거나(비결정론적 암호화), 복호화해야만 비교할 수 있기 때문입니다. 복호화하면 DB 서버가 평문을 봐야 하니 내부 위협에 무력해집니다.</p>
+
+<p>일부 DB 확장(예: pgcrypto, Always Encrypted)은 결정론적 암호화를 써서 같은 입력 → 같은 암호문을 만들어 인덱스를 허용합니다. 하지만 결정론적이면 동일 값이 같은 암호문을 가지므로 공격자가 빈도 분석을 할 수 있습니다. Quipu-Log의 블라인드 인덱스는 이 문제도 고려한 설계입니다.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ 파일시스템</span><p><strong>DB에서는</strong> 컬럼 암호화와 검색 인덱스를 동시에 갖기 어렵습니다 — 결정론적 암호화(=빈도 누출)와 비결정론적 암호화(=검색 불가) 사이의 선택이죠. <strong>Quipu-Log의 블라인드 인덱스는</strong> 평문을 <em>토큰으로 쪼갠 뒤 다이제스트</em>를 저장해, 빈도 분석 표면은 최소화하면서 부분 검색까지 허용합니다.</p></div>
+
+<h2>블라인드 인덱스의 발상</h2>
+
+<p>핵심 아이디어는 단순합니다. 검색 비교는 <em>원본 평문이 아니라 토큰의 다이제스트</em>끼리 합니다. 쓸 때와 검색할 때 같은 변환을 적용하면, 평문 없이도 일치 여부를 확인할 수 있습니다.</p>
+
+<figure>
+<svg viewBox="0 0 780 340" role="img" aria-label="블라인드 인덱스 쓰기·검색 흐름">
+  <defs>
+    <marker id="arr26" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .t26{fill:#e6e8ee;font:600 12px -apple-system,sans-serif}
+    .s26{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .bx26{rx:7;stroke-width:1.5}
+    .ln26{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#arr26)}
+    .ln26b{stroke:#7aa2ff;stroke-width:1.5;marker-end:url(#arr26)}
+  </style>
+
+  <!-- WRITE PATH -->
+  <text x="10" y="22" class="t26" fill="#8be9c0">쓰기 경로 (upsert)</text>
+
+  <rect x="10" y="30" width="100" height="40" class="bx26" fill="#161922" stroke="#2a2f3d"/>
+  <text x="60" y="48" class="t26" text-anchor="middle">평문</text>
+  <text x="60" y="63" class="s26" text-anchor="middle">"Alice Kim"</text>
+  <line x1="110" y1="50" x2="140" y2="50" class="ln26"/>
+
+  <rect x="140" y="30" width="110" height="40" class="bx26" fill="#16241d" stroke="#8be9c0"/>
+  <text x="195" y="48" class="t26" text-anchor="middle" fill="#8be9c0">normalize</text>
+  <text x="195" y="63" class="s26" text-anchor="middle">"alice kim"</text>
+  <line x1="250" y1="50" x2="280" y2="50" class="ln26"/>
+
+  <rect x="280" y="30" width="120" height="40" class="bx26" fill="#16241d" stroke="#8be9c0"/>
+  <text x="340" y="48" class="t26" text-anchor="middle" fill="#8be9c0">tokenize</text>
+  <text x="340" y="63" class="s26" text-anchor="middle">"ali","lic","ice"...</text>
+  <line x1="400" y1="50" x2="430" y2="50" class="ln26"/>
+
+  <rect x="430" y="30" width="130" height="40" class="bx26" fill="#0d1a20" stroke="#7aa2ff"/>
+  <text x="495" y="48" class="t26" text-anchor="middle" fill="#7aa2ff">HMAC digest</text>
+  <text x="495" y="63" class="s26" text-anchor="middle">"a3f9…","2b7c…"...</text>
+  <line x1="560" y1="50" x2="590" y2="50" class="ln26"/>
+
+  <rect x="590" y="30" width="130" height="40" class="bx26" fill="#161922" stroke="#2a2f3d"/>
+  <text x="655" y="48" class="t26" text-anchor="middle">tokens 저장</text>
+  <text x="655" y="63" class="s26" text-anchor="middle">RegistryRecord.tokens</text>
+
+  <!-- Arrow down to disk -->
+  <line x1="655" y1="70" x2="655" y2="100" class="ln26"/>
+  <rect x="590" y="100" width="130" height="40" class="bx26" fill="#200d1a" stroke="#ff8b8b"/>
+  <text x="655" y="118" class="t26" text-anchor="middle" fill="#ff8b8b">디스크</text>
+  <text x="655" y="133" class="s26" text-anchor="middle">평문 없음 ✓</text>
+
+  <!-- SEARCH PATH -->
+  <text x="10" y="185" class="t26" fill="#7aa2ff">검색 경로 (query)</text>
+
+  <rect x="10" y="193" width="100" height="40" class="bx26" fill="#161922" stroke="#2a2f3d"/>
+  <text x="60" y="211" class="t26" text-anchor="middle">질의어</text>
+  <text x="60" y="226" class="s26" text-anchor="middle">"Alice"</text>
+  <line x1="110" y1="213" x2="140" y2="213" class="ln26b"/>
+
+  <rect x="140" y="193" width="110" height="40" class="bx26" fill="#0d1a20" stroke="#7aa2ff"/>
+  <text x="195" y="211" class="t26" text-anchor="middle" fill="#7aa2ff">normalize</text>
+  <text x="195" y="226" class="s26" text-anchor="middle">"alice"</text>
+  <line x1="250" y1="213" x2="280" y2="213" class="ln26b"/>
+
+  <rect x="280" y="193" width="120" height="40" class="bx26" fill="#0d1a20" stroke="#7aa2ff"/>
+  <text x="340" y="211" class="t26" text-anchor="middle" fill="#7aa2ff">prefix 토큰</text>
+  <text x="340" y="226" class="s26" text-anchor="middle">"a","al","ali","alic","alice"</text>
+  <line x1="400" y1="213" x2="430" y2="213" class="ln26b"/>
+
+  <rect x="430" y="193" width="130" height="40" class="bx26" fill="#0d1a20" stroke="#7aa2ff"/>
+  <text x="495" y="211" class="t26" text-anchor="middle" fill="#7aa2ff">HMAC digest</text>
+  <text x="495" y="226" class="s26" text-anchor="middle">동일 키로 계산</text>
+  <line x1="560" y1="213" x2="590" y2="213" class="ln26b"/>
+
+  <rect x="590" y="193" width="130" height="40" class="bx26" fill="#16241d" stroke="#8be9c0"/>
+  <text x="655" y="211" class="t26" text-anchor="middle" fill="#8be9c0">포스팅 리스트</text>
+  <text x="655" y="226" class="s26" text-anchor="middle">교집합 → 후보</text>
+
+  <!-- Match line -->
+  <line x1="655" y1="100" x2="655" y2="193" class="ln26" stroke="#c792ea"/>
+  <text x="668" y="155" class="s26" fill="#c792ea">다이제스트</text>
+  <text x="668" y="168" class="s26" fill="#c792ea">일치 여부 비교</text>
+
+  <!-- Key note -->
+  <rect x="10" y="280" width="760" height="40" class="bx26" fill="#161922" stroke="#2a2f3d"/>
+  <text x="390" y="297" class="t26" text-anchor="middle">쓸 때와 검색할 때 같은 normalize → tokenize → HMAC 을 적용 = 평문 없이 일치 확인</text>
+  <text x="390" y="312" class="s26" text-anchor="middle">도메인 분리: "idx:" + 필드명 + NUL + token → 본문 다이제스트와 절대 충돌 안 함</text>
+</svg>
+<figcaption>쓰기 시 평문 → 정규화 → 토큰화 → HMAC 다이제스트 저장. 검색 시 질의어에도 같은 과정을 적용해 다이제스트 비교. 평문은 디스크에 남지 않는다.</figcaption>
+</figure>
+
+<h2>토큰화 3가지 — Exact / Prefix(n) / Ngram(n)</h2>
+
+<p>어떤 토큰을 만드느냐에 따라 지원하는 검색 방식이 달라집니다. Quipu-Log의 <code>FieldIndex</code>는 세 가지를 제공합니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/schema.rs — FieldIndex</span><code><span class="kw">pub enum</span> <span class="ty">FieldIndex</span> {
+    None,
+    <span class="hl">Exact,</span>       <span class="com">// 소문자화한 전체 값 하나 → 대소문자 무시 일치 검색</span>
+    <span class="hl">Prefix(usize),</span> <span class="com">// 길이 1..=n 접두사 전부 → n자까지 접두사 검색</span>
+    <span class="hl">Ngram(usize),</span>  <span class="com">// n자 슬라이딩 윈도 → 부분 문자열 검색(n = 3이 일반적)</span>
+}</code></pre>
+
+<p>실제 토큰화 로직을 보면 char 단위로 동작하므로 한글, 일본어 등 멀티바이트 문자도 올바르게 처리됩니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/tokens.rs — value_tokens</span><code><span class="kw">pub</span>(crate) <span class="kw">fn</span> <span class="fn">value_tokens</span>(text: &amp;<span class="ty">str</span>, idx: <span class="ty">FieldIndex</span>) -&gt; <span class="ty">Vec</span>&lt;<span class="ty">String</span>&gt; {
+    <span class="kw">let</span> norm = normalize(text); <span class="com">// to_lowercase()</span>
+    <span class="kw">let</span> chars: <span class="ty">Vec</span>&lt;<span class="ty">char</span>&gt; = norm.chars().collect(); <span class="com">// char 단위 — 멀티바이트 안전</span>
+    <span class="kw">match</span> idx {
+        <span class="ty">FieldIndex</span>::Exact =&gt; { out.insert(norm); }
+        <span class="hl"><span class="ty">FieldIndex</span>::Prefix(n) =&gt; {
+            <span class="kw">for</span> len <span class="kw">in</span> 1..=n.min(chars.len()) { out.insert(chars[..len].iter().collect()); }
+        }</span>
+        <span class="hl"><span class="ty">FieldIndex</span>::Ngram(n) =&gt; {
+            <span class="kw">for</span> w <span class="kw">in</span> chars.windows(n) { out.insert(w.iter().collect()); }
+        }</span>
+        _ =&gt; {}
+    }
+}</code></pre>
+
+<p>예를 들어 "Alice Kim"을 <code>Prefix(3)</code>으로 처리하면 ["a", "al", "ali"] 세 토큰이 생성됩니다. "김철수"를 <code>Ngram(2)</code>로 처리하면 ["김철", "철수"] 두 토큰이 만들어집니다.</p>
+
+<h2>도메인 분리 — 인덱스 토큰이 본문 다이제스트와 섞이지 않게</h2>
+
+<p>인덱스 토큰을 HMAC으로 처리할 때 입력 앞에 <code>"idx:" + 필드명 + NUL</code>을 붙입니다. 이것이 도메인 분리(domain separation)입니다.</p>
+
+<div class="callout why"><span class="lab">왜 이렇게?</span><p>HMAC 입력에 도메인 접두사가 없다면, "ssn" 필드의 값 "123-45-6789"의 HMAC과, "ssn" 필드 인덱스 토큰 "123-45-6789"의 HMAC이 동일해집니다. 공격자가 인덱스 토큰을 보고 필드 본문 다이제스트를 복제하거나, 그 역으로 속임수를 쓸 수 있습니다. 도메인 분리로 두 종류의 다이제스트가 절대 충돌하지 않음을 보장합니다.</p></div>
+
+<pre><span class="filename">crates/quipu-core/src/crypto.rs — index_token_digest_with</span><code><span class="kw">let mut</span> data = <span class="ty">Vec</span>::with_capacity(4 + field.len() + 1 + token.len());
+<span class="hl">data.extend_from_slice(b<span class="str">"idx:"</span>);           // 도메인 분리</span>
+<span class="hl">data.extend_from_slice(field.as_bytes());   // 필드명</span>
+<span class="hl">data.push(0);                               // NUL 구분자</span>
+data.extend_from_slice(token.as_bytes());   // 실제 토큰</code></pre>
+
+<h2>세 가지 인덱스 모드의 특성 비교</h2>
+
+<table>
+  <tr>
+    <th>FieldIndex</th>
+    <th>생성되는 토큰 (예: "carol")</th>
+    <th>지원 검색</th>
+    <th>위양성?</th>
+  </tr>
+  <tr>
+    <td><code>Exact</code></td>
+    <td>"carol" 1개</td>
+    <td>대소문자 무시 일치 (<code>ExactCi</code>)</td>
+    <td>없음</td>
+  </tr>
+  <tr>
+    <td><code>Prefix(3)</code></td>
+    <td>"c", "ca", "car"</td>
+    <td>접두사 검색 (최대 3자)</td>
+    <td>없음 (토큰 = 정확한 접두사)</td>
+  </tr>
+  <tr>
+    <td><code>Ngram(3)</code></td>
+    <td>"car", "aro", "rol"</td>
+    <td>부분 문자열 검색</td>
+    <td>Hmac/Sha256 필드에서 가능</td>
+  </tr>
+</table>
+
+<div class="callout warn"><span class="lab">주의</span><p>Ngram 인덱스를 <code>Sha256</code>이나 <code>Hmac</code> 필드에 쓰면 <strong>위양성(false positive)이 발생할 수 있습니다.</strong> "abcd"와 "cdef"를 3-gram으로 인덱싱하면 "bcd"라는 공통 토큰이 있습니다. "abcdef"를 검색하면 두 값 모두 후보로 나옵니다. 하지만 평문이 없으니 "abcd"에 "abcdef"가 포함되지 않는다는 걸 확인할 수 없습니다. <code>Rsa</code> 필드에 Ngram을 쓰면 개인키로 복호화해서 실제로 포함되는지 확인할 수 있으므로 위양성이 없습니다.</p></div>
+
+<h2>블라인드 인덱스는 어디에 저장되나</h2>
+
+<p>토큰 다이제스트는 <code>RegistryRecord.tokens</code>에 영속화됩니다. 서버 재시작 후에도 검색이 가능한 이유입니다 — 평문이 없어서 재시작 후 토큰을 다시 만들 수 없기 때문에, 쓰기 시점에 저장해두는 것이 필수입니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/registry.rs — RegistryRecord</span><code><span class="kw">pub struct</span> <span class="ty">RegistryRecord</span> {
+    <span class="dim">// ...기타 필드...</span>
+    <span class="hl">pub tokens: <span class="ty">BTreeMap</span>&lt;<span class="ty">String</span>, <span class="ty">FieldTokens</span>&gt;,  <span class="com">// 필드명 → 토큰 다이제스트 목록</span></span>
+}
+
+<span class="kw">pub struct</span> <span class="ty">FieldTokens</span> {
+    pub key_version: <span class="ty">u32</span>,    <span class="com">// 어떤 HMAC 키 버전으로 만들었나</span>
+    pub digests: <span class="ty">Vec</span>&lt;<span class="ty">String</span>&gt;, <span class="com">// 토큰별 HMAC 다이제스트</span>
+}</code></pre>
+
+<p>검색 시에는 인메모리 포스팅 리스트(token_index)를 이용해 후보를 빠르게 좁힙니다. Ngram 검색에서는 질의어의 모든 n-gram 다이제스트가 포스팅 리스트의 교집합에 있는 entity_id가 후보입니다. 포스팅 리스트는 서버 시작 시 레지스트리 레코드를 스캔해서 재구축됩니다.</p>
+
+<h2>키 없이는 오프라인 공격이 불가능하다</h2>
+
+<p>필드 보호가 <code>Hmac</code>이나 <code>Rsa</code>인 경우, 인덱스 토큰도 HMAC 키로 다이제스트를 만듭니다. 즉 공격자가 디스크에 저장된 토큰 다이제스트를 가져가도, HMAC 키 없이는 어떤 토큰이 이 다이제스트를 만들었는지 역산할 수 없습니다.</p>
+
+<div class="callout key"><span class="lab">보안 포인트</span><p>블라인드 인덱스가 추가하는 정보 누출은 구조적입니다 — "이 두 레코드는 이름의 앞 세 글자가 같다"는 사실이 드러납니다. 그 토큰 자체가 무엇인지는 키 없이 알 수 없습니다. 이 구조적 누출이 감수할 만한지는 설계 단계에서 결정해야 합니다 — FieldIndex 선언이 "이 필드는 검색성을 위해 이만큼의 구조를 노출한다"는 명시적 계약입니다.</p></div>
+
+<h2>정리</h2>
+<ul>
+  <li>블라인드 인덱스는 <strong>쓰기 시점에</strong> 평문 → 토큰 → 다이제스트를 만들어 저장. 평문이 디스크에 남지 않음.</li>
+  <li>검색 시 질의어에도 같은 변환을 적용해 다이제스트 비교 → 평문 없이 일치 확인 가능.</li>
+  <li><strong>Exact</strong>는 대소문자 무시 일치, <strong>Prefix(n)</strong>는 접두사 검색, <strong>Ngram(n)</strong>는 부분 문자열 검색.</li>
+  <li>Hmac/Sha256 + Ngram은 <strong>위양성 가능</strong> — Rsa + Ngram이면 복호화로 확정 가능.</li>
+  <li>인덱스 토큰도 도메인 분리 HMAC으로 보호 — 키 없이 오프라인 공격 불가.</li>
+</ul>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① "alice"를 <code>Prefix(3)</code>으로 인덱싱하면 어떤 토큰이 생기나요? "Ali"를 검색하면 몇 개의 토큰 다이제스트를 조회하게 되나요?<br>② Ngram(3) 인덱스에서 위양성이 왜 발생하는지, 구체적인 예로 설명해 보세요.<br>③ 블라인드 인덱스를 선언할 때 "이 필드에 이런 인덱스를 붙이면 무엇을 노출하는 것"인지 생각해 보세요.</p></div>
+
+</article>

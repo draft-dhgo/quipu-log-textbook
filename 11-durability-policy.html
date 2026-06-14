@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>11 · Durability: fsync policy and group commit — The Quipu-Log Book</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ Contents</button><b>The Quipu-Log Book</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn active" href="11-durability-policy.html">EN</a><a class="langbtn" href="ko/11-durability-policy.html">한국어</a></div>
+<a class="home" href="index.html">The Quipu-Log Book</a>
+<div class="sub">Storage engines and tamper-evident audit logs, built on nothing but the filesystem — explained from the ground up</div>
+<div class="part">Part 1 · Starting point: files, not a DB</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>What an audit log is, and why “files, no DB”</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>The map, and the DB↔filesystem correspondence</a>
+<div class="part">Part 2 · Filesystem basics</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>Filesystem basics: files, directories, inodes, descriptors</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>Reading &amp; writing, and the atomicity of rename</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>When data really hits disk: the page cache and fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>The std::fs toolbox: handling files in Rust</a>
+<div class="part">Part 3 · The heart of the engine: the append-only log</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>Append-only log = the WAL is the database</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>Segment files and rollover</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>Record framing: length, CRC32, magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>Serialization: turning structs into bytes</a>
+<div class="part">Part 4 · Re-creating what a DB gave you for free, on files</div>
+<a class="lnk active" href="11-durability-policy.html"><span class="n">11</span>Durability: fsync policy and group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>Atomicity and crash recovery: torn writes and tail detection</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>Concurrency I: single-writer and the file lock</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>Concurrency II: read snapshots and MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>Indexing: in-memory index + on-disk tokens</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>Query execution: segment scans and cursor pagination</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>Deletion and retention: segment unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>Store layout and format versioning</a>
+<div class="part">Part 5 · Integrity: making tampering evident (Security I)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>Hash functions and SHA-256: a digital fingerprint</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>The Merkle history tree: committing the log to 32 bytes</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>Inclusion proofs and consistency proofs</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>Checkpoints and external anchoring</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>Tamper-evident vs tamper-proof, and the threat model</a>
+<div class="part">Part 6 · Confidentiality: searching while keeping secrets (Security II)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>Field protection in four levels: plaintext/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>Symmetric, asymmetric, hybrid encryption and AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>Blind indexes: searching without plaintext</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>Write-only deployment: a server without the private key</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>Key management: keyring, versioning, rotation vs re-keying</a>
+<div class="part">Part 7 · The write &amp; read paths</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>The async pipeline: non-blocking emit and backpressure</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>Reliability: retries, backoff, DLQ, idempotency</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>The tower middleware: auto-recording HTTP requests</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>Permissions (RBAC), filters, and meta-audit</a>
+<div class="part">Part 8 · Distribution, operations, scaling</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>Single point of failure and availability: the client spool</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>Horizontal scaling: sharding, consistent hashing, read replicas</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>Server, client, MCP, and observability</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">Part 4 · Re-creating what a DB gave you for free, on files</span><h1><span class="chno">11</span> · Durability: fsync policy and group commit</h1></div><article>
+
+<p class="lead">If you've used a database, "commit once and it lives forever" probably felt like a given. But that promise doesn't appear by magic. Inside a DB, someone is calling <code>fsync</code> at just the right moments — and around the question of <em>when</em> to fsync, a constant tug-of-war plays out between durability and throughput. This chapter looks at how Quipu-Log surfaces that tug-of-war as a first-class policy at the file level.</p>
+
+<div class="callout"><span class="lab">In one sentence</span><p><code>SyncPolicy</code> is a durability policy expressed in code — it answers "how often do we call fsync?" The safer you go, the slower things get; the faster you go, the wider the window of data you could lose on a power cut.</p></div>
+
+<h2>First, what you already know: commit durability in a DB</h2>
+
+<p>When you hit <code>COMMIT</code> in a relational DB, the engine flushes the WAL record to disk (fsync) and only then returns "success." That's the D in ACID — Durability. The catch is that calling fsync on every transaction is expensive. A single fsync on a spinning disk typically costs hundreds of microseconds to a few milliseconds; even an SSD usually takes tens of microseconds.</p>
+
+<p>That's why high-performance databases have long relied on <strong>group commit</strong>. When several transactions request a commit at nearly the same time, the engine batches them and issues a single fsync for the whole group. "Write N records in one shot; hand success back to all N callers." Throughput climbs sharply, but anything committed after the last fsync is gone if the power dies.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ Filesystem</span><p><strong>In a DB</strong>, commit durability and group commit are hidden inside the engine. Developers tune them through parameters like <code>innodb_flush_log_at_trx_commit</code> or PostgreSQL's <code>synchronous_commit</code>. <strong>In Quipu-Log</strong>, the same decision is exposed directly in code as the <code>SyncPolicy</code> enum — a deliberate design choice to keep nothing hidden.</p></div>
+
+<h2>Two buffers: BufWriter and the OS page cache</h2>
+
+<p>To make sense of the fsync policy you first need to see that "a write" is really two separate steps. <span class="pill">Ch. 5 covers page cache and fsync in depth</span>, but a quick recap is useful here.</p>
+
+<figure>
+<svg viewBox="0 0 700 220" role="img" aria-label="Two stages of a write: BufWriter, OS page cache, and disk">
+  <defs>
+    <marker id="arr11" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+    <marker id="arr11b" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#8be9c0"/>
+    </marker>
+    <marker id="arr11c" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#ffd479"/>
+    </marker>
+  </defs>
+  <!-- Box 1: BufWriter -->
+  <rect x="30" y="60" width="160" height="80" rx="8" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="110" y="92" text-anchor="middle" fill="#e6e8ee" font-size="13" font-family="-apple-system,sans-serif" font-weight="600">BufWriter</text>
+  <text x="110" y="112" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">256 KB user-space buffer</text>
+  <text x="110" y="128" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">inside the Rust process</text>
+  <!-- Arrow flush() -->
+  <line x1="190" y1="100" x2="258" y2="100" stroke="#8be9c0" stroke-width="1.5" marker-end="url(#arr11b)"/>
+  <text x="224" y="92" text-anchor="middle" fill="#8be9c0" font-size="11" font-family="-apple-system,sans-serif">flush()</text>
+  <!-- Box 2: OS page cache -->
+  <rect x="260" y="60" width="160" height="80" rx="8" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="340" y="92" text-anchor="middle" fill="#e6e8ee" font-size="13" font-family="-apple-system,sans-serif" font-weight="600">OS page cache</text>
+  <text x="340" y="112" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">kernel buffer (RAM)</text>
+  <text x="340" y="128" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">lost on power cut</text>
+  <!-- Arrow fsync() -->
+  <line x1="420" y1="100" x2="488" y2="100" stroke="#ffd479" stroke-width="1.5" marker-end="url(#arr11c)"/>
+  <text x="454" y="92" text-anchor="middle" fill="#ffd479" font-size="11" font-family="-apple-system,sans-serif">fsync()</text>
+  <!-- Box 3: Disk -->
+  <rect x="490" y="60" width="160" height="80" rx="8" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="570" y="92" text-anchor="middle" fill="#e6e8ee" font-size="13" font-family="-apple-system,sans-serif" font-weight="600">Disk (durable)</text>
+  <text x="570" y="112" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">NVMe / SSD / HDD</text>
+  <text x="570" y="128" text-anchor="middle" fill="#8be9c0" font-size="11" font-family="-apple-system,sans-serif">survives a power cut</text>
+  <!-- Policy label -->
+  <text x="350" y="190" text-anchor="middle" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">OsManaged: flush only. EveryN: flush + fsync every N appends. Always: fsync every time.</text>
+</svg>
+<figcaption>A write has two stages. <code>flush()</code> hands the user-space buffer off to the OS; <code>fsync()</code> forces the OS to commit it to disk. A power cut erases anything still in the OS cache.</figcaption>
+</figure>
+
+<p>Quipu-Log writes segment files through a <code>BufWriter</code>. It holds a 256 KB user-space buffer and passes data to the OS page cache when the buffer fills or when you call <code>flush()</code> explicitly. One more step — calling <code>fsync</code> — is needed to guarantee the data has actually reached the disk.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs</span><code><span class="kw">pub fn</span> <span class="fn">flush</span>(&amp;<span class="kw">mut</span> self) -&gt; <span class="ty">Result</span>&lt;()&gt; {
+    <span class="hl">self.writer.flush()?;        <span class="com">// user space → OS page cache</span></span>
+    <span class="ty">Ok</span>(())
+}
+
+<span class="kw">pub fn</span> <span class="fn">sync</span>(&amp;<span class="kw">mut</span> self) -&gt; <span class="ty">Result</span>&lt;()&gt; {
+    self.writer.flush()?;
+    <span class="hl">self.writer.get_ref().sync_data()?; <span class="com">// OS cache → disk (fdatasync)</span></span>
+    <span class="ty">Ok</span>(())
+}</code></pre>
+
+<h2>Three policies: SyncPolicy</h2>
+
+<p>The decision of <em>when</em> to invoke each of those two steps is what <code>SyncPolicy</code> encodes.</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs</span><code><span class="kw">pub enum</span> <span class="ty">SyncPolicy</span> {
+    <span class="hl">Always,</span>       <span class="com">// fsync after every append. Safest, slowest.</span>
+    <span class="hl">EveryN(u32),</span>  <span class="com">// fsync after every N appends; otherwise only flush.</span>
+    <span class="hl">OsManaged,</span>   <span class="com">// Never fsync explicitly; rely on the OS to write back. Fastest.</span>
+}</code></pre>
+
+<p>Let's take them one at a time.</p>
+
+<h3>Always — fsync on every append</h3>
+
+<p>Every call to append is followed immediately by <code>sync()</code>. Even if the power dies a moment later, everything up through the most recent append is guaranteed to have made it to disk. The exposure window is essentially zero. The trade-off: every append involves a round-trip to disk, so throughput tops out in the hundreds-to-thousands of events per second range.</p>
+
+<h3>EveryN(n) — fsync every N appends (default: 64)</h3>
+
+<p>This is group commit. For N appends the data stays only in the OS cache (just <code>flush</code>); on the Nth append, <code>sync()</code> drives everything to disk at once. A power cut can lose up to N − 1 appends since the last fsync. But fsync calls drop by a factor of N, so throughput rises by nearly the same factor.</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs — apply_sync_policy()</span><code><span class="kw">match</span> self.cfg.sync_policy {
+    <span class="ty">SyncPolicy</span>::Always =&gt; self.sync_all()?,
+    <span class="ty">SyncPolicy</span>::EveryN(n) =&gt; {
+        self.appends_since_sync += <span class="num">1</span>;
+        <span class="kw">if</span> self.appends_since_sync &gt;= n {
+            <span class="hl">self.sync_all()?;</span>   <span class="com">// Nth append: fsync</span>
+        } <span class="kw">else</span> {
+            <span class="dim">self.logs.flush()?;</span>       <span class="com">// otherwise: flush only</span>
+            <span class="dim">self.relations.flush()?;</span>
+        }
+    }
+    <span class="ty">SyncPolicy</span>::OsManaged =&gt; {
+        self.logs.flush()?;
+        self.relations.flush()?;
+    }
+}</code></pre>
+
+<p><code>sync_all()</code> follows a specific fsync order: the registry first, then the log tables. The code comment explains why — you can't have a situation where a log record is on disk but the registry version it references isn't.</p>
+
+<h3>OsManaged — no explicit fsync</h3>
+
+<p>Only <code>flush()</code> is called, handing data to the OS cache; the OS decides when to write it to disk. A power cut loses everything still sitting in that cache. In exchange, there are no disk round-trips, so this is the fastest option. It's appropriate for development and testing environments where losing audit data is acceptable, or for servers with battery-backed UPS units.</p>
+
+<h2>The performance numbers: how much difference does the policy make?</h2>
+
+<p>These figures come directly from the README benchmark (Apple M4, NVMe SSD, rustc 1.96, release build).</p>
+
+<table>
+  <tr>
+    <th>SyncPolicy</th>
+    <th>Durable throughput</th>
+    <th>Exposure window</th>
+  </tr>
+  <tr>
+    <td><code>OsManaged</code></td>
+    <td>~56,000 events/s</td>
+    <td>Unbounded (until OS restart)</td>
+  </tr>
+  <tr>
+    <td><code>EveryN(64)</code> (default)</td>
+    <td>~4,800 events/s</td>
+    <td>Up to 63 events</td>
+  </tr>
+  <tr>
+    <td><code>Always</code></td>
+    <td>(~hundreds–thousands events/s)</td>
+    <td>0 (guaranteed through last append)</td>
+  </tr>
+</table>
+
+<p>The reason <code>EveryN(64)</code> is the default becomes clear. It's 12× slower than <code>OsManaged</code>, but the exposure window shrinks to at most 63 events — in practice, about the best balance you can strike for an audit log. <code>Always</code> is the right choice for environments — finance, healthcare — where not a single event can be lost.</p>
+
+<div class="callout analogy"><span class="lab">Analogy</span><p>Think of a food-order notepad. <code>Always</code> locks each order in the safe the moment it's written. <code>EveryN(64)</code> collects 64 orders and then locks them all at once. <code>OsManaged</code> leaves the notepad on the desk and only locks it when you leave for the day. If there's a fire (power cut), only what's in the safe survives.</p></div>
+
+<div class="callout warn"><span class="lab">Caution</span><p><code>OsManaged</code> means "fast, but no durability guarantee." In a VM or container environment where the host is frequently interrupted, this policy is not safe. If you need high throughput without fsync overhead, a more honest choice is to use <code>Always</code> behind a battery-backed RAID controller instead.</p></div>
+
+<h2>Recap</h2>
+
+<ul>
+  <li>The same durability–throughput trade-off as DB commit durability and group commit surfaces at the file level under the name <code>SyncPolicy</code>.</li>
+  <li><code>Always</code> = fsync on every append (safest, slowest); <code>EveryN(n)</code> = group commit (default, balanced); <code>OsManaged</code> = no fsync (fastest, no durability guarantee).</li>
+  <li>The write path is BufWriter (user buffer) → <code>flush()</code> (OS cache) → <code>fsync()</code> (disk). The policy controls how often that last step fires.</li>
+  <li><code>sync_all()</code> flushes registry before logs, preventing a crash from leaving a log record whose registry entry doesn't exist yet.</li>
+</ul>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① With <code>EveryN(64)</code>, how many events can you lose at most in a power cut? Why is that an acceptable trade-off for an audit log?<br>② Describe the structural similarity between a DB's group commit and <code>EveryN(n)</code> in one sentence.<br>③ Why does <code>sync_all()</code> fsync the registry first and the logs second?</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="10-serialization.html"><span class="dir">← Prev</span><span class="t">10 · Serialization: turning structs into bytes</span></a><a class="next" href="12-crash-recovery.html"><span class="dir">Next →</span><span class="t">12 · Atomicity and crash recovery: torn writes and tail detection</span></a></div>
+</div>
+</main>
+</div>
+<script src="assets/textbook.js"></script>
+</body>
+</html>

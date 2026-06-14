@@ -1,0 +1,107 @@
+<article>
+
+<p class="lead">서비스 코드를 고치지 않고 모든 HTTP 요청을 자동으로 감사할 수 있다면 어떨까요? <code>AuditLayer</code>가 바로 그 역할입니다. Express의 미들웨어, Spring의 인터셉터처럼 — 요청이 실제 핸들러에 도달하기 전후를 감싸 자동으로 기록합니다.</p>
+
+<div class="callout analogy"><span class="lab">비유</span><p>Express의 <code>app.use(auditMiddleware)</code>, Spring의 <code>HandlerInterceptor</code>와 같은 자리입니다. 비즈니스 로직에는 손 대지 않고, 바깥 껍질에서 감사가 일어납니다.</p></div>
+
+<h2>tower Layer = 데코레이터 패턴</h2>
+
+<p>Rust의 <code>tower</code> 라이브러리는 미들웨어를 <strong>Layer</strong>라는 개념으로 추상화합니다. Layer는 내부 서비스(inner service)를 받아 그것을 감싼 새 서비스를 반환합니다. 여러 Layer를 쌓으면 양파처럼 감쌉니다.</p>
+
+<figure>
+<svg viewBox="0 0 500 240" role="img" aria-label="tower Layer 감싸기: HTTP 요청이 AuditLayer를 통해 inner service에 도달하고, 응답이 돌아올 때 감사 이벤트가 emit됨">
+  <defs>
+    <marker id="arr3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .l3{fill:#e6e8ee;font:600 12px -apple-system,sans-serif}
+    .s3{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .a3{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#arr3)}
+    .a3b{stroke:#7aa2ff;stroke-width:1.5;stroke-dasharray:4,3;marker-end:url(#arr3)}
+  </style>
+
+  <!-- outer AuditLayer shell -->
+  <rect x="20" y="20" width="460" height="200" rx="10" fill="#161922" stroke="#2a2f3d" stroke-width="2"/>
+  <text x="40" y="44" class="l3" fill="#ffd479">AuditLayer (tower Layer)</text>
+
+  <!-- inner service box -->
+  <rect x="180" y="80" width="140" height="80" rx="8" fill="#16241d" stroke="#2c4a3a" stroke-width="1.5"/>
+  <text x="250" y="116" class="l3" text-anchor="middle" fill="#8be9c0">inner service</text>
+  <text x="250" y="134" class="s3" text-anchor="middle">(axum router)</text>
+
+  <!-- pre-filter label -->
+  <text x="60" y="110" class="s3" fill="#c792ea">① pre-filter</text>
+  <text x="60" y="125" class="s3" fill="#c792ea">② 요청 캡처</text>
+
+  <!-- post labels -->
+  <text x="340" y="110" class="s3" fill="#7aa2ff">③ 응답 캡처</text>
+  <text x="340" y="125" class="s3" fill="#7aa2ff">④ emit(event)</text>
+
+  <!-- HTTP request arrow in -->
+  <line x1="20" y1="120" x2="178" y2="120" class="a3"/>
+  <text x="50" y="112" class="s3">HTTP 요청</text>
+
+  <!-- inner service arrow out -->
+  <line x1="320" y1="120" x2="460" y2="120" class="a3"/>
+  <text x="355" y="112" class="s3">HTTP 응답</text>
+
+  <!-- emit arrow down -->
+  <line x1="250" y1="200" x2="250" y2="218" class="a3b"/>
+  <text x="165" y="215" class="s3" fill="#7aa2ff">AuditHandle.emit_unchecked(event)</text>
+</svg>
+<figcaption>AuditLayer가 inner service를 감싸고, 요청/응답 흐름의 앞뒤에서 감사 이벤트를 만들어 파이프라인에 emit한다.</figcaption>
+</figure>
+
+<h2>EndpointRule: 어떤 엔드포인트를 감사할까</h2>
+
+<p>모든 요청을 감사할 수도 있지만, 보통은 <code>EndpointRule</code>로 범위를 좁힙니다. 경로 접두사와 HTTP 메서드로 매칭하고, 요청/응답 바디를 캡처할지도 지정합니다.</p>
+
+<pre><span class="filename">examples/axum-demo/src/main.rs</span><code><span class="kw">let</span> audit_layer = <span class="ty">AuditLayer</span>::<span class="fn">new</span>(handle.clone())
+    .rules(vec![
+        <span class="hl">EndpointRule::prefix("/api/")</span>
+<span class="hl">            .method(Method::PUT)</span>
+<span class="hl">            .capture_request()    // 요청 바디 캡처</span>
+<span class="hl">            .capture_response()   // 응답 바디 캡처</span>
+    ])
+    .filters(FilterSet::new().pre(|req| {
+        <span class="com">// 헬스체크는 감사 불필요 → Skip</span>
+        <span class="kw">if</span> req.uri.path() == "/api/health" { FilterDecision::Skip }
+        <span class="kw">else</span> { FilterDecision::Audit }
+    }))
+    .target_extractor(|req, _res, _req_body, _res_body| {
+        <span class="dim">// URL 경로에서 타깃 엔티티를 추출</span>
+        req.uri.path().strip_prefix("/api/docs/")
+            .map(|id| vec![TargetSpec::new("default_target", EntityInput::new(id)...)])
+            .unwrap_or_default()
+    });</code></pre>
+
+<p>레이어를 axum 라우터에 붙이는 건 단 한 줄입니다. 기존 핸들러 코드에는 변경이 없습니다.</p>
+
+<pre><span class="filename">examples/axum-demo/src/main.rs</span><code><span class="kw">let</span> app = Router::new()
+    .route("/api/docs/{id}", put(my_handler))
+    <span class="hl">.layer(audit_layer)</span>  <span class="com">// 이 한 줄로 /api/** 자동 감사</span>
+    .route("/audit/logs", get(query_logs))
+    .with_state(handle);</code></pre>
+
+<h2>내부 흐름: call()에서 무슨 일이</h2>
+
+<p>요청이 들어오면 <code>AuditService::call</code>은 다음 순서로 동작합니다.</p>
+
+<ol>
+  <li><strong>EndpointRule 매칭</strong> — 이 요청이 감사 대상인지 확인합니다.</li>
+  <li><strong>pre-filter</strong> — 면제 조건 검사(헬스체크, 정적 파일 등). <code>Skip</code>이면 그냥 프록시만 합니다.</li>
+  <li><strong>요청 바디 캡처</strong> — <code>capture_request_body</code>가 설정된 경우 바디를 읽고, inner service에는 동일 바이트를 재조립해서 넘깁니다.</li>
+  <li><strong>inner service 호출</strong> — 실제 핸들러가 실행됩니다.</li>
+  <li><strong>응답 바디 캡처</strong> — <code>capture_response_body</code>가 설정된 경우 응답 바이트를 읽습니다.</li>
+  <li><strong>target_extractor 실행</strong> — 요청·응답 정보로 타깃 엔티티를 파생합니다.</li>
+  <li><strong>post-filter</strong> — 응답을 보고 최종 면제 여부 결정(예: 304는 건너뜀).</li>
+  <li><strong><code>emit_unchecked</code></strong> — 이벤트를 파이프라인에 넣습니다. 논블로킹이므로 응답 경로를 막지 않습니다.</li>
+</ol>
+
+<div class="callout warn"><span class="lab">주의</span><p>바디 캡처를 켜면 내용 전체를 메모리에 올립니다. <code>max_capture_bytes</code>(기본 1 MiB)를 초과하는 바디는 캡처하지 않고 크기 메모만 남깁니다. 큰 파일 업로드 엔드포인트는 캡처를 끄거나 한계를 낮추세요.</p></div>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① tower Layer가 "데코레이터 패턴"이라는 말의 의미를, 양파 비유로 설명해 보세요.<br>② pre-filter와 post-filter의 차이는 무엇인가요? 각각 어떤 경우에 쓸까요?<br>③ <code>.layer(audit_layer)</code> 한 줄이 내부적으로 어떤 타입 변환을 만들어내는지 생각해 보세요.</p></div>
+
+</article>

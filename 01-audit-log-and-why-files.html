@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>01 · What an audit log is, and why “files, no DB” — The Quipu-Log Book</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ Contents</button><b>The Quipu-Log Book</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn active" href="01-audit-log-and-why-files.html">EN</a><a class="langbtn" href="ko/01-audit-log-and-why-files.html">한국어</a></div>
+<a class="home" href="index.html">The Quipu-Log Book</a>
+<div class="sub">Storage engines and tamper-evident audit logs, built on nothing but the filesystem — explained from the ground up</div>
+<div class="part">Part 1 · Starting point: files, not a DB</div>
+<a class="lnk active" href="01-audit-log-and-why-files.html"><span class="n">01</span>What an audit log is, and why “files, no DB”</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>The map, and the DB↔filesystem correspondence</a>
+<div class="part">Part 2 · Filesystem basics</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>Filesystem basics: files, directories, inodes, descriptors</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>Reading &amp; writing, and the atomicity of rename</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>When data really hits disk: the page cache and fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>The std::fs toolbox: handling files in Rust</a>
+<div class="part">Part 3 · The heart of the engine: the append-only log</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>Append-only log = the WAL is the database</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>Segment files and rollover</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>Record framing: length, CRC32, magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>Serialization: turning structs into bytes</a>
+<div class="part">Part 4 · Re-creating what a DB gave you for free, on files</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>Durability: fsync policy and group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>Atomicity and crash recovery: torn writes and tail detection</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>Concurrency I: single-writer and the file lock</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>Concurrency II: read snapshots and MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>Indexing: in-memory index + on-disk tokens</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>Query execution: segment scans and cursor pagination</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>Deletion and retention: segment unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>Store layout and format versioning</a>
+<div class="part">Part 5 · Integrity: making tampering evident (Security I)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>Hash functions and SHA-256: a digital fingerprint</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>The Merkle history tree: committing the log to 32 bytes</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>Inclusion proofs and consistency proofs</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>Checkpoints and external anchoring</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>Tamper-evident vs tamper-proof, and the threat model</a>
+<div class="part">Part 6 · Confidentiality: searching while keeping secrets (Security II)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>Field protection in four levels: plaintext/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>Symmetric, asymmetric, hybrid encryption and AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>Blind indexes: searching without plaintext</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>Write-only deployment: a server without the private key</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>Key management: keyring, versioning, rotation vs re-keying</a>
+<div class="part">Part 7 · The write &amp; read paths</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>The async pipeline: non-blocking emit and backpressure</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>Reliability: retries, backoff, DLQ, idempotency</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>The tower middleware: auto-recording HTTP requests</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>Permissions (RBAC), filters, and meta-audit</a>
+<div class="part">Part 8 · Distribution, operations, scaling</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>Single point of failure and availability: the client spool</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>Horizontal scaling: sharding, consistent hashing, read replicas</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>Server, client, MCP, and observability</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">Part 1 · Starting point: files, not a DB</span><h1><span class="chno">01</span> · What an audit log is, and why “files, no DB”</h1></div><article>
+
+<p class="lead">There are many ways to record what happens inside an application — syslog, the ELK stack, a relational database. But Quipu-Log keeps its audit log in files embedded inside the process, with no external database or log stack. This chapter explores <em>why files</em> from three angles: compliance, security, and operations.</p>
+
+<div class="callout"><span class="lab">In one sentence</span><p>An audit log must be able to <em>prove — after the fact — who did what, and when.</em> The simplest implementation that satisfies that requirement is a <strong>process-embedded, append-only file with no external dependencies.</strong></p></div>
+
+<h2>Audit logs vs. application logs</h2>
+
+<p>Let's separate the terms first. What we normally call an <strong>application log</strong> is for debugging. "Query took 12 ms," "connection pool at 70%" — records like these can be thrown away once the problem is solved. A few weeks is plenty, and it doesn't matter much if timestamps shift slightly over time.</p>
+
+<p>An <strong>audit log</strong> has a different purpose entirely. "2026-06-14 09:42 UTC, alice viewed patient-record #4821." That fact must:</p>
+
+<ul>
+  <li><em>Still be there, unchanged,</em> when auditors come six months later.</li>
+  <li>Make it <em>visible if someone altered it.</em></li>
+  <li>Serve as a <em>rebuttal</em> if alice claims "I never looked at that."</li>
+</ul>
+
+<p>These three properties have formal names: <strong>tamper-evidence</strong> and <strong>non-repudiation</strong>. They are the defining requirements of an audit log — requirements that ordinary application logs don't carry.</p>
+
+<figure>
+<svg viewBox="0 0 680 220" role="img" aria-label="Comparing the purpose of application logs and audit logs">
+  <defs><marker id="arr1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/></marker></defs>
+  <style>
+    .lbl{fill:#e6e8ee;font:600 14px -apple-system,sans-serif}
+    .sub{fill:#9aa3b2;font:12px -apple-system,sans-serif}
+    .box{fill:#161922;stroke:#2a2f3d;stroke-width:1.5;rx:8}
+    .tag{fill:#7aa2ff;font:700 11px -apple-system,sans-serif}
+    .tag2{fill:#8be9c0;font:700 11px -apple-system,sans-serif}
+  </style>
+
+  <!-- Application log -->
+  <rect x="20" y="30" width="290" height="160" rx="8" fill="#161922" stroke="#2a2f3d" stroke-width="1.5"/>
+  <text x="36" y="56" class="lbl">Application log</text>
+  <text x="36" y="76" class="sub">Purpose: debugging / operational observability</text>
+  <text x="36" y="98" class="sub">Retention: weeks to months</text>
+  <text x="36" y="118" class="sub">Tamper-evidence: not required</text>
+  <text x="36" y="138" class="sub">Primary audience: developers · SREs</text>
+  <text x="36" y="162" class="tag">e.g. "query 12ms", "connection dropped"</text>
+
+  <!-- Audit log -->
+  <rect x="370" y="30" width="290" height="160" rx="8" fill="#16241d" stroke="#2c4a3a" stroke-width="1.5"/>
+  <text x="386" y="56" class="lbl" fill="#8be9c0">Audit log</text>
+  <text x="386" y="76" class="sub">Purpose: compliance / non-repudiation</text>
+  <text x="386" y="98" class="sub">Retention: years (legally mandated)</text>
+  <text x="386" y="118" class="sub" fill="#ffd479">Tamper-evidence: mandatory</text>
+  <text x="386" y="138" class="sub">Primary audience: auditors · regulators</text>
+  <text x="386" y="162" class="tag2">e.g. "alice, #4821 viewed, 09:42 UTC"</text>
+</svg>
+<figcaption>The two types of log have different purposes from the ground up. Tamper-evidence and long-term retention are design requirements for audit logs, not afterthoughts.</figcaption>
+</figure>
+
+<h2>What regulations demand: HIPAA · SOX · GDPR</h2>
+
+<p>Audit logs are often a legal obligation, not just a nice-to-have.</p>
+
+<ul>
+  <li><strong>HIPAA</strong> (U.S. health data protection) — who accessed patient data must be retained for six years, and record integrity must be maintained.</li>
+  <li><strong>SOX</strong> (corporate accounting transparency) — the change history of financial systems must be retained for seven years.</li>
+  <li><strong>GDPR</strong> (European data protection) — records of personal-data processing activities and access logs must be kept.</li>
+</ul>
+
+<p>The common thread across all of these: you must be able to prove that records <em>haven't changed since they were written.</em> Not just "the record exists," but "the record is exactly as it was when first written."</p>
+
+<div class="callout why"><span class="lab">Why this design?</span><p>Quipu-Log's tamper-evidence design starts directly from this requirement. The Merkle tree covered in Part 5 (Ch. 19–23) makes records <em>"obviously wrong if edited"</em> — not by preventing edits, but by ensuring that any edit leaves a visible trace. That is precisely what regulations ask for.</p></div>
+
+<h2>Why not a database or ELK?</h2>
+
+<p>Storing audit logs in a database seems intuitive — it gives you transactions, easy queries, and access control. But there are a few problems.</p>
+
+<table>
+  <tr><th>Approach</th><th>Strengths</th><th>Problems for audit logs</th></tr>
+  <tr><td>Relational DB (same instance)</td><td>Transactions, SQL queries</td><td>If it's the <em>same DB, a DBA can DELETE</em> — an insider can erase records. When the service goes down, audit recording stops too.</td></tr>
+  <tr><td>External DB (separate instance)</td><td>Separate trust boundary</td><td>Operational overhead. You have to manage another DB just for audit logs. Network failure means an audit gap.</td></tr>
+  <tr><td>ELK / log stack</td><td>Search and visualization</td><td>Elasticsearch <em>overwrites</em> indexes. Tamper-evidence is fundamentally hard. Cost and operational burden are also high.</td></tr>
+  <tr><td><strong>Quipu-Log (embedded files)</strong></td><td>No dependencies, simple, embedded</td><td>Works wherever the OS filesystem does. Runs inside the service — network failure is irrelevant.</td></tr>
+</table>
+
+<p>The key concept is the <strong>trust boundary</strong>. If the audit log lives in the same process or database as the service, the people operating that service (insiders) can delete records. Quipu-Log tackles this in two ways. First, it writes directly to files in append-only mode (the code has no overwrite path). Second, a Merkle tree and external anchoring detect tampering at the disk level.</p>
+
+<div class="callout analogy"><span class="lab">Analogy</span><p>Think of the room in a bank branch where tellers handle cash. Every transaction in that room goes into a <em>separate locked vault</em> — a vault where neither the teller nor the branch manager can erase a record once it's written. The idea is that audit logs should be "inside the same system, but impossible to alter."</p></div>
+
+<h2>Embedded mode: running inside the process</h2>
+
+<p>Quipu-Log runs <strong>embedded</strong>. Rather than a separate daemon or service, it executes inside your Rust service's own process. Just <code>cargo add quipu-core</code> and call <code>AuditStore::open()</code> — that's all it takes.</p>
+
+<pre><span class="filename">README.md — Quick start</span><code><span class="kw">let</span> root = std::path::PathBuf::from(<span class="str">"/var/lib/myapp/audit"</span>);
+<span class="kw">let</span> cfg = <span class="ty">StoreConfig</span>::new(&amp;root)
+    .retention(<span class="ty">RetentionPolicy</span>::days(<span class="num">90</span>))
+    .sync_policy(<span class="ty">SyncPolicy</span>::EveryN(<span class="num">32</span>));
+<span class="hl"><span class="kw">let mut</span> store = <span class="ty">AuditStore</span>::open(cfg)?;</span>
+<span class="com">// That's it — no daemon, no separate DB.</span></code></pre>
+
+<p>Of course, if you need a central audit store shared by multiple services, there's also a <strong>server mode</strong> where <code>quipu-server</code> runs as a separate process. When to choose embedded vs. server mode is covered in detail in <span class="pill">Ch. 2</span>.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ Filesystem</span><p><strong>In a DB</strong>, audit logs are often stored as INSERT rows in a table — and the same DB administrator can DELETE them, which is the weakness. <strong>In Quipu-Log</strong>, the storage engine itself is an append-only file, and there is no overwrite path at the code level. The design isn't "we prevent it" — it's "if you change it, the change shows."</p></div>
+
+<h2>What gets recorded: the event structure</h2>
+
+<p>A Quipu-Log audit event captures what <strong>actor</strong> did what action (<code>method</code>, <code>url</code>) to what <strong>target</strong>. The actor is "who" — a user, a service account. The target is "what" — a document, a patient record, an account. This structure lets you query the same records in two directions: "who did what to this document?" and "what did this user touch?"</p>
+
+<div class="callout warn"><span class="lab">Caution</span><p>Quipu-Log is tamper-<em>evidence</em>, not tamper-<em>prevention</em>. An attacker with physical access to the disk can edit the file. Quipu-Log <em>detects</em> that tampering. SECURITY.md states this scope explicitly: "an attacker with write access to the store changed a record" — if <code>verify_integrity</code> doesn't catch that, it's a vulnerability, but the inability to <em>prevent</em> it is by design.</p></div>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① Name two decisive differences between an audit log and an application log.<br>② What is the trust-boundary problem with storing audit logs in the same database as your service?<br>③ How do tamper-evidence and tamper-prevention differ? Which one is Quipu-Log?</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="index.html"><span class="dir">← Contents</span><span class="t">Cover</span></a><a class="next" href="02-map-and-db-fs-bridge.html"><span class="dir">Next →</span><span class="t">02 · The map, and the DB↔filesystem correspondence</span></a></div>
+</div>
+</main>
+</div>
+<script src="assets/textbook.js"></script>
+</body>
+</html>

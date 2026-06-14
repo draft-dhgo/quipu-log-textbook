@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>30 · 신뢰성: 재시도·백오프·DLQ·멱등성 — Quipu-Log 교과서</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ 목차</button><b>Quipu-Log 교과서</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn" href="../30-reliability-dlq.html">EN</a><a class="langbtn active" href="30-reliability-dlq.html">한국어</a></div>
+<a class="home" href="index.html">Quipu-Log 교과서</a>
+<div class="sub">파일시스템만으로 짓는 저장 엔진과 변조-탐지 감사 로그 — 밑바닥부터</div>
+<div class="part">파트 1 · 출발점: DB 없이, 파일로</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>감사 로그란, 그리고 왜 &#x27;DB 없이 파일로&#x27;인가</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>Quipu-Log 지도와 DB↔파일시스템 대응표</a>
+<div class="part">파트 2 · 파일시스템 기본기</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>파일시스템의 기본: 파일·디렉토리·inode·디스크립터</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>읽고 쓰기, 그리고 rename의 원자성</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>데이터는 언제 진짜 디스크에 남나: page cache와 fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>std::fs 도구상자: Rust로 파일 다루기</a>
+<div class="part">파트 3 · 저장 엔진의 심장: append-only 로그</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>append-only 로그 = WAL이 곧 데이터베이스</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>세그먼트 파일과 롤오버</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>레코드 프레이밍: 길이·CRC32·magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>직렬화: 구조체를 바이트로</a>
+<div class="part">파트 4 · DB가 공짜로 주던 보장을 파일로 재현</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>내구성: fsync 정책과 group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>원자성과 크래시 복구: torn write와 꼬리 탐지</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>동시성 제어 ①: single-writer와 파일 락</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>동시성 제어 ②: 읽기 스냅샷과 MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>인덱싱: 인메모리 인덱스 + 디스크 토큰</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>쿼리 실행: 세그먼트 스캔과 커서 페이지네이션</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>삭제와 보존: 세그먼트 unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>저장소 레이아웃과 포맷 버저닝</a>
+<div class="part">파트 5 · 무결성: 고치면 티가 나게 (보안 ①)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>해시 함수와 SHA-256: 디지털 지문</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>머클 히스토리 트리: 로그를 32바이트로 커밋</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>포함 증명·일관성 증명</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>체크포인트와 외부 앵커링</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>tamper-evident vs tamper-proof, 그리고 위협 모델</a>
+<div class="part">파트 6 · 기밀성: 비밀을 지키면서 검색하기 (보안 ②)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>필드 보호 4단계: 평문/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>대칭·비대칭·하이브리드 암호와 AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>블라인드 인덱스: 평문 없이 검색</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>쓰기 전용 배포: 개인키 없는 서버</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>키 관리: 키링·버저닝·로테이션 vs 리키</a>
+<div class="part">파트 7 · 쓰기·읽기 경로</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>비동기 파이프라인: 논블로킹 emit과 백프레셔</a>
+<a class="lnk active" href="30-reliability-dlq.html"><span class="n">30</span>신뢰성: 재시도·백오프·DLQ·멱등성</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>tower 미들웨어: HTTP 요청 자동 기록</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>권한(RBAC)·필터·메타 감사</a>
+<div class="part">파트 8 · 분산·운영·확장</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>단일 장애점과 가용성: 클라이언트 스풀</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>수평 확장: 샤딩·일관성 해싱·읽기 복제</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>서버·클라이언트·MCP·관측성</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">파트 7 · 쓰기·읽기 경로</span><h1><span class="chno">30</span> · 신뢰성: 재시도·백오프·DLQ·멱등성</h1></div><article>
+
+<p class="lead">감사 로그는 "최선 노력(best-effort)"이 아닌 "최대한 보장(at-least-once)"이어야 합니다. 디스크가 잠깐 꽉 찼거나, 서버가 재시작됐거나, I/O 에러가 났을 때도 이벤트가 조용히 사라지면 안 됩니다. 이 챕터는 Quipu-Log가 어떻게 그 약속을 지키는지 살펴봅니다.</p>
+
+<div class="callout"><span class="lab">한 문장 요약</span><p>쓰기 실패 → 재시도(지수 백오프+지터) → 모두 실패 시 DLQ에 디스크 파킹 → 나중에 redrive로 재생. 이벤트는 최소한 DLQ에는 남습니다.</p></div>
+
+<h2>재시도와 지수 백오프</h2>
+
+<p>writer 스레드는 이벤트 하나를 쓰는 데 실패하면 즉시 포기하지 않습니다. <code>PipelineConfig</code>에 설정된 <code>max_retries</code>(기본 3회)만큼 재시도하되, 시도 사이에 잠깐 기다립니다. 기다림 시간이 매 시도마다 늘어나는 방식이 <strong>지수 백오프(exponential backoff)</strong>입니다.</p>
+
+<p>클라이언트 사이드의 재시도 로직은 더 정교합니다. <code>Backoff</code> 구조체가 지수 증가에 <strong>완전 지터(full jitter)</strong>를 더합니다.</p>
+
+<pre><span class="filename">crates/quipu-client/src/retry.rs</span><code><span class="kw">pub fn</span> <span class="fn">delay</span>(&amp;self, attempt: <span class="ty">u32</span>) -&gt; Option&lt;Duration&gt; {
+    <span class="dim">if attempt == 0 || attempt &gt; self.max_retries { return None; }</span>
+    <span class="kw">let</span> exp = self.base.as_secs_f64() * self.multiplier.powi((attempt - 1) <span class="kw">as</span> i32);
+    <span class="kw">let</span> capped = exp.min(self.max_delay.as_secs_f64());
+    <span class="hl">let jittered = rand::Rng::gen_range(&amp;mut rand::thread_rng(), 0.0..=capped);</span>
+    Some(Duration::from_secs_f64(jittered))
+}</code></pre>
+
+<p>지터가 왜 필요할까요? 서버 하나가 다운됐다 돌아올 때, 큐에 이벤트를 쌓아둔 수백 개의 클라이언트가 동시에 재시도를 시작하면 서버에 폭풍이 몰립니다(thundering herd). 대기 시간에 무작위성을 더하면 각 클라이언트가 다른 시점에 재시도해 부하가 분산됩니다.</p>
+
+<div class="callout analogy"><span class="lab">비유</span><p>지진 직후 모든 사람이 동시에 119에 전화하면 교환원이 마비됩니다. "1~30초 후 무작위로 전화하라"고 했을 때 부하가 고르게 분산되는 것이 완전 지터입니다.</p></div>
+
+<h2>멱등키: 재시도가 중복 기록을 만들지 않게</h2>
+
+<p>재시도에는 함정이 있습니다. 서버가 이벤트를 저장했는데 응답이 오다가 끊겼다면, 클라이언트는 실패로 보고 재시도합니다. 그러면 같은 이벤트가 두 번 기록되죠. 이를 막는 게 <strong>멱등키(idempotency key)</strong>입니다.</p>
+
+<pre><span class="filename">crates/quipu-client/src/retry.rs</span><code><span class="com">// 이벤트당 한 번 생성 → 모든 재시도에 동일 키 사용</span>
+<span class="kw">pub fn</span> <span class="fn">new_idempotency_key</span>() -&gt; <span class="ty">String</span> {
+    <span class="dim">// UUIDv4 생성 (RFC 4122 version 4, variant 1)</span>
+    <span class="hl">// 같은 키를 가진 두 번째 요청은 서버가 중복으로 인식해 무시</span>
+}</code></pre>
+
+<p>키는 이벤트가 처음 만들어질 때 생성하고, 클라이언트 사이드 스풀에도 함께 저장합니다. 프로세스가 재시작돼도 키가 살아 있어 중복을 막을 수 있습니다.</p>
+
+<h2>DLQ: 재시도도 실패하면</h2>
+
+<p>모든 재시도가 소진됐다면? 이벤트를 그냥 버리지 않고 <strong>Dead-Letter Queue(DLQ)</strong>에 파킹합니다. DLQ는 <code>&lt;store root&gt;/dlq/</code> 아래의 또 다른 append-only 세그먼트 파일입니다 — 메인 로그와 별도 저장소이므로 메인 디스크가 꽉 차도(ENOSPC) DLQ 쓰기를 시도하고, 프로세스가 죽어도 파일로 남습니다.</p>
+
+<figure>
+<svg viewBox="0 0 620 200" role="img" aria-label="이벤트 처리 흐름: emit → write → retry → DLQ park → redrive">
+  <defs>
+    <marker id="arr2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .lbl2{fill:#e6e8ee;font:600 12px -apple-system,sans-serif}
+    .sub2{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .bx{fill:#161922;stroke:#2a2f3d;stroke-width:1.5}
+    .ok{fill:#16241d;stroke:#2c4a3a;stroke-width:1.5}
+    .err{fill:#241212;stroke:#5a2c2c;stroke-width:1.5}
+    .dlq{fill:#24191a;stroke:#8b4040;stroke-width:1.5}
+    .ar{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#arr2)}
+    .ar2{stroke:#8be9c0;stroke-width:1.5;marker-end:url(#arr2)}
+    .ar3{stroke:#ff8b8b;stroke-width:1.5;marker-end:url(#arr2)}
+    .ar4{stroke:#7aa2ff;stroke-width:1.5;marker-end:url(#arr2)}
+  </style>
+
+  <rect x="20" y="70" width="80" height="40" rx="5" class="bx"/>
+  <text x="60" y="87" class="lbl2" text-anchor="middle">이벤트</text>
+  <text x="60" y="103" class="sub2" text-anchor="middle">emit</text>
+
+  <rect x="150" y="70" width="80" height="40" rx="5" class="bx"/>
+  <text x="190" y="87" class="lbl2" text-anchor="middle">write</text>
+  <text x="190" y="103" class="sub2" text-anchor="middle">시도</text>
+
+  <rect x="280" y="20" width="80" height="40" rx="5" class="ok"/>
+  <text x="320" y="38" class="lbl2" text-anchor="middle" fill="#8be9c0">성공</text>
+  <text x="320" y="54" class="sub2" text-anchor="middle">→ 완료</text>
+
+  <rect x="280" y="120" width="80" height="40" rx="5" class="err"/>
+  <text x="320" y="138" class="lbl2" text-anchor="middle" fill="#ff8b8b">실패</text>
+  <text x="320" y="154" class="sub2" text-anchor="middle">재시도</text>
+
+  <rect x="420" y="120" width="80" height="40" rx="5" class="dlq"/>
+  <text x="460" y="138" class="lbl2" text-anchor="middle" fill="#ffd479">DLQ</text>
+  <text x="460" y="154" class="sub2" text-anchor="middle">park</text>
+
+  <rect x="420" y="20" width="80" height="40" rx="5" class="ok"/>
+  <text x="460" y="38" class="lbl2" text-anchor="middle" fill="#8be9c0">redrive</text>
+  <text x="460" y="54" class="sub2" text-anchor="middle">재생</text>
+
+  <!-- fallback -->
+  <rect x="540" y="120" width="60" height="40" rx="5" fill="#1a1228" stroke="#3d2c5a" stroke-width="1.5"/>
+  <text x="570" y="138" class="lbl2" text-anchor="middle" fill="#c792ea">fallback</text>
+  <text x="570" y="154" class="sub2" text-anchor="middle">훅</text>
+
+  <line x1="100" y1="90" x2="148" y2="90" class="ar"/>
+  <line x1="230" y1="80" x2="278" y2="45" class="ar2"/>
+  <line x1="230" y1="100" x2="278" y2="135" class="ar3"/>
+  <line x1="360" y1="140" x2="418" y2="140" class="ar3"/>
+  <text x="385" y="135" class="sub2" fill="#ff8b8b">재시도 소진</text>
+  <line x1="460" y1="120" x2="460" y2="62" class="ar4"/>
+  <text x="463" y="98" class="sub2" fill="#7aa2ff">나중에</text>
+  <line x1="500" y1="140" x2="538" y2="140" class="ar"/>
+  <text x="502" y="135" class="sub2">DLQ도</text>
+  <text x="502" y="147" class="sub2">실패 시</text>
+</svg>
+<figcaption>이벤트는 성공하거나, DLQ에 파킹되거나, 최후에 fallback 훅에 전달된다. 조용히 사라지지 않는다.</figcaption>
+</figure>
+
+<h2>redrive: DLQ 재생</h2>
+
+<p>DLQ에 쌓인 이벤트는 <code>handle.redrive_dlq(&amp;admin_role)</code>로 재생합니다. redrive는 충돌 안전하게 설계돼 있습니다. 재생 결과(성공한 것, 또 실패한 것)를 <em>staging</em> 디렉토리에 먼저 쓰고, 모두 fsync한 뒤에 기존 DLQ를 삭제하고 staging을 rename합니다. 중간에 프로세스가 죽어도 이미 성공한 이벤트가 다시 재생될 수 있습니다(at-least-once) — 없어지지는 않습니다.</p>
+
+<div class="callout warn"><span class="lab">주의</span><p>at-least-once이므로 redrive 후 드물게 중복 레코드가 생길 수 있습니다. 감사 로그에서는 "없어지는 것"이 "두 번 기록되는 것"보다 훨씬 나쁘므로, at-least-once가 올바른 트레이드오프입니다.</p></div>
+
+<h2>마지막 방어선: fallback 훅</h2>
+
+<p>DLQ 쓰기마저 실패하면(디스크가 완전히 꽉 찬 경우 등) 이벤트는 영구 유실됩니다. 그 경우 <code>FallbackFn</code> 훅을 호출합니다. 파이프라인 시작 시 등록한 클로저인데, 여기에 경보 발송·stderr 출력 등을 연결할 수 있습니다.</p>
+
+<pre><span class="filename">examples/axum-demo/src/main.rs</span><code>AuditPipeline::start(
+    store, root,
+    PermissionPolicy::allow_all(),
+    PipelineConfig::default(),
+    <span class="hl">Some(Arc::new(|event, err| {</span>
+<span class="hl">        eprintln!("AUDIT FALLBACK: {} {} failed: {err}", event.method, event.url);</span>
+<span class="hl">    })),</span>
+)?;</code></pre>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① 지수 백오프에 지터를 더하는 이유를 "thundering herd" 키워드로 설명해 보세요.<br>② 멱등키가 이벤트당 한 번 생성되고, 재시도마다 같은 키를 쓰는 이유는?<br>③ redrive가 "기존 DLQ 삭제 → staging rename" 순서로 처리하는 이유는 무엇인가요?</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="29-async-pipeline.html"><span class="dir">← 이전</span><span class="t">29 · 비동기 파이프라인: 논블로킹 emit과 백프레셔</span></a><a class="next" href="31-tower-middleware.html"><span class="dir">다음 →</span><span class="t">31 · tower 미들웨어: HTTP 요청 자동 기록</span></a></div>
+</div>
+</main>
+</div>
+<script src="../assets/textbook.js"></script>
+</body>
+</html>

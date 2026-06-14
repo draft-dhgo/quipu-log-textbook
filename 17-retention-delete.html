@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>17 · Deletion and retention: segment unlink vs DELETE — The Quipu-Log Book</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ Contents</button><b>The Quipu-Log Book</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn active" href="17-retention-delete.html">EN</a><a class="langbtn" href="ko/17-retention-delete.html">한국어</a></div>
+<a class="home" href="index.html">The Quipu-Log Book</a>
+<div class="sub">Storage engines and tamper-evident audit logs, built on nothing but the filesystem — explained from the ground up</div>
+<div class="part">Part 1 · Starting point: files, not a DB</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>What an audit log is, and why “files, no DB”</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>The map, and the DB↔filesystem correspondence</a>
+<div class="part">Part 2 · Filesystem basics</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>Filesystem basics: files, directories, inodes, descriptors</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>Reading &amp; writing, and the atomicity of rename</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>When data really hits disk: the page cache and fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>The std::fs toolbox: handling files in Rust</a>
+<div class="part">Part 3 · The heart of the engine: the append-only log</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>Append-only log = the WAL is the database</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>Segment files and rollover</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>Record framing: length, CRC32, magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>Serialization: turning structs into bytes</a>
+<div class="part">Part 4 · Re-creating what a DB gave you for free, on files</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>Durability: fsync policy and group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>Atomicity and crash recovery: torn writes and tail detection</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>Concurrency I: single-writer and the file lock</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>Concurrency II: read snapshots and MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>Indexing: in-memory index + on-disk tokens</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>Query execution: segment scans and cursor pagination</a>
+<a class="lnk active" href="17-retention-delete.html"><span class="n">17</span>Deletion and retention: segment unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>Store layout and format versioning</a>
+<div class="part">Part 5 · Integrity: making tampering evident (Security I)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>Hash functions and SHA-256: a digital fingerprint</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>The Merkle history tree: committing the log to 32 bytes</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>Inclusion proofs and consistency proofs</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>Checkpoints and external anchoring</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>Tamper-evident vs tamper-proof, and the threat model</a>
+<div class="part">Part 6 · Confidentiality: searching while keeping secrets (Security II)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>Field protection in four levels: plaintext/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>Symmetric, asymmetric, hybrid encryption and AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>Blind indexes: searching without plaintext</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>Write-only deployment: a server without the private key</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>Key management: keyring, versioning, rotation vs re-keying</a>
+<div class="part">Part 7 · The write &amp; read paths</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>The async pipeline: non-blocking emit and backpressure</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>Reliability: retries, backoff, DLQ, idempotency</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>The tower middleware: auto-recording HTTP requests</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>Permissions (RBAC), filters, and meta-audit</a>
+<div class="part">Part 8 · Distribution, operations, scaling</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>Single point of failure and availability: the client spool</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>Horizontal scaling: sharding, consistent hashing, read replicas</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>Server, client, MCP, and observability</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">Part 4 · Re-creating what a DB gave you for free, on files</span><h1><span class="chno">17</span> · Deletion and retention: segment unlink vs DELETE</h1></div><article>
+
+<p class="lead">You can't keep audit logs forever. When disk fills up, old entries have to go. In a DB you'd run <code>DELETE FROM logs WHERE ts &lt; cutoff</code> and later vacuum to reclaim the space. Quipu-Log doesn't work that way. Instead it <strong>unlinks entire segment files</strong>. Let's look at why that approach is dramatically simpler and faster, and at the reason behind the choice to never delete the registry.</p>
+
+<div class="callout"><span class="lab">In one sentence</span><p>The retention policy <code>unlink</code>s old sealed segments whole — no row-level deletion or rewriting, the registry is preserved, and the active segment is never touched.</p></div>
+
+<h2>What you already know: DELETE + VACUUM vs. partition drop</h2>
+
+<p>In a relational DB, "deleting old rows" is actually two steps. <code>DELETE FROM logs WHERE ts &lt; cutoff</code> only marks rows as dead tuples — it doesn't reclaim disk space immediately. Later, <code>VACUUM</code> cleans up dead tuples, and <code>VACUUM FULL</code> rewrites the table file itself to return the space. It's an O(n) operation proportional to table size, and the table is locked while it happens.</p>
+
+<p>The smarter approach is a <strong>partition drop</strong>. If you set up monthly partitions like <code>CREATE TABLE logs_2024_01 PARTITION OF logs</code>, dropping January means just <code>DROP TABLE logs_2024_01</code> — one line, O(1). That sets the file's inode reference count to zero and the OS reclaims the space immediately.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ Filesystem</span><p><strong>DB DELETE + VACUUM</strong>: mark rows dead → separate vacuum process cleans up → slow and heavy. <strong>DB partition drop</strong>: return the whole table file to the OS → O(1), instant. <strong>Quipu-Log segment unlink</strong>: same as a partition drop. Each segment file is its own partition. One call to <code>std::fs::remove_file()</code> is the equivalent of <code>DROP TABLE</code>.</p></div>
+
+<h2>RetentionPolicy: age and size, two axes</h2>
+
+<p>The retention policy is declared as a <code>RetentionPolicy</code>.</p>
+
+<pre><span class="filename">crates/quipu-core/src/retention.rs</span><code><span class="kw">pub struct</span> <span class="ty">RetentionPolicy</span> {
+<span class="hl">    pub max_age:   <span class="ty">Option</span>&lt;<span class="ty">Duration</span>&gt;, <span class="com">// "delete anything older than this"</span></span>
+<span class="hl">    pub max_bytes: <span class="ty">Option</span>&lt;<span class="ty">u64</span>&gt;,     <span class="com">// "delete oldest when size exceeds this"</span></span>
+}
+
+<span class="kw">impl</span> <span class="ty">RetentionPolicy</span> {
+    <span class="kw">pub fn</span> <span class="fn">days</span>(days: <span class="ty">u64</span>) -&gt; <span class="ty">Self</span> { ... }
+    <span class="kw">pub const fn</span> <span class="fn">with_max_bytes</span>(<span class="kw">mut</span> self, n: <span class="ty">u64</span>) -&gt; <span class="ty">Self</span> { ... }
+}</code></pre>
+
+<p>The two conditions combine with <strong>OR</strong>. The moment either is exceeded, the oldest sealed segment is deleted first. With 90 days + 50 GB: "delete if anything is older than 90 days, <em>and also</em> delete if total size exceeds 50 GB."</p>
+
+<h2>How deletion works: the O(1) secret of unlink</h2>
+
+<p>The actual deletion is handled by <code>Table::purge_older_than()</code> and <code>Table::purge_oldest_sealed()</code>.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/table.rs</span><code><span class="kw">pub fn</span> <span class="fn">purge_older_than</span>(&amp;<span class="kw">mut</span> self, cutoff_micros: <span class="ty">u64</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">usize</span>&gt; {
+    <span class="kw">let</span> doomed: <span class="ty">Vec</span>&lt;<span class="ty">u64</span>&gt; = self.sealed.iter()
+<span class="hl">        .filter(|(_, s)| s.meta.max_timestamp &lt; cutoff_micros) <span class="com">// even the newest row is expired</span></span>
+        .map(|(&amp;seq, _)| seq)
+        .collect();
+    <span class="kw">for</span> seq in &amp;doomed {
+        <span class="kw">if let</span> <span class="ty">Some</span>(s) = self.sealed.remove(seq) {
+<span class="hl">            std::fs::remove_file(s.path)?;            <span class="com">// file unlink — O(1)</span></span>
+            <span class="kw">let</span> _ = std::fs::remove_file(meta_path(&amp;self.dir, *seq));
+        }
+    }
+    <span class="ty">Ok</span>(doomed.len())
+}</code></pre>
+
+<p><code>remove_file()</code> calls the Unix <code>unlink(2)</code> system call. It doesn't touch the file's contents — it only removes the directory entry (the name → inode link). Once the inode's reference count drops to zero, the OS immediately returns the disk blocks. Whether the file is 64 MB or 4 GB, the time taken is the same: genuinely O(1).</p>
+
+<div class="callout analogy"><span class="lab">Analogy</span><p>Think of a librarian who, rather than tearing out pages one by one, places a whole book onto the returns cart. There's no need to read a single page — it's done in an instant.</p></div>
+
+<figure>
+<svg viewBox="0 0 720 280" role="img" aria-label="Segment-level deletion vs. row-level deletion compared">
+  <defs>
+    <marker id="arr17" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .t17{fill:#e6e8ee;font:600 13px -apple-system,sans-serif}
+    .s17{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .bx17{fill:#161922;stroke:#2a2f3d;stroke-width:1.5;rx:6}
+    .seg_ok{fill:#0e1c14;stroke:#8be9c0;stroke-width:1.5;rx:4}
+    .seg_del{fill:#1c0c00;stroke:#ff8b8b;stroke-width:1.5;rx:4;opacity:0.7}
+    .seg_dead{fill:#1c1200;stroke:#ffd479;stroke-width:1;rx:4;opacity:0.5}
+    .ar17{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#arr17)}
+    .red17{fill:#ff8b8b;font:bold 11px -apple-system,sans-serif}
+    .grn17{fill:#8be9c0;font:bold 11px -apple-system,sans-serif}
+  </style>
+
+  <!-- DB DELETE + VACUUM (left) -->
+  <text x="20" y="28" class="t17">DB: DELETE + VACUUM</text>
+  <rect x="20" y="42" width="320" height="200" class="bx17"/>
+
+  <!-- table (rows) -->
+  <text x="32" y="62" class="s17">table (heap)</text>
+  <rect x="32" y="70" width="60" height="18" rx="2" class="seg_del"/><text x="38" y="83" class="red17">dead</text>
+  <rect x="96" y="70" width="60" height="18" rx="2" class="seg_del"/><text x="102" y="83" class="red17">dead</text>
+  <rect x="160" y="70" width="60" height="18" rx="2" class="seg_ok"/><text x="166" y="83" class="grn17">live</text>
+  <rect x="224" y="70" width="60" height="18" rx="2" class="seg_ok"/><text x="230" y="83" class="grn17">live</text>
+  <rect x="32" y="92" width="60" height="18" rx="2" class="seg_dead"/><text x="36" y="105" class="s17" fill="#ffd479">garbage</text>
+  <rect x="96" y="92" width="60" height="18" rx="2" class="seg_ok"/><text x="102" y="105" class="grn17">live</text>
+  <rect x="160" y="92" width="60" height="18" rx="2" class="seg_del"/><text x="166" y="105" class="red17">dead</text>
+  <rect x="224" y="92" width="60" height="18" rx="2" class="seg_ok"/><text x="230" y="105" class="grn17">live</text>
+
+  <text x="32" y="130" class="s17" fill="#ff8b8b">① DELETE: marks dead only (no space reclaimed)</text>
+  <text x="32" y="148" class="s17" fill="#ffd479">② VACUUM: cleans dead rows (takes time)</text>
+  <text x="32" y="166" class="s17" fill="#ff8b8b">③ VACUUM FULL: rewrites table (O(n), locking)</text>
+  <text x="32" y="186" class="s17">cost: O(deleted rows + live row rearrangement)</text>
+  <text x="32" y="206" class="s17">side effects: blocks concurrent reads, space fragmentation</text>
+  <text x="32" y="226" class="s17">integrity: rewriting live rows → Merkle hashes must be recomputed</text>
+
+  <!-- Quipu-Log unlink (right) -->
+  <text x="380" y="28" class="t17">Quipu-Log: segment unlink</text>
+  <rect x="380" y="42" width="320" height="200" class="bx17"/>
+
+  <text x="392" y="62" class="s17">segment files</text>
+  <rect x="392" y="70" width="80" height="34" rx="4" class="seg_del"/>
+  <text x="398" y="83" class="red17">seg-0</text>
+  <text x="398" y="97" class="s17">max_ts expired</text>
+
+  <rect x="478" y="70" width="80" height="34" rx="4" class="seg_del"/>
+  <text x="484" y="83" class="red17">seg-1</text>
+  <text x="484" y="97" class="s17">max_ts expired</text>
+
+  <rect x="564" y="70" width="80" height="34" rx="4" class="seg_ok"/>
+  <text x="570" y="83" class="grn17">seg-2</text>
+  <text x="570" y="97" class="s17">active</text>
+
+  <line x1="435" y1="106" x2="435" y2="126" class="ar17"/>
+  <text x="408" y="118" class="s17">remove_file()</text>
+  <line x1="519" y1="106" x2="519" y2="126" class="ar17"/>
+
+  <text x="392" y="148" class="grn17">✓ O(1) — independent of file size</text>
+  <text x="392" y="166" class="grn17">✓ surviving records are never touched</text>
+  <text x="392" y="184" class="grn17">✓ Merkle spine preserved (incl. deleted prefix)</text>
+  <text x="392" y="202" class="s17">seg-2 (active) is never dropped</text>
+  <text x="392" y="222" class="s17">registry tables are preserved indefinitely</text>
+</svg>
+<figcaption>DB DELETE+VACUUM is O(n) and requires locking. Quipu-Log segment unlink is O(1) regardless of file size, and never touches surviving records.</figcaption>
+</figure>
+
+<h2>Two absolute rules: preserve the active segment, preserve the registry</h2>
+
+<p>Quipu-Log's retention has two exceptions. Neither is ever deleted, regardless of policy settings.</p>
+
+<h3>1. The active segment is never deleted</h3>
+
+<p>The code only ever targets <code>sealed</code> segments. The active segment — the one currently being appended to — is not yet closed, so it is simply not a candidate for retention decisions.</p>
+
+<p>As a result, <code>max_bytes</code> is a <strong>target</strong>, not a <strong>hard ceiling</strong>. However large the active segment grows, it cannot be deleted, so the store can exceed the configured value by up to one active segment's worth. Once that segment seals at the next rollover, the next retention run will drop it.</p>
+
+<pre><span class="filename">crates/quipu-core/src/retention.rs — explanatory comment</span><code><span class="com">// Enforcement drops whole sealed segments, so purging never rewrites data
+// and costs one unlink per segment.</span>
+<span class="com">//</span>
+<span class="hl">// The active segment is never dropped, so max_bytes is a *target*, not a</span>
+<span class="hl">// hard ceiling: the store can exceed it by up to one active segment per</span>
+<span class="hl">// table until the next roll.</span></code></pre>
+
+<h3>2. The registry is never deleted</h3>
+
+<p><code>apply_retention()</code> only purges the <code>logs</code> and <code>relations</code> tables. The registry (<code>registry/&lt;type&gt;/</code>) is untouched. A code comment spells out the reason.</p>
+
+<pre><span class="filename">crates/quipu-core/src/retention.rs — explanatory comment</span><code><span class="com">// Registries (and their meta/checkpoint bookkeeping) are intentionally not
+// purged and not counted against max_bytes:</span>
+<span class="hl">// version history is what lets old logs keep rendering as-recorded values.</span></code></pre>
+
+<p>For a log record from 90 days ago to display "the user's name at the time," the registry version from that time must still be alive. Even if Alice later changed her name to "Alicia," a 90-day-old log should still render as "Alice." Delete the registry and there is no way to recover the actor/target information in past logs.</p>
+
+<p>In practice, registry records are proportional to the number of entities. 100,000 users at an average of two versions each is 200,000 records — negligible compared to tens of millions of log records.</p>
+
+<div class="callout why"><span class="lab">Why this design?</span><p>Without a preserved registry, "renderability of past logs" has to be tied to the log retention period — a significant increase in design complexity. The fact that the registry stays small is precisely what makes "preserve the registry forever" a practical rule rather than a burden.</p></div>
+
+<h2>Re-anchoring the checkpoint after purge</h2>
+
+<p>One more thing happens after a purge. The previous checkpoint may reference a Merkle root that covered records in the deleted segments. That checkpoint is no longer in a verifiable state. So a new checkpoint is issued automatically right after retention runs.</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs</span><code><span class="kw">pub fn</span> <span class="fn">apply_retention</span>(&amp;<span class="kw">mut</span> self) -&gt; <span class="ty">Result</span>&lt;<span class="ty">usize</span>&gt; {
+    <span class="dim">// ... purge_older_than(), purge_to_byte_budget() ...</span>
+    <span class="kw">if</span> dropped_main &gt; 0 {
+<span class="hl">        <span class="com">// re-anchor after the unlink: a fresh checkpoint covers the surviving records</span></span>
+<span class="hl">        self.<span class="fn">write_checkpoint</span>()?;</span>
+    }
+    <span class="ty">Ok</span>(dropped)
+}</code></pre>
+
+<p>The Merkle spine (the list of leaf hashes) is not affected by retention — leaf hashes for deleted segments remain in the spine, allowing proof that "those records once existed." The details of this are covered in <span class="pill">Ch. 20 (Merkle History Tree)</span>.</p>
+
+<h2>Recap</h2>
+
+<ul>
+  <li>DB DELETE+VACUUM deletes rows one by one and reclaims space separately — O(n), heavy.</li>
+  <li>Like a DB partition drop, Quipu-Log <strong>unlinks entire segment files</strong> — O(1), surviving records untouched.</li>
+  <li><code>RetentionPolicy</code> combines age (<code>max_age</code>) and size (<code>max_bytes</code>) with OR; when a condition is met, the oldest sealed segment is removed first.</li>
+  <li>The <strong>active segment</strong> is never deleted → <code>max_bytes</code> is a target, not a hard ceiling.</li>
+  <li>The <strong>registry</strong> is never deleted → past logs always render with the values that were current when they were recorded.</li>
+  <li>A new checkpoint is issued automatically after a purge to keep the integrity-verification baseline current.</li>
+</ul>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① Explain why segment unlink is faster than row-level DELETE from an OS filesystem perspective. (Hint: inode reference count.)<br>② With <code>RetentionPolicy::days(90).with_max_bytes(50 * 1024 * 1024 * 1024)</code>, can a segment that is only 70 days old be deleted due to a size overrun?<br>③ Explain why the registry is never deleted using "what data is needed to display an actor's name from a 90-day-old log?" as your starting point.</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="16-query-execution.html"><span class="dir">← Prev</span><span class="t">16 · Query execution: segment scans and cursor pagination</span></a><a class="next" href="18-layout-versioning.html"><span class="dir">Next →</span><span class="t">18 · Store layout and format versioning</span></a></div>
+</div>
+</main>
+</div>
+<script src="assets/textbook.js"></script>
+</body>
+</html>

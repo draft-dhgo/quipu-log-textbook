@@ -1,0 +1,125 @@
+<article>
+
+<p class="lead">An audit log must be "at-least-once" — not merely "best-effort." Events shouldn't silently vanish when the disk fills up briefly, the server restarts, or an I/O error fires. This chapter looks at how Quipu-Log keeps that promise.</p>
+
+<div class="callout"><span class="lab">In one sentence</span><p>Write failure → retry (exponential backoff + jitter) → if all retries fail, park the event in the DLQ on disk → replay later with redrive. Events end up in the DLQ at the very least.</p></div>
+
+<h2>Retry and exponential backoff</h2>
+
+<p>When the writer thread fails to write an event, it doesn't give up immediately. It retries up to <code>max_retries</code> times (default 3), as configured in <code>PipelineConfig</code>, waiting a little between each attempt. Having that wait grow on every attempt is <strong>exponential backoff</strong>.</p>
+
+<p>The client-side retry logic is more precise. The <code>Backoff</code> struct applies <strong>full jitter</strong> on top of the exponential increase.</p>
+
+<pre><span class="filename">crates/quipu-client/src/retry.rs</span><code><span class="kw">pub fn</span> <span class="fn">delay</span>(&amp;self, attempt: <span class="ty">u32</span>) -&gt; Option&lt;Duration&gt; {
+    <span class="dim">if attempt == 0 || attempt &gt; self.max_retries { return None; }</span>
+    <span class="kw">let</span> exp = self.base.as_secs_f64() * self.multiplier.powi((attempt - 1) <span class="kw">as</span> i32);
+    <span class="kw">let</span> capped = exp.min(self.max_delay.as_secs_f64());
+    <span class="hl">let jittered = rand::Rng::gen_range(&amp;mut rand::thread_rng(), 0.0..=capped);</span>
+    Some(Duration::from_secs_f64(jittered))
+}</code></pre>
+
+<p>Why does jitter matter? When a server goes down and comes back up, hundreds of clients that have been queuing events may all start retrying at the same moment — a thundering herd. Adding randomness to the wait time spreads those retries across different moments in time, distributing the load.</p>
+
+<div class="callout analogy"><span class="lab">Analogy</span><p>If everyone calls emergency services at the exact same second after an earthquake, the switchboard collapses. Telling people "call at a random time within the next 30 seconds" spreads the load evenly — that's full jitter.</p></div>
+
+<h2>Idempotency keys: keeping retries from creating duplicate records</h2>
+
+<p>Retries have a trap. If the server saved the event but the response was lost in transit, the client sees a failure and retries — and the same event gets recorded twice. <strong>Idempotency keys</strong> prevent this.</p>
+
+<pre><span class="filename">crates/quipu-client/src/retry.rs</span><code><span class="com">// Generated once per event — the same key is used for every retry</span>
+<span class="kw">pub fn</span> <span class="fn">new_idempotency_key</span>() -&gt; <span class="ty">String</span> {
+    <span class="dim">// Generates a UUIDv4 (RFC 4122 version 4, variant 1)</span>
+    <span class="hl">// A second request carrying the same key is recognized as a duplicate and ignored</span>
+}</code></pre>
+
+<p>The key is generated when the event is first created and stored alongside it in the client-side spool. Even if the process restarts, the key survives to prevent duplicates.</p>
+
+<h2>DLQ: when all retries are exhausted</h2>
+
+<p>What if every retry fails? Rather than dropping the event, Quipu-Log parks it in a <strong>Dead-Letter Queue (DLQ)</strong>. The DLQ is another append-only segment file under <code>&lt;store root&gt;/dlq/</code> — a separate store from the main log. That separation means that even if the main disk is full (ENOSPC), a DLQ write is still attempted, and if the process dies, the file remains on disk.</p>
+
+<figure>
+<svg viewBox="0 0 620 200" role="img" aria-label="Event flow: emit → write → retry → DLQ park → redrive">
+  <defs>
+    <marker id="arr2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .lbl2{fill:#e6e8ee;font:600 12px -apple-system,sans-serif}
+    .sub2{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .bx{fill:#161922;stroke:#2a2f3d;stroke-width:1.5}
+    .ok{fill:#16241d;stroke:#2c4a3a;stroke-width:1.5}
+    .err{fill:#241212;stroke:#5a2c2c;stroke-width:1.5}
+    .dlq{fill:#24191a;stroke:#8b4040;stroke-width:1.5}
+    .ar{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#arr2)}
+    .ar2{stroke:#8be9c0;stroke-width:1.5;marker-end:url(#arr2)}
+    .ar3{stroke:#ff8b8b;stroke-width:1.5;marker-end:url(#arr2)}
+    .ar4{stroke:#7aa2ff;stroke-width:1.5;marker-end:url(#arr2)}
+  </style>
+
+  <rect x="20" y="70" width="80" height="40" rx="5" class="bx"/>
+  <text x="60" y="87" class="lbl2" text-anchor="middle">event</text>
+  <text x="60" y="103" class="sub2" text-anchor="middle">emit</text>
+
+  <rect x="150" y="70" width="80" height="40" rx="5" class="bx"/>
+  <text x="190" y="87" class="lbl2" text-anchor="middle">write</text>
+  <text x="190" y="103" class="sub2" text-anchor="middle">attempt</text>
+
+  <rect x="280" y="20" width="80" height="40" rx="5" class="ok"/>
+  <text x="320" y="38" class="lbl2" text-anchor="middle" fill="#8be9c0">success</text>
+  <text x="320" y="54" class="sub2" text-anchor="middle">→ done</text>
+
+  <rect x="280" y="120" width="80" height="40" rx="5" class="err"/>
+  <text x="320" y="138" class="lbl2" text-anchor="middle" fill="#ff8b8b">failure</text>
+  <text x="320" y="154" class="sub2" text-anchor="middle">retry</text>
+
+  <rect x="420" y="120" width="80" height="40" rx="5" class="dlq"/>
+  <text x="460" y="138" class="lbl2" text-anchor="middle" fill="#ffd479">DLQ</text>
+  <text x="460" y="154" class="sub2" text-anchor="middle">park</text>
+
+  <rect x="420" y="20" width="80" height="40" rx="5" class="ok"/>
+  <text x="460" y="38" class="lbl2" text-anchor="middle" fill="#8be9c0">redrive</text>
+  <text x="460" y="54" class="sub2" text-anchor="middle">replay</text>
+
+  <!-- fallback -->
+  <rect x="540" y="120" width="60" height="40" rx="5" fill="#1a1228" stroke="#3d2c5a" stroke-width="1.5"/>
+  <text x="570" y="138" class="lbl2" text-anchor="middle" fill="#c792ea">fallback</text>
+  <text x="570" y="154" class="sub2" text-anchor="middle">hook</text>
+
+  <line x1="100" y1="90" x2="148" y2="90" class="ar"/>
+  <line x1="230" y1="80" x2="278" y2="45" class="ar2"/>
+  <line x1="230" y1="100" x2="278" y2="135" class="ar3"/>
+  <line x1="360" y1="140" x2="418" y2="140" class="ar3"/>
+  <text x="385" y="135" class="sub2" fill="#ff8b8b">retries exhausted</text>
+  <line x1="460" y1="120" x2="460" y2="62" class="ar4"/>
+  <text x="463" y="98" class="sub2" fill="#7aa2ff">later</text>
+  <line x1="500" y1="140" x2="538" y2="140" class="ar"/>
+  <text x="502" y="135" class="sub2">if DLQ</text>
+  <text x="502" y="147" class="sub2">also fails</text>
+</svg>
+<figcaption>An event either succeeds, gets parked in the DLQ, or as a last resort is delivered to the fallback hook. It never disappears silently.</figcaption>
+</figure>
+
+<h2>redrive: replaying the DLQ</h2>
+
+<p>Events sitting in the DLQ are replayed by calling <code>handle.redrive_dlq(&amp;admin_role)</code>. redrive is designed to be crash-safe. It writes the replay results (successes and further failures alike) to a <em>staging</em> directory first, fsync's everything, then deletes the old DLQ and renames staging into place. If the process dies mid-replay, events that already succeeded may be replayed again (at-least-once) — but nothing is lost.</p>
+
+<div class="callout warn"><span class="lab">Caution</span><p>Because the guarantee is at-least-once, redrive can occasionally produce duplicate records. In an audit log, losing an event is far worse than recording it twice, so at-least-once is the right trade-off here.</p></div>
+
+<h2>The last line of defense: the fallback hook</h2>
+
+<p>If even the DLQ write fails (say, the disk is completely full), the event is permanently lost. In that case Quipu-Log calls the <code>FallbackFn</code> hook — a closure registered when the pipeline is started, where you can wire up an alert, write to stderr, or whatever makes sense for your situation.</p>
+
+<pre><span class="filename">examples/axum-demo/src/main.rs</span><code>AuditPipeline::start(
+    store, root,
+    PermissionPolicy::allow_all(),
+    PipelineConfig::default(),
+    <span class="hl">Some(Arc::new(|event, err| {</span>
+<span class="hl">        eprintln!("AUDIT FALLBACK: {} {} failed: {err}", event.method, event.url);</span>
+<span class="hl">    })),</span>
+)?;</code></pre>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① Explain why jitter is added on top of exponential backoff, using the term "thundering herd."<br>② Why is the idempotency key generated once per event and reused across every retry?<br>③ Why does redrive process events in the order "delete old DLQ → rename staging" rather than the other way around?</p></div>
+
+</article>

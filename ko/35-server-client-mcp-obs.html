@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>35 · 서버·클라이언트·MCP·관측성 — Quipu-Log 교과서</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ 목차</button><b>Quipu-Log 교과서</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn" href="../35-server-client-mcp-obs.html">EN</a><a class="langbtn active" href="35-server-client-mcp-obs.html">한국어</a></div>
+<a class="home" href="index.html">Quipu-Log 교과서</a>
+<div class="sub">파일시스템만으로 짓는 저장 엔진과 변조-탐지 감사 로그 — 밑바닥부터</div>
+<div class="part">파트 1 · 출발점: DB 없이, 파일로</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>감사 로그란, 그리고 왜 &#x27;DB 없이 파일로&#x27;인가</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>Quipu-Log 지도와 DB↔파일시스템 대응표</a>
+<div class="part">파트 2 · 파일시스템 기본기</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>파일시스템의 기본: 파일·디렉토리·inode·디스크립터</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>읽고 쓰기, 그리고 rename의 원자성</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>데이터는 언제 진짜 디스크에 남나: page cache와 fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>std::fs 도구상자: Rust로 파일 다루기</a>
+<div class="part">파트 3 · 저장 엔진의 심장: append-only 로그</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>append-only 로그 = WAL이 곧 데이터베이스</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>세그먼트 파일과 롤오버</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>레코드 프레이밍: 길이·CRC32·magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>직렬화: 구조체를 바이트로</a>
+<div class="part">파트 4 · DB가 공짜로 주던 보장을 파일로 재현</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>내구성: fsync 정책과 group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>원자성과 크래시 복구: torn write와 꼬리 탐지</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>동시성 제어 ①: single-writer와 파일 락</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>동시성 제어 ②: 읽기 스냅샷과 MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>인덱싱: 인메모리 인덱스 + 디스크 토큰</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>쿼리 실행: 세그먼트 스캔과 커서 페이지네이션</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>삭제와 보존: 세그먼트 unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>저장소 레이아웃과 포맷 버저닝</a>
+<div class="part">파트 5 · 무결성: 고치면 티가 나게 (보안 ①)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>해시 함수와 SHA-256: 디지털 지문</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>머클 히스토리 트리: 로그를 32바이트로 커밋</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>포함 증명·일관성 증명</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>체크포인트와 외부 앵커링</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>tamper-evident vs tamper-proof, 그리고 위협 모델</a>
+<div class="part">파트 6 · 기밀성: 비밀을 지키면서 검색하기 (보안 ②)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>필드 보호 4단계: 평문/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>대칭·비대칭·하이브리드 암호와 AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>블라인드 인덱스: 평문 없이 검색</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>쓰기 전용 배포: 개인키 없는 서버</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>키 관리: 키링·버저닝·로테이션 vs 리키</a>
+<div class="part">파트 7 · 쓰기·읽기 경로</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>비동기 파이프라인: 논블로킹 emit과 백프레셔</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>신뢰성: 재시도·백오프·DLQ·멱등성</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>tower 미들웨어: HTTP 요청 자동 기록</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>권한(RBAC)·필터·메타 감사</a>
+<div class="part">파트 8 · 분산·운영·확장</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>단일 장애점과 가용성: 클라이언트 스풀</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>수평 확장: 샤딩·일관성 해싱·읽기 복제</a>
+<a class="lnk active" href="35-server-client-mcp-obs.html"><span class="n">35</span>서버·클라이언트·MCP·관측성</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">파트 8 · 분산·운영·확장</span><h1><span class="chno">35</span> · 서버·클라이언트·MCP·관측성</h1></div><article>
+
+<p class="lead">이 챕터는 책의 마지막입니다. 지금까지 배운 저장 엔진, 무결성, 기밀성, 파이프라인이 <em>실제로 서비스되는</em> 층을 한눈에 살펴봅니다. 서버 모드, 클라이언트, MCP 감사관, 그리고 운영 가시성 — 각각 개관 위주로, 핵심 결정만 짚겠습니다.</p>
+
+<h2>서버 모드: HTTP/JSON 위의 단일 스토어</h2>
+
+<p>임베디드 모드는 감사 로그를 직접 프로세스 안에 심는 방식입니다. 서버 모드는 그 엔진을 HTTP 데몬으로 감싸서, <em>어떤 언어로 작성된 서비스든</em> bearer 토큰 하나로 감사 기록을 보내고 조회할 수 있게 합니다.</p>
+
+<figure>
+<svg viewBox="0 0 680 200" role="img" aria-label="quipu-server 배포 구조: 서비스들이 HTTP로 단일 데몬에 연결">
+  <defs>
+    <marker id="asv" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .t35{fill:#e6e8ee;font:13px -apple-system,sans-serif}
+    .s35{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .bx35{fill:#161922;stroke:#2a2f3d;stroke-width:1.5}
+  </style>
+
+  <!-- 서비스들 -->
+  <rect x="10" y="30" width="110" height="36" class="bx35" rx="5"/>
+  <text x="65" y="53" class="s35" text-anchor="middle">서비스 A (Go)</text>
+  <rect x="10" y="82" width="110" height="36" class="bx35" rx="5"/>
+  <text x="65" y="105" class="s35" text-anchor="middle">서비스 B (Python)</text>
+  <rect x="10" y="134" width="110" height="36" class="bx35" rx="5"/>
+  <text x="65" y="157" class="s35" text-anchor="middle">감사관/SIEM</text>
+
+  <!-- 화살표 -->
+  <line x1="120" y1="48" x2="205" y2="90" stroke="#9aa3b2" stroke-width="1.2" marker-end="url(#asv)"/>
+  <line x1="120" y1="100" x2="205" y2="100" stroke="#9aa3b2" stroke-width="1.2" marker-end="url(#asv)"/>
+  <line x1="120" y1="152" x2="205" y2="110" stroke="#9aa3b2" stroke-width="1.2" marker-end="url(#asv)"/>
+  <text x="155" y="80" class="s35" text-anchor="middle">Bearer 토큰</text>
+  <text x="155" y="92" class="s35" text-anchor="middle">HTTP/JSON</text>
+
+  <!-- quipu-server -->
+  <rect x="210" y="48" width="160" height="104" class="bx35" rx="8"/>
+  <text x="290" y="70" class="t35" text-anchor="middle" fill="#7aa2ff">quipu-server</text>
+  <text x="290" y="89" class="s35" text-anchor="middle">RBAC (deny-by-default)</text>
+  <text x="290" y="106" class="s35" text-anchor="middle">bounded queue + writer</text>
+  <text x="290" y="123" class="s35" text-anchor="middle">파일 락 (단일 프로세스)</text>
+  <text x="290" y="140" class="s35" text-anchor="middle">write-only 가능</text>
+
+  <!-- store -->
+  <rect x="410" y="48" width="130" height="104" rx="8" fill="#16241d" stroke="#8be9c0" stroke-width="1.5"/>
+  <text x="475" y="70" class="t35" text-anchor="middle" fill="#8be9c0">스토어</text>
+  <text x="475" y="90" class="s35" text-anchor="middle">logs/</text>
+  <text x="475" y="107" class="s35" text-anchor="middle">registry/&lt;type&gt;/</text>
+  <text x="475" y="124" class="s35" text-anchor="middle">dlq/</text>
+  <text x="475" y="141" class="s35" text-anchor="middle">access/</text>
+
+  <line x1="370" y1="100" x2="410" y2="100" stroke="#8be9c0" stroke-width="1.5" marker-end="url(#asv)"/>
+
+  <!-- syslog -->
+  <rect x="560" y="80" width="110" height="42" class="bx35" rx="5"/>
+  <text x="615" y="97" class="s35" text-anchor="middle" fill="#ffd479">syslog / SIEM</text>
+  <text x="615" y="112" class="s35" text-anchor="middle">UDP 미러 (best-effort)</text>
+  <line x1="370" y1="115" x2="560" y2="100" stroke="#ffd479" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#asv)"/>
+</svg>
+<figcaption>quipu-server는 여러 언어의 서비스가 하나의 감사 데몬에 HTTP로 연결하는 구조입니다. 스토어는 단일 프로세스가 파일 락으로 독점합니다.</figcaption>
+</figure>
+
+<p>서버의 핵심 설계 포인트 몇 가지만 짚겠습니다.</p>
+
+<p><strong>토큰 인증과 RBAC.</strong> 모든 엔드포인트는 <code>Authorization: Bearer &lt;token&gt;</code>을 요구합니다(healthz 제외). 토큰은 설정 파일에 SHA-256 해시로 저장하므로, 설정 파일 자체가 자격증명이 되지 않습니다. 각 토큰에 역할(role)을 부여하고, 역할에 동작(emit·query·administer)을 허용합니다. deny-by-default — 명시적으로 허용하지 않은 것은 거부됩니다. <code>SIGHUP</code>으로 토큰을 무중단 핫 리로드할 수 있습니다.</p>
+
+<p><strong>write-only 배포.</strong> <span class="pill">27장 쓰기 전용 배포</span>에서 자세히 다뤘듯, 서버는 RSA 개인키 없이도 기동할 수 있습니다. 그러면 RSA 보호 필드는 복호 불가 암호문으로 반환됩니다 — 서버가 털려도 평문을 볼 수 없습니다.</p>
+
+<p><strong>쿼리 동시성 상한.</strong> 쿼리는 풀 스캔이므로 동시 쿼리가 CPU를 독점할 수 있습니다. <code>auth.max_concurrent_queries</code>로 토큰당 동시 쿼리 수를 제한하고, 한도를 넘으면 429로 즉시 거부합니다.</p>
+
+<p><strong>NDJSON 내보내기.</strong> <code>POST /v1/logs/export</code>는 같은 <code>LogQuery</code>를 받아 <code>application/x-ndjson</code>으로 응답합니다 — SIEM 파이프라인과 감사관 핸드오프용입니다.</p>
+
+<h2>MCP: LLM을 감사관으로</h2>
+
+<p><code>quipu-mcp</code>는 Model Context Protocol(MCP) 서버입니다 — LLM 에이전트가 자연어로 감사 로그를 조회하고 검증할 수 있게 합니다. "지난 주에 alice가 어떤 문서를 삭제했나요?" 같은 질문을 에이전트가 직접 로그에서 찾을 수 있습니다.</p>
+
+<div class="callout why"><span class="lab">왜 이렇게?</span><p>MCP 서버를 임베디드 스토어로 만들면, 이미 돌고 있는 <code>quipu-server</code>와 파일 락 충돌이 납니다 — 단일 writer 설계 때문입니다. 그래서 <code>quipu-mcp</code>는 임베디드가 아니라 <strong>HTTP 클라이언트</strong>입니다. 이 선택으로 RBAC, 쿼리 동시성 상한, 키 경계, 메타 감사를 전부 <code>quipu-server</code>에서 재사용합니다. MCP는 새로운 보안 표면을 전혀 추가하지 않습니다.</p></div>
+
+<p>에이전트에게 노출되는 도구는 세 가지입니다.</p>
+
+<table>
+  <tr><th>도구</th><th>하는 일</th><th>필요 권한</th></tr>
+  <tr><td><code>query_logs</code></td><td>LogQuery로 감사 로그 검색</td><td>query</td></tr>
+  <tr><td><code>get_entity_history</code></td><td>엔티티의 전체 버전 이력</td><td>query</td></tr>
+  <tr><td><code>verify_store_integrity</code></td><td>체인 무결성 검증 실행</td><td>administer</td></tr>
+</table>
+
+<p>도구 실패는 JSON-RPC 프로토콜 에러가 아니라 <code>isError: true</code>인 정상 결과로 반환됩니다. 에이전트가 에러를 텍스트로 읽고 추론을 조정할 수 있게 하려는 것입니다 — 세션이 죽지 않습니다.</p>
+
+<p>그리고 중요한 속성: <strong>에이전트의 조회도 메타 감사에 기록됩니다.</strong> 모든 tool 호출은 <code>quipu-server</code>의 query 경로를 타기 때문에, <code>access_log</code>가 켜져 있으면 "AI가 언제 무엇을 조회했는지"가 자동으로 남습니다. MCP 크레이트가 별도 처리 없이 얻는 공짜 속성입니다.</p>
+
+<pre><span class="filename">crates/quipu-mcp/src/lib.rs — 핵심 설계 결정</span><code><span class="com">// The agent talks MCP to this server; this server talks the</span>
+<span class="com">// ordinary token-authenticated HTTP API to quipu-server.</span>
+<span class="hl">// Access is audited for free. Every tool call is an HTTP query
+// against the server, so the agent's own reads land in the ledger
+// through the same path — without this crate doing anything special.</span></code></pre>
+
+<h2>관측성: 보이지 않으면 운영할 수 없다</h2>
+
+<p>내려가는 서버, 디스크가 차오르는 것, 이벤트가 DLQ에 쌓이는 것 — 이것들을 제때 알아야 운영할 수 있습니다. Quipu-Log는 Prometheus, healthz, syslog로 이를 지원합니다.</p>
+
+<h3>Prometheus: GET /metrics</h3>
+
+<p>메트릭은 writer 스레드와 분리된 <strong>락 프리(lock-free) atomic 스냅샷</strong>으로 제공됩니다. writer가 죽어도 <code>/metrics</code>는 살아 있습니다 — 가장 중요한 순간에 가장 필요한 정보입니다.</p>
+
+<pre><span class="filename">crates/quipu-middleware/src/metrics.rs — lock-free 히스토그램</span><code><span class="kw">pub struct</span> <span class="ty">PipelineMetrics</span> {
+    <span class="dim">queue_depth: AtomicI64,</span>
+    <span class="dim">writes_ok: AtomicU64,</span>
+    <span class="dim">writes_parked: AtomicU64,   // DLQ로 간 이벤트</span>
+    <span class="dim">events_lost: AtomicU64,     // 스토어+DLQ 둘 다 실패</span>
+    <span class="hl">latency_buckets: [AtomicU64; LATENCY_BUCKETS_SECS.len()], // 히스토그램</span>
+    <span class="dim">latency_sum_micros: AtomicU64,</span>
+}</code></pre>
+
+<p>주요 메트릭과 권장 알람입니다.</p>
+
+<table>
+  <tr><th>메트릭</th><th>타입</th><th>알람 기준</th></tr>
+  <tr><td><code>quipu_writer_alive</code></td><td>gauge</td><td>== 0 이면 즉시 페이지</td></tr>
+  <tr><td><code>quipu_disk_full</code></td><td>gauge</td><td>== 1 이면 즉시 페이지</td></tr>
+  <tr><td><code>quipu_events_lost_total</code></td><td>counter</td><td>rate &gt; 0 이면 즉시 페이지</td></tr>
+  <tr><td><code>quipu_dlq_entries</code></td><td>gauge</td><td>&gt; 0 이 몇 분 지속되면 경고</td></tr>
+  <tr><td><code>quipu_disk_low</code></td><td>gauge</td><td>== 1 이면 경고</td></tr>
+  <tr><td><code>quipu_write_latency_seconds</code></td><td>histogram</td><td>p99 상승 추세 모니터링</td></tr>
+</table>
+
+<h3>GET /v1/healthz: 세 가지 상태</h3>
+
+<p>healthz는 JSON <code>{"status": "ok"/"degraded"/"unhealthy", "reasons": [...]}</code>를 반환합니다.</p>
+
+<ul>
+  <li><strong>unhealthy (HTTP 503)</strong> — writer 스레드 사망, ENOSPC 래치 세팅, 또는 스토어 루트 프로브 실패. 이벤트가 지속되지 않고 있습니다.</li>
+  <li><strong>degraded (HTTP <em>200</em>)</strong> — 쓰기는 작동하나 디스크 여유가 임계치 아래. <strong>200인 것이 포인트</strong>입니다 — 로드 밸런서가 이 인스턴스를 빼면 안 됩니다. 경보는 상태 코드가 아니라 <code>status</code> 필드로 걸어야 합니다.</li>
+  <li><strong>ok (HTTP 200)</strong> — 모든 것 정상.</li>
+</ul>
+
+<pre><span class="filename">crates/quipu-middleware/src/health.rs — HealthState</span><code><span class="kw">pub struct</span> <span class="ty">HealthState</span> {
+    writer_alive: AtomicBool,
+    disk_full: AtomicBool,    <span class="com">// ENOSPC 래치 — 쓰기 성공 시 자동 해제</span>
+    low_disk: AtomicBool,     <span class="com">// 사전 경보 — 디스크 임계치 아래</span>
+    <span class="hl">// 모두 atomic — writer가 죽어도 healthz는 읽을 수 있다</span>
+}</code></pre>
+
+<h3>syslog / SIEM 미러</h3>
+
+<p>설정에 <code>"sink": {"syslog_udp": "10.0.0.5:514"}</code>를 추가하면, 감사된 모든 이벤트가 RFC 5424 syslog UDP로 SIEM에 미러됩니다. 미러는 best-effort입니다 — 백로그가 꽉 차면 라인을 드롭하고, 쓰기 경로를 절대 막지 않습니다. 스토어가 시스템 오브 레코드이고 SIEM은 skeleton 복사본입니다.</p>
+
+<div class="callout key"><span class="lab">보안 포인트</span><p><code>GET /metrics</code>는 administer 토큰을 요구합니다. 메트릭에는 큐 깊이, DLQ 상태 등 내부 동작 정보가 담겨 있어 공개하면 공격 표면이 될 수 있습니다. Prometheus 스크레이프 설정에 반드시 bearer 토큰을 포함하세요.</p></div>
+
+<h2>책을 닫으며: 파일 위에 DB를 짓는다는 것</h2>
+
+<p>이 책은 하나의 질문으로 시작했습니다 — "DB가 공짜로 주던 것들을, 파일 위에서 직접 만들려면 어떻게 해야 할까?" 우리는 append-only 파일로 WAL을 만들고, CRC로 torn write를 탐지하고, fsync 정책으로 내구성을 조율하고, 파일 락으로 단일 writer를 강제했습니다. 인덱스를 메모리에 직접 쌓고, 스냅샷으로 읽기-쓰기를 비차단했습니다. 여기에 머클 트리로 변조 증명을 더하고, AEAD와 블라인드 인덱스로 평문 없이 검색했습니다. 그리고 마지막으로, 이 단순한 단일 writer 설계를 — 복잡하게 바꾸지 않고 — 클라이언트 스풀과 샤딩으로 확장했습니다. <strong>각 층에서 한 가지 원칙이 일관되게 지켜졌습니다: 단순함을 유지하고, 복잡성을 더하지 않아도 되는 곳에 더하지 않는다.</strong> 그것이 Quipu-Log가, 그리고 파일시스템 위에 짓는 모든 저장 엔진이 가르쳐주는 가장 깊은 교훈입니다.</p>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① <code>quipu-mcp</code>가 임베디드가 아니라 HTTP 클라이언트인 이유는 무엇인가요? 단일 writer 설계와 어떻게 연결되나요?<br>② <code>/v1/healthz</code>가 "degraded"일 때 HTTP 200을 반환하는 이유는 무엇인가요? 503을 반환하면 어떤 운영 문제가 생길까요?<br>③ 이 책 전체를 돌아보며, "DB에서 공짜로 주던 것"을 "파일로 직접 구현"한 사례를 세 가지 골라 설명해보세요.</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="34-sharding-scaling.html"><span class="dir">← 이전</span><span class="t">34 · 수평 확장: 샤딩·일관성 해싱·읽기 복제</span></a><div class="ph"></div></div>
+</div>
+</main>
+</div>
+<script src="../assets/textbook.js"></script>
+</body>
+</html>

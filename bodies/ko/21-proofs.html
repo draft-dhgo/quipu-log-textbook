@@ -1,0 +1,289 @@
+<article>
+
+<p class="lead">루트 32바이트가 전체 로그를 "커밋"한다는 건 알겠습니다. 그런데 누군가 "이 레코드가 정말 그 로그에 있었나요?"라고 물으면, 로그 전체를 넘겨줘야 할까요? 수백만 건을? 머클 트리의 진짜 힘은 여기서 나옵니다 — <strong>로그 전체 없이, 루트와 log n 개의 해시만으로 레코드의 존재를 수학적으로 증명</strong>할 수 있습니다.</p>
+
+<div class="callout"><span class="lab">한 문장 요약</span><p>포함 증명(inclusion proof)은 "이 레코드가 이 루트에 있다"를 O(log n) 해시 목록으로 증명하고, 일관성 증명(consistency proof)은 "과거 로그가 현재 로그의 접두사다(append-only였다)"를 증명한다.</p></div>
+
+<h2>포함 증명(Inclusion Proof): 로그 없이 존재를 증명</h2>
+
+<p>n=8 트리에서 리프 #2(R2)가 포함됐음을 증명하는 상황을 생각해 봅시다. 검증자는 루트만 알고 있습니다.</p>
+
+<figure>
+<svg viewBox="0 0 740 380" role="img" aria-label="n=8 머클 트리 포함 증명: 리프 2 증명 경로">
+  <defs>
+    <marker id="arr21i" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+    <marker id="arr21p" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#7aa2ff"/>
+    </marker>
+  </defs>
+  <style>
+    .t21{fill:#e6e8ee;font:600 12px -apple-system,sans-serif;text-anchor:middle}
+    .s21{fill:#9aa3b2;font:11px -apple-system,sans-serif;text-anchor:middle}
+    .lf21{fill:#161922;stroke:#2a2f3d;stroke-width:1.5;rx:6}
+    .lfprv{fill:#16241d;stroke:#8be9c0;stroke-width:2;rx:6}
+    .lftgt{fill:#242030;stroke:#c792ea;stroke-width:2.5;rx:6}
+    .in21{fill:#161922;stroke:#2a2f3d;stroke-width:1;rx:6}
+    .inprv{fill:#1a1f2e;stroke:#7aa2ff;stroke-width:2;rx:6}
+    .rt21{fill:#241f12;stroke:#ffd479;stroke-width:2;rx:8}
+    .e21{stroke:#2a2f3d;stroke-width:1}
+    .eprv{stroke:#7aa2ff;stroke-width:2}
+  </style>
+
+  <!-- 루트 -->
+  <rect x="290" y="10" width="160" height="40" class="rt21" rx="8"/>
+  <text x="370" y="28" class="t21" fill="#ffd479">Root</text>
+  <text x="370" y="46" class="s21">SHA-256(...)</text>
+
+  <!-- 레벨 1: 노드 01, 23, 45, 67 -->
+  <rect x="100" y="90" width="130" height="38" class="inprv" rx="6"/>
+  <text x="165" y="108" class="t21" fill="#7aa2ff">N(01)</text>
+  <text x="165" y="124" class="s21">증명에 포함 ①</text>
+
+  <rect x="320" y="90" width="130" height="38" class="in21" rx="6"/>
+  <text x="385" y="108" class="t21">N(23)</text>
+  <text x="385" y="124" class="s21">계산으로 유도</text>
+
+  <rect x="540" y="90" width="90" height="38" class="inprv" rx="6"/>
+  <text x="585" y="108" class="t21" fill="#7aa2ff">N(4567)</text>
+  <text x="585" y="124" class="s21">증명에 포함 ②</text>
+
+  <!-- 레벨 1.5: N(23) 자식 -->
+  <rect x="270" y="168" width="100" height="38" class="inprv" rx="6"/>
+  <text x="320" y="186" class="t21" fill="#7aa2ff">H3</text>
+  <text x="320" y="202" class="s21">증명에 포함 ③</text>
+
+  <rect x="390" y="168" width="100" height="38" class="in21" rx="6"/>
+  <text x="440" y="186" class="t21">H2</text>
+  <text x="440" y="202" class="s21">계산 (목표)</text>
+
+  <!-- 리프: R0~R7 -->
+  <rect x="20" y="258" width="72" height="48" class="lf21" rx="6"/>
+  <text x="56" y="276" class="t21" fill="#9aa3b2">H0</text>
+
+  <rect x="106" y="258" width="72" height="48" class="lf21" rx="6"/>
+  <text x="142" y="276" class="t21" fill="#9aa3b2">H1</text>
+
+  <rect x="394" y="258" width="90" height="48" class="lftgt" rx="6"/>
+  <text x="439" y="276" class="t21" fill="#c792ea">H2</text>
+  <text x="439" y="294" class="s21" fill="#c792ea">← 증명 대상</text>
+
+  <!-- N01 자식 (H0, H1은 필요 없으므로 흐리게) -->
+  <text x="56" y="310" class="s21" fill="#2a2f3d">R0</text>
+  <text x="142" y="310" class="s21" fill="#2a2f3d">R1</text>
+
+  <rect x="596" y="258" width="72" height="48" class="lf21" rx="6"/>
+  <text x="632" y="276" class="t21" fill="#9aa3b2">H3은</text>
+  <text x="632" y="292" class="s21">위에 표시</text>
+
+  <!-- 엣지 -->
+  <line x1="340" y1="50" x2="210" y2="90" class="e21"/>
+  <line x1="400" y1="50" x2="385" y2="90" class="e21"/>
+  <line x1="420" y1="50" x2="565" y2="90" class="e21"/>
+
+  <line x1="330" y1="128" x2="320" y2="168" class="e21"/>
+  <line x1="440" y1="128" x2="440" y2="168" class="e21"/>
+
+  <line x1="410" y1="206" x2="439" y2="258" class="eprv"/>
+
+  <!-- 범례 -->
+  <rect x="12" y="330" width="700" height="40" fill="#161922" stroke="#2a2f3d" rx="6"/>
+  <rect x="24" y="342" width="12" height="12" fill="#c792ea" rx="2"/>
+  <text x="42" y="352" style="fill:#9aa3b2;font:11px -apple-system,sans-serif">증명 대상 리프(H2)</text>
+  <rect x="180" y="342" width="12" height="12" fill="#7aa2ff" rx="2"/>
+  <text x="198" y="352" style="fill:#9aa3b2;font:11px -apple-system,sans-serif">증명 경로 (audit path): N(01), N(4567), H3</text>
+  <rect x="490" y="342" width="12" height="12" fill="#ffd479" rx="2"/>
+  <text x="508" y="352" style="fill:#9aa3b2;font:11px -apple-system,sans-serif">검증자가 아는 값: Root</text>
+</svg>
+<figcaption>포함 증명 예시(n=8, 리프 #2). 검증자는 H2(리프 해시)와 세 개의 형제 해시(audit path)만으로 루트를 재계산할 수 있다. 로그 나머지 5개는 볼 필요가 없다.</figcaption>
+</figure>
+
+<p>검증 절차는 이렇습니다. 검증자는 <strong>H2(리프 해시) + 증명 경로 [H3, N(01), N(4567)]</strong>를 받습니다:</p>
+
+<ol>
+  <li><code>node_hash(H2, H3)</code> → N(23) 재계산</li>
+  <li><code>node_hash(N(01), N(23))</code> → N(0123) 재계산 (N(01)은 증명에 들어 있음)</li>
+  <li><code>node_hash(N(0123), N(4567))</code> → 루트 재계산</li>
+  <li>재계산한 루트가 공개된 루트와 같으면 → H2는 분명 그 트리에 속함 ✅</li>
+</ol>
+
+<p>n개의 리프가 있을 때 증명 경로 길이는 <strong>⌈log₂ n⌉</strong>입니다. 백만 건이라도 증명 경로는 겨우 20개 해시, 640바이트면 됩니다.</p>
+
+<div class="callout why"><span class="lab">왜 이렇게?</span><p>감사 감증 시나리오에서, 외부 감사인은 수 테라바이트의 로그를 받을 수 없습니다. "레코드 #42는 정말 2025년 3월의 로그에 있었나요?"를 증명할 때 20개 해시 파일 하나만 주면 됩니다. 감사인은 자신이 가진 루트(외부 앵커에서 확인한 것)와 대조해서 O(log n)만에 독립 검증합니다.</p></div>
+
+<h2>포함 증명 코드 확인</h2>
+
+<pre><span class="filename">crates/quipu-core/src/merkle.rs — inclusion_proof / verify_inclusion</span><code><span class="kw">pub fn</span> <span class="fn">inclusion_proof</span>(leaves: <span class="ty">&amp;[Hash]</span>, m: <span class="ty">usize</span>) -&gt; <span class="ty">Vec&lt;Hash&gt;</span> {
+    <span class="dim">let n = leaves.len();
+    if n == 1 { return Vec::new(); }
+    let k = split(n);</span>
+<span class="hl">    if m &lt; k {
+        <span class="kw">let mut</span> path = <span class="fn">inclusion_proof</span>(&amp;leaves[..k], m);
+        path.push(<span class="fn">mth</span>(&amp;leaves[k..]));  <span class="com">// 오른쪽 서브트리 해시 추가</span>
+        path
+    } <span class="kw">else</span> {
+        <span class="kw">let mut</span> path = <span class="fn">inclusion_proof</span>(&amp;leaves[k..], m - k);
+        path.push(<span class="fn">mth</span>(&amp;leaves[..k]));  <span class="com">// 왼쪽 서브트리 해시 추가</span>
+        path
+    }</span>
+}
+
+<span class="com">// 검증은 로그 없이 독립 실행:</span>
+<span class="kw">pub fn</span> <span class="fn">verify_inclusion</span>(
+    leaf: <span class="ty">&amp;Hash</span>, leaf_index: <span class="ty">usize</span>, tree_size: <span class="ty">usize</span>,
+    proof: <span class="ty">&amp;[Hash]</span>, root: <span class="ty">&amp;Hash</span>,
+) -&gt; <span class="ty">bool</span> { <span class="com">/* 증명 경로를 따라 루트를 재계산하고 비교 */</span> }</code></pre>
+
+<p>재귀 구조가 직관적입니다. 목표 리프가 왼쪽(m &lt; k)이면 오른쪽 서브트리 루트를 경로에 넣고, 오른쪽이면 왼쪽 서브트리 루트를 경로에 넣습니다. 재귀가 끝나면 경로에는 "없었던 형제들의 루트"가 리프-투-루트 순서로 쌓입니다.</p>
+
+<h2>일관성 증명(Consistency Proof): append-only를 증명</h2>
+
+<p>포함 증명이 "이 레코드가 있다"를 증명한다면, 일관성 증명은 <strong>"과거 루트 R_m이 현재 루트 R_n의 접두사다 — 즉, m번째 이후로 레코드가 추가됐을 뿐, 기존 m개는 한 바이트도 안 바뀌었다"</strong>를 증명합니다.</p>
+
+<figure>
+<svg viewBox="0 0 740 300" role="img" aria-label="일관성 증명: 과거 트리가 현재 트리의 접두사임을 증명">
+  <defs>
+    <marker id="arr21c" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .t21c{fill:#e6e8ee;font:600 12px -apple-system,sans-serif;text-anchor:middle}
+    .s21c{fill:#9aa3b2;font:11px -apple-system,sans-serif;text-anchor:middle}
+  </style>
+
+  <!-- 왼쪽: 과거 트리 (m=4) -->
+  <rect x="10" y="10" width="310" height="265" fill="#0b0d12" stroke="#2a2f3d" rx="10"/>
+  <text x="165" y="32" class="t21c" fill="#8be9c0">과거 트리 (m=4)</text>
+  <text x="165" y="50" class="s21c">Root_m = 앵커에 공개된 값</text>
+
+  <rect x="90" y="64" width="150" height="36" fill="#16241d" stroke="#8be9c0" stroke-width="2" rx="6"/>
+  <text x="165" y="80" class="t21c" fill="#8be9c0">Root_m</text>
+  <text x="165" y="96" class="s21c">N(0123)</text>
+
+  <rect x="30" y="142" width="110" height="32" fill="#161922" stroke="#2a2f3d" rx="5"/>
+  <text x="85" y="162" class="t21c">N(01)</text>
+  <rect x="165" y="142" width="110" height="32" fill="#161922" stroke="#2a2f3d" rx="5"/>
+  <text x="220" y="162" class="t21c">N(23)</text>
+
+  <rect x="18" y="216" width="56" height="32" fill="#161922" stroke="#2a2f3d" rx="4"/>
+  <text x="46" y="236" class="t21c" style="font-size:11px">H0</text>
+  <rect x="82" y="216" width="56" height="32" fill="#161922" stroke="#2a2f3d" rx="4"/>
+  <text x="110" y="236" class="t21c" style="font-size:11px">H1</text>
+  <rect x="154" y="216" width="56" height="32" fill="#161922" stroke="#2a2f3d" rx="4"/>
+  <text x="182" y="236" class="t21c" style="font-size:11px">H2</text>
+  <rect x="218" y="216" width="56" height="32" fill="#161922" stroke="#2a2f3d" rx="4"/>
+  <text x="246" y="236" class="t21c" style="font-size:11px">H3</text>
+
+  <!-- 연결선 -->
+  <line x1="165" y1="100" x2="95" y2="142" stroke="#2a2f3d" stroke-width="1"/>
+  <line x1="165" y1="100" x2="230" y2="142" stroke="#2a2f3d" stroke-width="1"/>
+  <line x1="95" y1="174" x2="46" y2="216" stroke="#2a2f3d" stroke-width="1"/>
+  <line x1="95" y1="174" x2="110" y2="216" stroke="#2a2f3d" stroke-width="1"/>
+  <line x1="220" y1="174" x2="182" y2="216" stroke="#2a2f3d" stroke-width="1"/>
+  <line x1="220" y1="174" x2="246" y2="216" stroke="#2a2f3d" stroke-width="1"/>
+
+  <!-- 화살표 중간 -->
+  <text x="380" y="145" style="fill:#ffd479;font:700 28px sans-serif;text-anchor:middle">⊂</text>
+  <text x="380" y="170" style="fill:#9aa3b2;font:11px -apple-system,sans-serif;text-anchor:middle">consistency</text>
+  <text x="380" y="186" style="fill:#9aa3b2;font:11px -apple-system,sans-serif;text-anchor:middle">proof</text>
+
+  <!-- 오른쪽: 현재 트리 (n=6) -->
+  <rect x="420" y="10" width="310" height="265" fill="#0b0d12" stroke="#2a2f3d" rx="10"/>
+  <text x="575" y="32" class="t21c" fill="#ffd479">현재 트리 (n=6)</text>
+  <text x="575" y="50" class="s21c">Root_n = 현재 루트</text>
+
+  <rect x="500" y="64" width="150" height="36" fill="#241f12" stroke="#ffd479" stroke-width="2" rx="6"/>
+  <text x="575" y="80" class="t21c" fill="#ffd479">Root_n</text>
+  <text x="575" y="96" class="s21c">N(0-5)</text>
+
+  <rect x="440" y="142" width="110" height="32" fill="#16241d" stroke="#8be9c0" stroke-width="1.5" rx="5"/>
+  <text x="495" y="162" class="t21c" fill="#8be9c0">N(0123)</text>
+
+  <rect x="572" y="142" width="110" height="32" fill="#161922" stroke="#2a2f3d" rx="5"/>
+  <text x="627" y="162" class="t21c">N(45)</text>
+
+  <rect x="428" y="216" width="50" height="32" fill="#161922" stroke="#2a2f3d" rx="4"/>
+  <text x="453" y="236" class="t21c" style="font-size:11px">H0</text>
+  <rect x="484" y="216" width="50" height="32" fill="#161922" stroke="#2a2f3d" rx="4"/>
+  <text x="509" y="236" class="t21c" style="font-size:11px">H1</text>
+  <rect x="540" y="216" width="50" height="32" fill="#161922" stroke="#2a2f3d" rx="4"/>
+  <text x="565" y="236" class="t21c" style="font-size:11px">H2</text>
+  <rect x="596" y="216" width="50" height="32" fill="#161922" stroke="#2a2f3d" rx="4"/>
+  <text x="621" y="236" class="t21c" style="font-size:11px">H3</text>
+  <rect x="652" y="216" width="40" height="32" fill="#1a1a2e" stroke="#c792ea" stroke-width="1.5" rx="4"/>
+  <text x="672" y="236" class="t21c" style="font-size:11px;fill:#c792ea">H4</text>
+  <rect x="698" y="216" width="20" height="32" fill="#1a1a2e" stroke="#c792ea" stroke-width="1.5" rx="4"/>
+  <text x="708" y="236" class="t21c" style="font-size:10px;fill:#c792ea">H5</text>
+
+  <line x1="575" y1="100" x2="490" y2="142" stroke="#2a2f3d" stroke-width="1"/>
+  <line x1="575" y1="100" x2="630" y2="142" stroke="#2a2f3d" stroke-width="1"/>
+  <line x1="490" y1="174" x2="453" y2="216" stroke="#2a2f3d" stroke-width="1"/>
+  <line x1="490" y1="174" x2="509" y2="216" stroke="#2a2f3d" stroke-width="1"/>
+  <line x1="490" y1="174" x2="565" y2="216" stroke="#2a2f3d" stroke-width="1"/>
+  <line x1="490" y1="174" x2="621" y2="216" stroke="#2a2f3d" stroke-width="1"/>
+  <line x1="627" y1="174" x2="672" y2="216" stroke="#2a2f3d" stroke-width="1"/>
+  <line x1="627" y1="174" x2="708" y2="216" stroke="#2a2f3d" stroke-width="1"/>
+</svg>
+<figcaption>일관성 증명(m=4, n=6). N(0123)는 두 트리 모두에 존재한다 — 이 공통 노드가 "과거 4개가 바뀌지 않았음"의 증거다. 증명은 N(45)(새 부분)와 연결 정보만 넘긴다.</figcaption>
+</figure>
+
+<p>일관성 증명의 핵심 아이디어: <strong>두 트리의 공통 서브트리를 찾아, 그 서브트리가 두 루트 모두에 일관되게 묶인다는 것을 보입니다.</strong> 위 예에서 N(0123)는 m=4 트리의 루트이자, n=6 트리의 왼쪽 자식입니다. 이 노드 하나가 두 트리를 연결하는 증거가 됩니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/merkle_log.rs — prove_consistency</span><code><span class="kw">pub fn</span> <span class="fn">prove_consistency</span>(
+    &amp;<span class="kw">mut self</span>,
+    first_size: <span class="ty">u64</span>,
+) -&gt; <span class="ty">Result&lt;ConsistencyProof&gt;</span> {
+    <span class="kw">let</span> leaves = <span class="fn">load</span>(&amp;<span class="kw">self</span>.path)?;
+<span class="hl">    <span class="kw">let</span> path = <span class="fn">consistency_proof</span>(&amp;leaves, first_size <span class="kw">as</span> <span class="ty">usize</span>);</span>
+    <span class="ty">Ok</span>(<span class="ty">ConsistencyProof</span> {
+        first_size,
+        second_size: leaves.len() <span class="kw">as</span> <span class="ty">u64</span>,
+        path,
+    })
+}</code></pre>
+
+<h2>검증은 완전히 독립적</h2>
+
+<p>포함 증명과 일관성 증명 모두, <strong>검증 함수는 로그를 전혀 보지 않습니다.</strong> <code>verify_inclusion</code>과 <code>verify_consistency</code>는 루트(들)와 증명 경로만 받아 순수하게 해시를 계산합니다:</p>
+
+<pre><span class="filename">crates/quipu-core/src/merkle.rs — verify_inclusion 서명</span><code><span class="kw">pub fn</span> <span class="fn">verify_inclusion</span>(
+    leaf: <span class="ty">&amp;Hash</span>,          <span class="com">// 검증할 레코드의 해시</span>
+    leaf_index: <span class="ty">usize</span>,   <span class="com">// 트리에서의 위치(0-based)</span>
+    tree_size: <span class="ty">usize</span>,    <span class="com">// 증명 당시 트리 크기</span>
+    proof: <span class="ty">&amp;[Hash]</span>,       <span class="com">// audit path (O(log n)개)</span>
+<span class="hl">    root: <span class="ty">&amp;Hash</span>,           <span class="com">// 공개·앵커된 루트 — 이것만 신뢰하면 됨</span></span>
+) -&gt; <span class="ty">bool</span></code></pre>
+
+<p>이 설계가 중요합니다. 외부 감사인은 Quipu-Log 서버에 접속하거나 데이터를 받을 필요 없습니다. 외부 앵커(22장)에서 루트를 가져와서, 증명 경로(서버가 생성)와 함께 이 함수를 돌리면 됩니다. RFC 6962를 구현한 어떤 언어의 코드도 호환됩니다.</p>
+
+<div class="callout key"><span class="lab">보안 포인트</span><p>일관성 증명은 "꼬리 절단(tail truncation)" 공격을 탐지합니다. 공격자가 최신 세그먼트를 삭제하면, 현재 트리의 크기가 마지막 체크포인트의 <code>tree_size</code>보다 작아집니다. <code>verify_consistency(m=last_checkpoint_tree_size, n=current_tree_size)</code>가 즉시 실패합니다. 레코드를 지우면 반드시 티가 납니다.</p></div>
+
+<h2>MerkleLog가 노출하는 API</h2>
+
+<p><code>MerkleLog</code> 구조체에서 증명을 요청하는 건 간단합니다:</p>
+
+<pre><span class="filename">crates/quipu-core/src/merkle_log.rs — 증명 요청 예시</span><code><span class="dim">let mut log = MerkleLog::open(dir)?;</span>
+<span class="com">// 포함 증명: leaf_index #42번 레코드가 현재 트리에 있음을 증명</span>
+<span class="kw">let</span> p: <span class="ty">InclusionProof</span> = log.<span class="fn">prove_inclusion</span>(<span class="num">42</span>)?;
+<span class="hl">assert!(<span class="fn">verify_inclusion</span>(&amp;p.leaf, p.leaf_index <span class="kw">as</span> <span class="ty">usize</span>,
+                         p.tree_size <span class="kw">as</span> <span class="ty">usize</span>, &amp;p.path, &amp;log.<span class="fn">root</span>()));</span>
+
+<span class="com">// 일관성 증명: first_size=1000일 때의 루트가 현재 트리의 접두사임을 증명</span>
+<span class="kw">let</span> c: <span class="ty">ConsistencyProof</span> = log.<span class="fn">prove_consistency</span>(<span class="num">1000</span>)?;
+<span class="hl">assert!(<span class="fn">verify_consistency</span>(c.first_size <span class="kw">as</span> <span class="ty">usize</span>, c.second_size <span class="kw">as</span> <span class="ty">usize</span>,
+                           &amp;first_root, &amp;log.<span class="fn">root</span>(), &amp;c.path));</span></code></pre>
+
+<h2>정리</h2>
+
+<ul>
+  <li><strong>포함 증명</strong>: 레코드 해시 + ⌈log₂ n⌉개 형제 해시 → 루트 재계산 → 루트 비교. 로그 전체 없이 O(log n)으로 존재 증명.</li>
+  <li><strong>일관성 증명</strong>: 공통 서브트리 루트들 → 두 루트(과거/현재) 모두 재계산 → 둘 다 일치하면 append-only 증명.</li>
+  <li>검증 함수는 <strong>완전 독립</strong> — 로그 없이, 루트와 증명만으로 동작. RFC 6962 표준이므로 외부 검증기 호환.</li>
+  <li>일관성 증명은 꼬리 절단 공격도 잡습니다.</li>
+</ul>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① n=8 트리에서 리프 #5의 포함 증명 경로에는 몇 개의 해시가 들어가나요? 어느 노드들인지 설명해 보세요.<br>② 일관성 증명이 "append-only였다"를 보장하는 핵심 원리를 설명해 보세요. 레코드 하나를 삭제하면 왜 증명이 실패하는지 추적해 보세요.<br>③ 포함 증명은 "삭제된 레코드"에 대해 작동할까요? 그 이유는? (힌트: merkle.spine 파일과 페이로드의 관계를 생각해 보세요.)</p></div>
+
+</article>

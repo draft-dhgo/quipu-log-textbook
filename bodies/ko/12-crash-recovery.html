@@ -1,0 +1,163 @@
+<article>
+
+<p class="lead">쓰다가 갑자기 전기가 나갑니다. 데이터는 어떻게 될까요? DB는 WAL replay로 "쓰다 만 트랜잭션"을 되돌리거나 다시 적용합니다. Quipu-Log는 다르게 생겼습니다. append-only라 "되돌릴 것"이 없고, 복구는 단 하나의 동작 — 망가진 꼬리 잘라내기 — 으로 끝납니다. 왜 그게 충분한지, 어떻게 구현되는지 살펴봅시다.</p>
+
+<div class="callout"><span class="lab">한 문장 요약</span><p>크래시 복구 = 마지막 레코드의 CRC를 확인하고, 실패하면 그 레코드를 잘라낸다. redo도 undo도 필요 없다 — append-only 로그에서 "쓰다 만 것"은 버리면 그만이다.</p></div>
+
+<h2>당신이 아는 것: DB의 WAL replay</h2>
+
+<p>관계형 DB가 재부팅되면 복구 루틴이 WAL을 처음부터 훑습니다.</p>
+<ul>
+  <li><strong>redo 단계</strong> — "커밋됐지만 데이터 페이지(본체)에 반영 안 된 것"을 다시 적용합니다.</li>
+  <li><strong>undo 단계</strong> — "WAL에는 있지만 커밋이 없던 것(쓰다 만 트랜잭션)"을 롤백합니다.</li>
+</ul>
+
+<p>redo·undo 두 단계가 필요한 이유는 DB가 "데이터 페이지(본체)와 로그, 두 곳에" 씁니다. 본체는 파일 여기저기를 수정하는 제자리 쓰기(in-place write)라 크래시 타이밍에 따라 중간 상태가 남을 수 있습니다. 그걸 정리해야 합니다.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ 파일시스템</span><p><strong>DB에서는</strong> redo + undo 두 단계 복구가 필요하다. 본체(B-tree 페이지)가 제자리 수정(in-place write)되기 때문에, 크래시 시 중간 상태가 생긴다. <strong>Quipu-Log에서는</strong> 본체가 없다. 오직 append만 있다. "쓰다 만 append = 파일 끝의 망가진 프레임 하나"라서 그것만 잘라내면 끝이다. redo-only, undo 없음.</p></div>
+
+<h2>torn write: 쓰다 만 레코드</h2>
+
+<p>Quipu-Log가 append를 하는 중에 전기가 나가면 어떤 일이 일어날까요? 한 프레임을 파일 끝에 붙이는 도중에 절전됐다고 상상해 보세요.</p>
+
+<figure>
+<svg viewBox="0 0 680 220" role="img" aria-label="정상 세그먼트와 torn write(꼬리가 잘린) 세그먼트 비교">
+  <defs>
+    <marker id="arr12" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <!-- 정상 상태 -->
+  <text x="20" y="24" fill="#e6e8ee" font-size="13" font-family="-apple-system,sans-serif" font-weight="600">정상 (크래시 없음)</text>
+  <!-- 헤더 -->
+  <rect x="20" y="36" width="60" height="44" rx="4" fill="#161922" stroke="#7aa2ff" stroke-width="1.5"/>
+  <text x="50" y="54" text-anchor="middle" fill="#7aa2ff" font-size="10" font-family="-apple-system,sans-serif">ALOG</text>
+  <text x="50" y="70" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">헤더</text>
+  <!-- 레코드 1 -->
+  <rect x="84" y="36" width="100" height="44" rx="4" fill="#16241d" stroke="#2c4a3a" stroke-width="1.5"/>
+  <text x="134" y="54" text-anchor="middle" fill="#8be9c0" font-size="10" font-family="-apple-system,sans-serif">len|CRC|ts</text>
+  <text x="134" y="70" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">payload ①</text>
+  <!-- 레코드 2 -->
+  <rect x="188" y="36" width="100" height="44" rx="4" fill="#16241d" stroke="#2c4a3a" stroke-width="1.5"/>
+  <text x="238" y="54" text-anchor="middle" fill="#8be9c0" font-size="10" font-family="-apple-system,sans-serif">len|CRC|ts</text>
+  <text x="238" y="70" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">payload ②</text>
+  <!-- 레코드 3 -->
+  <rect x="292" y="36" width="100" height="44" rx="4" fill="#16241d" stroke="#2c4a3a" stroke-width="1.5"/>
+  <text x="342" y="54" text-anchor="middle" fill="#8be9c0" font-size="10" font-family="-apple-system,sans-serif">len|CRC|ts</text>
+  <text x="342" y="70" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">payload ③</text>
+  <text x="430" y="60" fill="#9aa3b2" font-size="13" font-family="-apple-system,sans-serif">← EOF</text>
+
+  <!-- 크래시 상태 -->
+  <text x="20" y="134" fill="#e6e8ee" font-size="13" font-family="-apple-system,sans-serif" font-weight="600">크래시 후 (torn tail)</text>
+  <!-- 헤더 -->
+  <rect x="20" y="146" width="60" height="44" rx="4" fill="#161922" stroke="#7aa2ff" stroke-width="1.5"/>
+  <text x="50" y="164" text-anchor="middle" fill="#7aa2ff" font-size="10" font-family="-apple-system,sans-serif">ALOG</text>
+  <text x="50" y="180" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">헤더</text>
+  <!-- 레코드 1 -->
+  <rect x="84" y="146" width="100" height="44" rx="4" fill="#16241d" stroke="#2c4a3a" stroke-width="1.5"/>
+  <text x="134" y="164" text-anchor="middle" fill="#8be9c0" font-size="10" font-family="-apple-system,sans-serif">len|CRC|ts</text>
+  <text x="134" y="180" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">payload ①</text>
+  <!-- 레코드 2 -->
+  <rect x="188" y="146" width="100" height="44" rx="4" fill="#16241d" stroke="#2c4a3a" stroke-width="1.5"/>
+  <text x="238" y="164" text-anchor="middle" fill="#8be9c0" font-size="10" font-family="-apple-system,sans-serif">len|CRC|ts</text>
+  <text x="238" y="180" text-anchor="middle" fill="#9aa3b2" font-size="10" font-family="-apple-system,sans-serif">payload ②</text>
+  <!-- 찢어진 레코드 3 (절반만) -->
+  <rect x="292" y="146" width="52" height="44" rx="4" fill="#241213" stroke="#ff8b8b" stroke-width="1.5"/>
+  <text x="318" y="164" text-anchor="middle" fill="#ff8b8b" font-size="10" font-family="-apple-system,sans-serif">len|CR</text>
+  <text x="318" y="180" text-anchor="middle" fill="#ff8b8b" font-size="10" font-family="-apple-system,sans-serif">torn!</text>
+  <!-- 잘라내기 표시 -->
+  <line x1="344" y1="140" x2="344" y2="196" stroke="#ffd479" stroke-width="2" stroke-dasharray="4"/>
+  <text x="356" y="168" fill="#ffd479" font-size="11" font-family="-apple-system,sans-serif">truncate</text>
+  <text x="356" y="184" fill="#9aa3b2" font-size="11" font-family="-apple-system,sans-serif">여기서 잘라냄</text>
+</svg>
+<figcaption>크래시가 나면 파일 끝의 마지막 레코드가 반만 쓰인 채(torn tail) 남을 수 있다. <code>skim()</code>이 그것을 탐지하고, 열 때 <code>set_len()</code>으로 잘라낸다.</figcaption>
+</figure>
+
+<p>이렇게 쓰다 만 프레임을 <strong>torn tail</strong>이라 부릅니다. 마지막 프레임의 CRC가 맞지 않거나, <code>len</code> 필드가 가리키는 바이트 수만큼 데이터가 없거나, <code>MAX_RECORD</code>(64MiB)를 초과한 값이 오면 "여기서 잘라야 한다"는 신호입니다.</p>
+
+<h2>skim(): 유효한 꼬리 찾기</h2>
+
+<p>Quipu-Log에서 크래시 복구는 <code>skim()</code> 함수 하나로 이뤄집니다. 세그먼트 파일을 처음부터 훑으면서, CRC가 맞는 프레임들의 길이를 누적합니다. 처음으로 망가진 프레임을 만나면 거기서 멈춥니다. 멈춘 지점이 <code>valid_len</code>입니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — skim()</span><code><span class="kw">loop</span> {
+    <span class="dim">if total - valid &lt; FRAME_HEADER as u64 { break; }</span>
+    reader.read_exact(&amp;mut header)?;
+    <span class="kw">let</span> len = <span class="ty">u32</span>::from_le_bytes(header[<span class="num">0</span>..<span class="num">4</span>].try_into().unwrap());
+    <span class="kw">let</span> crc = <span class="ty">u32</span>::from_le_bytes(header[<span class="num">4</span>..<span class="num">8</span>].try_into().unwrap());
+    <span class="kw">let</span> ts  = <span class="ty">u64</span>::from_le_bytes(header[<span class="num">8</span>..<span class="num">16</span>].try_into().unwrap());
+    <span class="hl">if len &gt; MAX_RECORD || total - valid - (FRAME_HEADER as u64) &lt; len as u64 {
+        break; <span class="com">// 길이 이상 → torn tail 시작</span>
+    }</span>
+    buf.resize(len as usize, <span class="num">0</span>);
+    reader.read_exact(&amp;mut buf)?;
+    <span class="hl">if crc32fast::hash(&amp;buf) != crc { break; } <span class="com">// CRC 불일치 → torn tail</span></span>
+    valid += (FRAME_HEADER + len as usize) as u64;
+    <span class="dim">records += 1;</span>
+}</code></pre>
+
+<p>루프가 끝나면 <code>valid</code>가 "마지막으로 온전한 프레임까지의 파일 길이"입니다. 이것이 <code>Skim::valid_len</code>에 담겨 돌아옵니다.</p>
+
+<h2>열 때 자른다: Segment::open()</h2>
+
+<p><code>Segment::open()</code>은 파일을 쓰기용으로 열 때마다 <code>skim()</code>을 먼저 부릅니다. 파일이 <code>valid_len</code>보다 크면 — 즉 torn tail이 있으면 — <code>file.set_len(valid_len)</code>으로 딱 잘라버립니다. 그리고 BufWriter를 <code>valid_len</code>에 가져다 놓고 쓰기를 시작합니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — Segment::open()</span><code><span class="kw">match</span> skimmed {
+    <span class="ty">Some</span>(s) =&gt; {
+        <span class="hl">if file.metadata()?.len() &gt; s.valid_len {
+            file.set_len(s.valid_len)?; <span class="com">// torn tail을 잘라낸다</span>
+        }</span>
+        <span class="kw">let mut</span> writer = <span class="ty">BufWriter</span>::with_capacity(<span class="num">256</span> * <span class="num">1024</span>, file);
+        writer.seek(<span class="ty">SeekFrom</span>::Start(s.valid_len))?;
+        <span class="ty">Ok</span>(<span class="ty">Self</span> { <span class="dim">/* ... valid 상태에서 시작 */</span> })
+    }
+    <span class="ty">None</span> =&gt; {
+        <span class="com">// 빈 파일이거나 헤더가 torn된 경우: 새 파일로 시작</span>
+        file.set_len(<span class="num">0</span>)?;
+        <span class="dim">/* 헤더 다시 작성 */</span>
+    }
+}</code></pre>
+
+<p>이 코드를 보면 복구의 본질이 보입니다. "복잡한 replay 없이, 열 때 검증하고, 망가진 끝만 자른다." 전체 복구 과정이 이 두 함수(<code>skim</code> + <code>set_len</code>)에 담겨 있습니다.</p>
+
+<h2>왜 redo만으로 충분한가</h2>
+
+<p>DB는 redo와 undo 둘 다 필요했습니다. Quipu-Log는 왜 redo도 필요 없을까요?</p>
+
+<p>append-only이기 때문입니다. 레코드가 한번 완전히 쓰이면 그 자리를 절대 고치지 않습니다. "쓰다 만 것"은 파일 맨 끝에 있는 반쪽짜리 프레임 하나뿐이고, 그 앞의 레코드들은 모두 온전합니다. 그러니 "다시 적용할 것(redo)"이 없습니다 — 온전한 레코드는 이미 파일에 있습니다. "롤백할 것(undo)"도 없습니다 — 반쪽짜리를 잘라내면 그 레코드는 애초에 존재하지 않았던 것과 같습니다.</p>
+
+<div class="callout analogy"><span class="lab">비유</span><p>공증 사무소의 접수대장을 떠올려 보세요. 서류 하나를 기재하다 갑자기 불이 꺼집니다. 다시 켜지면 마지막 줄이 반만 쓰여 있습니다. 어떻게 복구할까요? 그냥 반쪽 줄을 지우면 됩니다. 이미 완성된 앞쪽 줄들은 그대로 유효합니다. "다시 계산해야 할" 원장은 없습니다.</p></div>
+
+<h2>base_index: 머클 위치를 보존하다</h2>
+
+<p>꼬리를 잘라냈다고 해서 모든 게 끝난 건 아닙니다. Quipu-Log는 레코드를 머클 트리에 커밋합니다 <span class="pill">20장 머클 트리</span>. 레코드의 트리 안 위치(leaf index)는 "이 레코드가 몇 번째 레코드인가"에 따라 결정됩니다. 세그먼트가 여럿이고 앞쪽 세그먼트가 retention으로 삭제될 수도 있는데, 그래도 남은 레코드의 leaf index가 변해선 안 됩니다.</p>
+
+<p>이를 위해 세그먼트 헤더에 <code>base_index</code>를 씁니다 — 이 세그먼트의 첫 레코드가 전체 로그에서 몇 번째인지. 레코드의 절대 leaf index는 <code>base_index + 세그먼트 내 오프셋</code>으로 계산됩니다. 세그먼트를 새로 열 때 <code>base_index</code>가 이미 있으면 헤더에서 읽어오고, 새 파일이면 인자로 받은 값을 씁니다. torn tail을 잘라내도 <code>base_index</code>는 헤더에 남아 있으니 이후 레코드의 leaf index는 크래시 전과 동일합니다.</p>
+
+<div class="callout why"><span class="lab">왜 이렇게?</span><p>세그먼트 헤더에 <code>base_index</code>를 박아 넣는 이유는 "retention이 세그먼트를 통째로 삭제해도 남은 레코드의 머클 위치가 바뀌지 않게 하기 위해"다. 포함 증명(inclusion proof)은 leaf index를 기반으로 계산되는데, 그 인덱스가 retention 후에 변해버리면 이미 발급된 모든 증명이 무효가 된다.</p></div>
+
+<h2>테스트로 확인: 실제로 복구가 되나</h2>
+
+<p>소스에 unit test가 있습니다. 두 레코드를 쓰고 sync한 뒤, 파일 끝에 <em>망가진 반쪽 프레임</em>을 직접 이어 붙입니다. 그 뒤 같은 파일을 다시 열면 torn tail이 자동으로 잘려서 세 번째 레코드를 정상 추가할 수 있습니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — tests</span><code><span class="com">// 크래시 시뮬레이션: 파일 끝에 반쪽 프레임을 직접 쓴다</span>
+{
+    <span class="kw">let mut</span> f = OpenOptions::new().append(<span class="kw">true</span>).open(&amp;path).unwrap();
+    <span class="hl">f.write_all(&amp;[<span class="num">9</span>, <span class="num">0</span>, <span class="num">0</span>, <span class="num">0</span>, <span class="num">1</span>, <span class="num">2</span>]).unwrap(); <span class="com">// len=9 but no payload</span></span>
+}
+<span class="com">// 다시 열면 torn tail이 자동 제거된다</span>
+<span class="kw">let mut</span> seg = <span class="ty">Segment</span>::open(&amp;path, <span class="num">0</span>).unwrap();
+seg.append(b<span class="str">"gamma"</span>, <span class="num">3</span>).unwrap();
+seg.sync().unwrap();
+<span class="com">// 읽으면: alpha, beta, gamma (torn 프레임은 없다)</span></code></pre>
+
+<h2>정리</h2>
+<ul>
+  <li>DB는 redo + undo 두 단계 복구가 필요하다. 본체(B-tree)가 제자리 수정이기 때문이다.</li>
+  <li>Quipu-Log는 append-only라 torn tail(반쪽 프레임 하나)만 생긴다. <code>skim()</code>이 valid_len을 계산하고, <code>set_len()</code>으로 잘라낸다. redo도 undo도 필요 없다.</li>
+  <li>CRC 불일치 또는 길이 이상이 torn tail의 신호다.</li>
+  <li><code>base_index</code>는 세그먼트 헤더에 박혀 있어, retention이나 크래시 후에도 레코드의 머클 leaf index가 불변임을 보장한다.</li>
+</ul>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① Quipu-Log에서 "undo 단계"가 없어도 되는 이유를 append-only의 성질로 설명해 보세요.<br>② torn tail이 "첫 번째 레코드가 아닌 마지막 레코드"에서만 일어나는 이유는 무엇인가요?<br>③ <code>base_index</code>가 없다면 retention이 세그먼트를 삭제할 때 어떤 문제가 생길까요?</p></div>
+
+</article>

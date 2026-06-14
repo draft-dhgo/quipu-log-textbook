@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>34 · 수평 확장: 샤딩·일관성 해싱·읽기 복제 — Quipu-Log 교과서</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ 목차</button><b>Quipu-Log 교과서</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn" href="../34-sharding-scaling.html">EN</a><a class="langbtn active" href="34-sharding-scaling.html">한국어</a></div>
+<a class="home" href="index.html">Quipu-Log 교과서</a>
+<div class="sub">파일시스템만으로 짓는 저장 엔진과 변조-탐지 감사 로그 — 밑바닥부터</div>
+<div class="part">파트 1 · 출발점: DB 없이, 파일로</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>감사 로그란, 그리고 왜 &#x27;DB 없이 파일로&#x27;인가</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>Quipu-Log 지도와 DB↔파일시스템 대응표</a>
+<div class="part">파트 2 · 파일시스템 기본기</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>파일시스템의 기본: 파일·디렉토리·inode·디스크립터</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>읽고 쓰기, 그리고 rename의 원자성</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>데이터는 언제 진짜 디스크에 남나: page cache와 fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>std::fs 도구상자: Rust로 파일 다루기</a>
+<div class="part">파트 3 · 저장 엔진의 심장: append-only 로그</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>append-only 로그 = WAL이 곧 데이터베이스</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>세그먼트 파일과 롤오버</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>레코드 프레이밍: 길이·CRC32·magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>직렬화: 구조체를 바이트로</a>
+<div class="part">파트 4 · DB가 공짜로 주던 보장을 파일로 재현</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>내구성: fsync 정책과 group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>원자성과 크래시 복구: torn write와 꼬리 탐지</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>동시성 제어 ①: single-writer와 파일 락</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>동시성 제어 ②: 읽기 스냅샷과 MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>인덱싱: 인메모리 인덱스 + 디스크 토큰</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>쿼리 실행: 세그먼트 스캔과 커서 페이지네이션</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>삭제와 보존: 세그먼트 unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>저장소 레이아웃과 포맷 버저닝</a>
+<div class="part">파트 5 · 무결성: 고치면 티가 나게 (보안 ①)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>해시 함수와 SHA-256: 디지털 지문</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>머클 히스토리 트리: 로그를 32바이트로 커밋</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>포함 증명·일관성 증명</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>체크포인트와 외부 앵커링</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>tamper-evident vs tamper-proof, 그리고 위협 모델</a>
+<div class="part">파트 6 · 기밀성: 비밀을 지키면서 검색하기 (보안 ②)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>필드 보호 4단계: 평문/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>대칭·비대칭·하이브리드 암호와 AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>블라인드 인덱스: 평문 없이 검색</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>쓰기 전용 배포: 개인키 없는 서버</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>키 관리: 키링·버저닝·로테이션 vs 리키</a>
+<div class="part">파트 7 · 쓰기·읽기 경로</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>비동기 파이프라인: 논블로킹 emit과 백프레셔</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>신뢰성: 재시도·백오프·DLQ·멱등성</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>tower 미들웨어: HTTP 요청 자동 기록</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>권한(RBAC)·필터·메타 감사</a>
+<div class="part">파트 8 · 분산·운영·확장</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>단일 장애점과 가용성: 클라이언트 스풀</a>
+<a class="lnk active" href="34-sharding-scaling.html"><span class="n">34</span>수평 확장: 샤딩·일관성 해싱·읽기 복제</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>서버·클라이언트·MCP·관측성</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">파트 8 · 분산·운영·확장</span><h1><span class="chno">34</span> · 수평 확장: 샤딩·일관성 해싱·읽기 복제</h1></div><article>
+
+<p class="lead">단일 writer 하나로 버틸 수 있는 쓰기 속도에는 한계가 있습니다. "그럼 writer를 여러 개로 늘리면 되지 않나?" — 좋은 생각입니다. 하지만 Quipu-Log의 tamper-evidence는 단일 writer를 전제로 합니다. 이 챕터는 그 전제를 깨지 않으면서 쓰기를 <em>N</em>배로 늘리는 방법을 다룹니다: 테넌트별 샤딩.</p>
+
+<div class="callout"><span class="lab">한 문장 요약</span><p>지켜야 할 불변식은 "글로벌 체인이 하나"가 아니라 <em>"체인당 writer 하나"</em>입니다. 독립된 체인을 N개 두면 변조 증명은 그대로이고 쓰기 처리량은 N배가 됩니다.</p></div>
+
+<h2>왜 단일 writer가 병목인가</h2>
+
+<p>모든 이벤트가 한 writer 스레드를 통과합니다. 내부적으로 파이프라인 큐(<span class="pill">29장 비동기 파이프라인</span>)가 버퍼링하지만, 큐를 소비하는 것도 결국 한 스레드입니다. CPU 1개와 디스크 I/O 1개를 나눠 쓰는 셈이죠. 이 천장을 넘으려면 writer 자체를 늘려야 합니다.</p>
+
+<p>문제는, 여러 writer가 <em>같은 체인</em>에 동시에 쓰면 체인 헤드가 분기됩니다. 어느 쪽이 진짜인지 합의가 필요해지고, 그 합의 로직에 버그가 생기는 순간 변조 탐지의 전제가 무너집니다.</p>
+
+<p><strong>해법</strong>: 체인을 여러 개로 쪼갭니다. 각 체인은 여전히 writer 하나입니다. 다만 서로 다른 테넌트의 이벤트가 서로 다른 체인에 쓰입니다.</p>
+
+<h2>ShardRouter: 쓰기 라우팅 + 읽기 팬아웃</h2>
+
+<p><code>ShardRouter</code>는 N개의 독립 <code>AuditPipeline</code>을 묶는 얇은 조율자입니다. 코어 스토리지 엔진(<code>quipu-core</code>)은 손대지 않았습니다 — 각 샤드는 오늘날의 단일 스토어와 똑같이 동작하는 <code>AuditStore</code>이고, <code>ShardRouter</code>는 그것들의 "교통 경찰"입니다.</p>
+
+<figure>
+<svg viewBox="0 0 700 380" role="img" aria-label="ShardRouter 구조: 쓰기 라우팅과 읽기 팬아웃">
+  <defs>
+    <marker id="aw" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#7aa2ff"/>
+    </marker>
+    <marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#8be9c0"/>
+    </marker>
+    <marker id="af" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#ffd479"/>
+    </marker>
+  </defs>
+  <style>
+    .t34{fill:#e6e8ee;font:13px -apple-system,sans-serif}
+    .s34{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .bx34{fill:#161922;stroke:#2a2f3d;stroke-width:1.5}
+    .sh0{fill:#16241d;stroke:#8be9c0;stroke-width:1.5}
+    .sh1{fill:#1a1a12;stroke:#ffd479;stroke-width:1.5}
+    .shn{fill:#1a1224;stroke:#c792ea;stroke-width:1.5}
+    .shf{fill:#121216;stroke:#2a2f3d;stroke-width:1.5;stroke-dasharray:4,3}
+  </style>
+
+  <!-- 서비스들 -->
+  <rect x="10" y="80" width="100" height="36" class="bx34" rx="5"/>
+  <text x="60" y="103" class="s34" text-anchor="middle">서비스 A (tenant-x)</text>
+  <rect x="10" y="130" width="100" height="36" class="bx34" rx="5"/>
+  <text x="60" y="153" class="s34" text-anchor="middle">서비스 B (tenant-y)</text>
+  <rect x="10" y="180" width="100" height="36" class="bx34" rx="5"/>
+  <text x="60" y="203" class="s34" text-anchor="middle">서비스 C (tenant-z)</text>
+
+  <!-- ShardRouter -->
+  <rect x="148" y="60" width="150" height="240" class="bx34" rx="8"/>
+  <text x="223" y="82" class="t34" text-anchor="middle">ShardRouter</text>
+  <rect x="158" y="92" width="130" height="42" rx="5" fill="#0b0d12" stroke="#7aa2ff" stroke-width="1"/>
+  <text x="223" y="112" class="s34" text-anchor="middle" fill="#7aa2ff">ShardMap</text>
+  <text x="223" y="127" class="s34" text-anchor="middle">일관 해싱 링</text>
+  <text x="223" y="162" class="s34" text-anchor="middle">route_write(tenant)</text>
+  <text x="223" y="180" class="t34" text-anchor="middle" fill="#7aa2ff">→ 액티브 샤드</text>
+  <text x="223" y="220" class="s34" text-anchor="middle">read_targets(tenant)</text>
+  <text x="223" y="238" class="t34" text-anchor="middle" fill="#8be9c0">→ 샤드 목록</text>
+  <text x="223" y="275" class="s34" text-anchor="middle">query_merged()</text>
+  <text x="223" y="290" class="t34" text-anchor="middle" fill="#ffd479">타임스탬프 머지</text>
+
+  <!-- 샤드들 -->
+  <rect x="340" y="50" width="130" height="80" class="sh0" rx="6"/>
+  <text x="405" y="72" class="t34" text-anchor="middle" fill="#8be9c0">shard-0000</text>
+  <text x="405" y="90" class="s34" text-anchor="middle">AuditPipeline</text>
+  <text x="405" y="105" class="s34" text-anchor="middle">writer + 체인 + 레지스트리</text>
+  <text x="405" y="120" class="s34" text-anchor="middle">체크포인트</text>
+
+  <rect x="340" y="155" width="130" height="80" class="sh1" rx="6"/>
+  <text x="405" y="177" class="t34" text-anchor="middle" fill="#ffd479">shard-0001</text>
+  <text x="405" y="195" class="s34" text-anchor="middle">AuditPipeline</text>
+  <text x="405" y="210" class="s34" text-anchor="middle">writer + 체인 + 레지스트리</text>
+  <text x="405" y="225" class="s34" text-anchor="middle">체크포인트</text>
+
+  <rect x="340" y="260" width="130" height="80" class="shn" rx="6"/>
+  <text x="405" y="282" class="t34" text-anchor="middle" fill="#c792ea">shard-N (frozen)</text>
+  <text x="405" y="300" class="s34" text-anchor="middle">읽기 전용</text>
+  <text x="405" y="318" class="s34" text-anchor="middle">쓰기 없음(영구)</text>
+  <text x="405" y="333" class="s34" text-anchor="middle">과거 이력 보존</text>
+
+  <!-- 머지 -->
+  <rect x="510" y="155" width="170" height="70" rx="6" fill="#161922" stroke="#ffd479" stroke-width="1.5"/>
+  <text x="595" y="178" class="t34" text-anchor="middle" fill="#ffd479">cross-shard 쿼리</text>
+  <text x="595" y="196" class="s34" text-anchor="middle">각 샤드 → 최대 limit개</text>
+  <text x="595" y="212" class="s34" text-anchor="middle">(timestamp, log_id) k-way 머지</text>
+
+  <!-- 화살표: 서비스 → 라우터 -->
+  <line x1="110" y1="98" x2="148" y2="120" stroke="#7aa2ff" stroke-width="1.2" marker-end="url(#aw)"/>
+  <line x1="110" y1="148" x2="148" y2="148" stroke="#7aa2ff" stroke-width="1.2" marker-end="url(#aw)"/>
+  <line x1="110" y1="198" x2="148" y2="190" stroke="#7aa2ff" stroke-width="1.2" marker-end="url(#aw)"/>
+
+  <!-- 화살표: 라우터 → 샤드 (쓰기) -->
+  <line x1="298" y1="115" x2="340" y2="90" stroke="#7aa2ff" stroke-width="1.5" marker-end="url(#aw)"/>
+  <line x1="298" y1="150" x2="340" y2="195" stroke="#ffd479" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#af)"/>
+
+  <!-- 화살표: 라우터 → 샤드 (읽기 팬아웃) -->
+  <line x1="298" y1="240" x2="340" y2="90" stroke="#8be9c0" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#ar)"/>
+  <line x1="298" y1="255" x2="340" y2="195" stroke="#8be9c0" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#ar)"/>
+  <line x1="298" y1="270" x2="340" y2="300" stroke="#8be9c0" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#ar)"/>
+
+  <!-- 화살표: 샤드 → 머지 -->
+  <line x1="470" y1="90" x2="510" y2="180" stroke="#8be9c0" stroke-width="1" marker-end="url(#ar)"/>
+  <line x1="470" y1="195" x2="510" y2="195" stroke="#8be9c0" stroke-width="1" marker-end="url(#ar)"/>
+  <line x1="470" y1="300" x2="510" y2="210" stroke="#8be9c0" stroke-width="1" marker-end="url(#ar)"/>
+</svg>
+<figcaption>ShardRouter는 쓰기를 테넌트에 따라 한 샤드로 라우팅하고, 읽기는 관련 샤드 전체에 팬아웃 후 타임스탬프로 머지합니다. frozen 샤드는 읽기만 가능하고 쓰기를 받지 않습니다.</figcaption>
+</figure>
+
+<h2>일관 해싱: 적게 재분배하고 많이 확장한다</h2>
+
+<p>테넌트를 어느 샤드로 보낼지 결정하는 건 <code>ShardMap</code>입니다. 단순히 <code>tenant_id % N</code>을 해버리면 샤드 수가 바뀔 때 <em>모든</em> 테넌트가 다른 샤드로 이동합니다. 이것은 큰 문제입니다 — 이전에 기록한 이력이 다 다른 샤드에 있으니까요.</p>
+
+<p>해법이 <strong>일관 해싱(consistent hashing)</strong>입니다. 해시 링에 각 샤드의 가상 노드(virtual node)를 배치하고, 테넌트 해시가 링에서 어느 가상 노드 다음에 오는지로 샤드를 찾습니다. 샤드가 추가될 때 이동하는 테넌트는 <em>전체의 일부만</em>입니다.</p>
+
+<pre><span class="filename">crates/quipu-middleware/src/sharding/shard_map.rs</span><code><span class="kw">const</span> VNODES_PER_SHARD: <span class="ty">u32</span> = 64; <span class="com">// 샤드당 가상 노드 수</span>
+
+<span class="kw">pub fn</span> <span class="fn">route_write</span>(&amp;self, tenant: &amp;<span class="ty">str</span>) -&gt; <span class="ty">ShardId</span> {
+    let h = self.hash(&amp;tenant);
+    <span class="hl">// 링에서 h 이상인 첫 가상 노드 → 그 가상 노드가 속한 샤드.</span>
+    match self.ring.binary_search_by_key(&amp;h, |(rh, _)| *rh) {
+        Ok(i) =&gt; self.ring[i].1,
+        Err(i) if i &lt; self.ring.len() =&gt; self.ring[i].1,
+        Err(_) =&gt; self.ring[0].1, <span class="com">// 링 끝을 넘으면 맨 앞으로</span>
+    }
+}</code></pre>
+
+<h2>리샤딩은 add-only: 레코드를 옮기지 않는다</h2>
+
+<p>append-only 체인은 재배치할 수 없습니다. 한번 쓴 레코드를 다른 샤드로 옮기면 체인이 끊어지고 tamper-evidence가 무너집니다. 그래서 리샤딩은 이렇게 작동합니다.</p>
+
+<ol>
+  <li>기존 샤드를 <strong>freeze</strong>합니다. 이제부터 그 샤드는 쓰기를 받지 않습니다 — 영원히.</li>
+  <li>새 빈 샤드를 추가해 액티브로 만듭니다.</li>
+  <li>이후 쓰기는 일관 해싱에 따라 새 샤드로 향합니다.</li>
+</ol>
+
+<p>frozen 샤드의 과거 이력은 그 자리에 그대로 있습니다. 테넌트의 읽기는 현재 소유 샤드와 <em>모든 frozen 샤드</em>를 함께 조회합니다(<code>read_targets</code>). <strong>레코드는 절대 이동하지 않고, 단일 writer 불변식도 절대 깨지지 않습니다.</strong></p>
+
+<pre><span class="filename">crates/quipu-middleware/src/sharding/shard_map.rs</span><code><span class="kw">pub fn</span> <span class="fn">read_targets</span>(&amp;self, tenant: <span class="ty">Option</span>&lt;&amp;<span class="ty">str</span>&gt;) -&gt; <span class="ty">Vec</span>&lt;<span class="ty">ShardId</span>&gt; {
+    match tenant {
+        <span class="hl">Some(t) =&gt; {
+            // 현재 액티브 소유 샤드 + 모든 frozen 샤드
+            // (리샤딩 전 이력이 frozen에 있을 수 있다)
+            let mut targets = vec![self.route_write(t)];
+            targets.extend(self.frozen.iter());
+            targets
+        }</span>
+        None =&gt; self.all_shards().collect(), <span class="com">// 테넌트 없으면 전체 팬아웃</span>
+    }
+}</code></pre>
+
+<div class="callout warn"><span class="lab">주의</span><p>리샤딩은 늘리기만 할 수 있습니다 — 줄이는 방향은 없습니다. 샤드 수는 사전에 신중하게 계획하세요. 또한 마지막 남은 액티브 샤드는 freeze할 수 없습니다 (쓰기가 갈 곳이 없어지므로).</p></div>
+
+<h2>크로스 샤드 쿼리: 팬아웃 + 타임스탬프 머지</h2>
+
+<p>여러 샤드에 걸친 쿼리는 각 샤드에 동일한 서브 쿼리를 날리고, 결과를 <code>(timestamp_micros, log_id)</code> 기준으로 k-way 머지합니다. 전역 총 순서가 없기 때문에 타임스탬프가 기준이 됩니다.</p>
+
+<p>페이지네이션이 까다롭습니다. 전역 인덱스가 없으므로, 페이지를 넘길 때마다 각 샤드에서 어디까지 읽었는지를 들고 다녀야 합니다. 그것이 <code>MultiCursor</code>입니다 — 샤드별 독립 커서의 맵.</p>
+
+<pre><span class="filename">crates/quipu-middleware/src/sharding/fanout.rs</span><code><span class="com">/// 재개 가능한 크로스 샤드 커서. 샤드별로 "마지막으로 낸 행 다음" 위치를 기억.</span>
+<span class="kw">pub struct</span> <span class="ty">MultiCursor</span> {
+    <span class="hl">per_shard: BTreeMap&lt;u32, String&gt;,  // 샤드별 불투명 커서</span>
+    done: BTreeSet&lt;u32&gt;,               <span class="com">// 소진된 샤드 — 재시작하지 않는다</span>
+}</code></pre>
+
+<div class="callout analogy"><span class="lab">비유</span><p>여러 책을 동시에 읽으면서 내용이 날짜 순으로 이어지도록 편집한다고 상상해보세요. 각 책에 책갈피를 끼워두고, 다음 장으로 넘길 때마다 모든 책의 다음 날짜를 비교해서 가장 이른 것부터 읽습니다. <code>MultiCursor</code>가 그 책갈피 모음입니다.</p></div>
+
+<h2>전역 순서는 포기한다 — 대신 무결성은 지킨다</h2>
+
+<p>샤딩하면 글로벌 단일 타임라인이 없습니다. 서로 다른 샤드의 이벤트는 클럭 기반 타임스탬프로만 정렬됩니다. 이것은 의도된 트레이드오프입니다(ADR-2).</p>
+
+<p>하지만 무결성은 완전히 보존됩니다. 각 샤드는 독립적으로 체인, 체크포인트, 앵커링을 유지합니다. 여기에 더해 <strong>교차 샤드 앵커링</strong>(ADR-5, <code>GlobalCheckpoint</code>)이 "샤드 전체 삭제 또는 롤백"을 탐지합니다 — 각 샤드는 개별적으로 검증을 통과해도, 샤드 집합 자체가 바뀌면 글로벌 체크포인트가 잡아냅니다.</p>
+
+<table>
+  <tr><th>항목</th><th>단일 스토어</th><th>샤딩 후</th></tr>
+  <tr><td>쓰기 처리량</td><td>writer 1개 분</td><td>~N배 (샤드 수)</td></tr>
+  <tr><td>체인당 단일 writer</td><td>✅ 1개</td><td>✅ 샤드당 1개 (불변)</td></tr>
+  <tr><td>글로벌 전 순서</td><td>✅ 있음</td><td>❌ 없음 (클럭 기반)</td></tr>
+  <tr><td>per-shard tamper-evidence</td><td>✅</td><td>✅ 동일</td></tr>
+  <tr><td>글로벌 무결성</td><td>✅</td><td>✅ GlobalCheckpoint</td></tr>
+  <tr><td>읽기 복제</td><td>불가 (active 공유)</td><td>✅ sealed 세그먼트 rsync/스냅샷</td></tr>
+</table>
+
+<h2>읽기 복제: sealed 세그먼트는 그냥 복사해도 된다</h2>
+
+<p>sealed(봉인된) 세그먼트는 <span class="pill">8장 세그먼트와 롤오버</span>에서 설명한 대로 불변입니다. 바이트 하나도 변하지 않죠. 그래서 이것을 다른 호스트에 rsync 또는 스냅샷으로 복사해 쿼리 전용 노드를 만들 수 있습니다. 무결성에 영향이 없습니다 — 복사본도 CRC와 Merkle 트리로 검증됩니다.</p>
+
+<p>단, 액티브(현재 쓰는 중인) 세그먼트 꼬리는 복사 시점에 완전하지 않을 수 있으므로 제외합니다. <code>POST /v1/admin/flush</code>로 플러시한 뒤 복사하면 꼬리까지 일관된 스냅샷을 얻을 수 있습니다.</p>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① "체인당 writer 하나"와 "글로벌 writer 하나"의 차이를 설명해보세요. 샤딩이 어떻게 전자는 지키면서 처리량을 늘릴 수 있나요?<br>② 테넌트 A의 이력이 shard-0000(frozen)과 shard-0002(active)에 나뉘어 있습니다. 쿼리 시 어떤 샤드들을 조회해야 하나요? <code>read_targets</code>는 어떻게 이것을 결정하나요?<br>③ 글로벌 전 순서를 포기했음에도 감사 로그의 목적에는 왜 충분한가요? (힌트: 각 샤드 내 순서와 per-shard 체크포인트를 생각해보세요.)</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="33-availability-spool.html"><span class="dir">← 이전</span><span class="t">33 · 단일 장애점과 가용성: 클라이언트 스풀</span></a><a class="next" href="35-server-client-mcp-obs.html"><span class="dir">다음 →</span><span class="t">35 · 서버·클라이언트·MCP·관측성</span></a></div>
+</div>
+</main>
+</div>
+<script src="../assets/textbook.js"></script>
+</body>
+</html>

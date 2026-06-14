@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>24 · 필드 보호 4단계: 평문/SHA-256/HMAC/RSA — Quipu-Log 교과서</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ 목차</button><b>Quipu-Log 교과서</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn" href="../24-field-protection.html">EN</a><a class="langbtn active" href="24-field-protection.html">한국어</a></div>
+<a class="home" href="index.html">Quipu-Log 교과서</a>
+<div class="sub">파일시스템만으로 짓는 저장 엔진과 변조-탐지 감사 로그 — 밑바닥부터</div>
+<div class="part">파트 1 · 출발점: DB 없이, 파일로</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>감사 로그란, 그리고 왜 &#x27;DB 없이 파일로&#x27;인가</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>Quipu-Log 지도와 DB↔파일시스템 대응표</a>
+<div class="part">파트 2 · 파일시스템 기본기</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>파일시스템의 기본: 파일·디렉토리·inode·디스크립터</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>읽고 쓰기, 그리고 rename의 원자성</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>데이터는 언제 진짜 디스크에 남나: page cache와 fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>std::fs 도구상자: Rust로 파일 다루기</a>
+<div class="part">파트 3 · 저장 엔진의 심장: append-only 로그</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>append-only 로그 = WAL이 곧 데이터베이스</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>세그먼트 파일과 롤오버</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>레코드 프레이밍: 길이·CRC32·magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>직렬화: 구조체를 바이트로</a>
+<div class="part">파트 4 · DB가 공짜로 주던 보장을 파일로 재현</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>내구성: fsync 정책과 group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>원자성과 크래시 복구: torn write와 꼬리 탐지</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>동시성 제어 ①: single-writer와 파일 락</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>동시성 제어 ②: 읽기 스냅샷과 MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>인덱싱: 인메모리 인덱스 + 디스크 토큰</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>쿼리 실행: 세그먼트 스캔과 커서 페이지네이션</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>삭제와 보존: 세그먼트 unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>저장소 레이아웃과 포맷 버저닝</a>
+<div class="part">파트 5 · 무결성: 고치면 티가 나게 (보안 ①)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>해시 함수와 SHA-256: 디지털 지문</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>머클 히스토리 트리: 로그를 32바이트로 커밋</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>포함 증명·일관성 증명</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>체크포인트와 외부 앵커링</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>tamper-evident vs tamper-proof, 그리고 위협 모델</a>
+<div class="part">파트 6 · 기밀성: 비밀을 지키면서 검색하기 (보안 ②)</div>
+<a class="lnk active" href="24-field-protection.html"><span class="n">24</span>필드 보호 4단계: 평문/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>대칭·비대칭·하이브리드 암호와 AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>블라인드 인덱스: 평문 없이 검색</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>쓰기 전용 배포: 개인키 없는 서버</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>키 관리: 키링·버저닝·로테이션 vs 리키</a>
+<div class="part">파트 7 · 쓰기·읽기 경로</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>비동기 파이프라인: 논블로킹 emit과 백프레셔</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>신뢰성: 재시도·백오프·DLQ·멱등성</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>tower 미들웨어: HTTP 요청 자동 기록</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>권한(RBAC)·필터·메타 감사</a>
+<div class="part">파트 8 · 분산·운영·확장</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>단일 장애점과 가용성: 클라이언트 스풀</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>수평 확장: 샤딩·일관성 해싱·읽기 복제</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>서버·클라이언트·MCP·관측성</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">파트 6 · 기밀성: 비밀을 지키면서 검색하기 (보안 ②)</span><h1><span class="chno">24</span> · 필드 보호 4단계: 평문/SHA-256/HMAC/RSA</h1></div><article>
+
+<p class="lead">데이터베이스도 "컬럼 암호화"를 지원합니다. 하지만 실무에서 잘 안 쓰는 이유가 있습니다 — 암호화한 순간 WHERE 절로 검색할 수 없게 되거든요. Quipu-Log는 이 딜레마를 "<em>필드마다 용도에 맞는 보호 수준을 고른다</em>"는 접근으로 해결합니다. 이 챕터에서는 그 4단계 보호 모드를 비교하고, 어떤 필드에 무엇을 골라야 하는지를 정리합니다.</p>
+
+<div class="callout"><span class="lab">한 문장 요약</span><p>필드 보호는 전역 스위치가 아닙니다. 각 필드는 <code>None / Sha256 / Hmac / Rsa</code> 중 하나를 선택하고, 검색성과 키 의존성의 트레이드오프를 감수합니다.</p></div>
+
+<h2>DB에서는 어떻게 했나 — TDE와 컬럼 암호화의 한계</h2>
+
+<p>관계형 DB가 민감한 데이터를 보호하는 방법은 크게 둘입니다.</p>
+
+<ul>
+  <li><strong>TDE(Transparent Data Encryption)</strong> — 디스크 파일 전체를 OS 레벨에서 암호화합니다. DB 엔진이 읽고 쓸 때는 투명하게 복호화되므로 쿼리가 그대로 동작합니다. 하지만 <em>DB 프로세스에 접근할 수 있는 내부자(DBA, 로그 수집 시스템, 백업 읽기 권한자)에게는 완전히 투명하기</em> 때문에 내부 위협에는 무력합니다.</li>
+  <li><strong>컬럼 암호화</strong> — 특정 컬럼 값을 암호화해 저장합니다. 내부자가 파일을 열어도 암호문만 보입니다. 대신 <em>암호화한 컬럼은 <code>WHERE col = '홍길동'</code> 같은 검색이 안 됩니다.</em> 값을 비교하려면 복호화가 먼저 필요한데, 그러면 DB 엔진이 키를 갖고 있어야 하니 내부자 보호가 무너지죠.</li>
+</ul>
+
+<div class="callout dbfs"><span class="lab">DB ↔ 파일시스템</span><p><strong>DB 컬럼 암호화</strong>는 "암호화하면 검색 안 됨"이라는 딜레마를 피할 수 없습니다. <strong>Quipu-Log는</strong> 이 딜레마를 두 가지 방법으로 돌파합니다 — 단방향 해시로 평문 없이 일치 검색을 허용하거나, <span class="pill">26장 블라인드 인덱스</span>로 부분 검색까지 가능하게 합니다. 암호화와 검색성이 동시에 필요하다면, 다음 장들이 그 방법을 설명합니다.</p></div>
+
+<h2>4단계 비교: 무엇을 저장하고, 무엇을 얻나</h2>
+
+<p>Quipu-Log의 <code>FieldProtection</code>은 4단계로 나뉩니다. 아래 비교표로 먼저 전체 그림을 잡아 봅시다.</p>
+
+<table>
+  <tr>
+    <th>보호 수준</th>
+    <th>디스크에 저장되는 것</th>
+    <th>검색성</th>
+    <th>키 필요</th>
+    <th>주요 용도</th>
+  </tr>
+  <tr>
+    <td><code>None</code></td>
+    <td>평문 그대로</td>
+    <td>exact · contains · prefix 모두</td>
+    <td>없음</td>
+    <td>민감하지 않은 일반 필드</td>
+  </tr>
+  <tr>
+    <td><code>Sha256</code></td>
+    <td>SHA-256 다이제스트(64자 hex)</td>
+    <td>exact 일치만</td>
+    <td>없음</td>
+    <td>중간 엔트로피 값(이메일, 의사번호 등)</td>
+  </tr>
+  <tr>
+    <td><code>Hmac</code></td>
+    <td>HMAC-SHA-256 다이제스트(64자 hex) + key_version</td>
+    <td>exact 일치만</td>
+    <td>HMAC 키</td>
+    <td>저엔트로피 값(SSN, 주민번호, 전화번호)</td>
+  </tr>
+  <tr>
+    <td><code>Rsa</code></td>
+    <td>암호문(AES-256-GCM) + 래핑된 키 + nonce</td>
+    <td>기본 없음(블라인드 인덱스 추가 가능)</td>
+    <td>RSA 공개키(쓰기) + 개인키(읽기)</td>
+    <td>복호화가 필요한 값(이름, 주소 전체 등)</td>
+  </tr>
+</table>
+
+<p>코드에서 이 4단계는 <code>FieldProtection</code> enum으로 표현됩니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/schema.rs</span><code><span class="kw">pub enum</span> <span class="ty">FieldProtection</span> {
+    <span class="hl">None,</span>
+    <span class="hl">Sha256,</span>  <span class="com">// keyless — 키 없이도 동작, 저엔트로피에 취약</span>
+    <span class="hl">Hmac,</span>    <span class="com">// keyed — HMAC 키 없으면 offline brute-force 불가</span>
+    <span class="hl">Rsa,</span>     <span class="com">// hybrid AES-256-GCM + RSA-OAEP, 복호화 가능</span>
+}</code></pre>
+
+<p>그리고 이 보호 결과물은 <code>StoredValue</code>로 디스크에 남습니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/model.rs</span><code><span class="kw">pub enum</span> <span class="ty">StoredValue</span> {
+    <span class="dim">Plain(Value),                       // None → 평문</span>
+    <span class="dim">Sha256(String),                     // hex 다이제스트</span>
+    Hmac { key_version: <span class="ty">u32</span>, digest: <span class="ty">String</span> }, <span class="com">// keyed 다이제스트 + 버전</span>
+    <span class="hl">Rsa {</span>
+        <span class="hl">key_version: <span class="ty">u32</span>,               // 암호화에 쓴 공개키 버전</span>
+        <span class="hl">wrapped_key: <span class="ty">String</span>,           // RSA로 감싼 AES 키 (b64)</span>
+        <span class="hl">nonce: <span class="ty">String</span>, ciphertext: <span class="ty">String</span>,</span>
+    <span class="hl">},</span>
+}</code></pre>
+
+<h2>각 단계를 하나씩 뜯어보기</h2>
+
+<figure>
+<svg viewBox="0 0 760 320" role="img" aria-label="FieldProtection 4단계 흐름 비교">
+  <defs>
+    <marker id="arr24" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .t24{fill:#e6e8ee;font:600 13px -apple-system,sans-serif}
+    .s24{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .box24{rx:8;stroke-width:1.5}
+    .arr24{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#arr24)}
+  </style>
+
+  <!-- None -->
+  <rect x="10" y="30" width="160" height="52" class="box24" fill="#161922" stroke="#2a2f3d"/>
+  <text x="90" y="52" class="t24" text-anchor="middle">평문 값</text>
+  <text x="90" y="70" class="s24" text-anchor="middle">"Alice Smith"</text>
+  <line x1="90" y1="82" x2="90" y2="108" class="arr24"/>
+  <rect x="10" y="108" width="160" height="40" class="box24" fill="#16241d" stroke="#8be9c0"/>
+  <text x="90" y="133" class="s24" text-anchor="middle" fill="#8be9c0">Plain("Alice Smith")</text>
+  <text x="90" y="8" class="t24" text-anchor="middle" fill="#9aa3b2">None</text>
+
+  <!-- SHA-256 -->
+  <rect x="195" y="30" width="160" height="52" class="box24" fill="#161922" stroke="#2a2f3d"/>
+  <text x="275" y="52" class="t24" text-anchor="middle">평문 값</text>
+  <text x="275" y="70" class="s24" text-anchor="middle">"010-1234-5678"</text>
+  <line x1="275" y1="82" x2="275" y2="108" class="arr24"/>
+  <rect x="195" y="108" width="160" height="52" class="box24" fill="#1a1a0d" stroke="#ffd479"/>
+  <text x="275" y="128" class="s24" text-anchor="middle" fill="#ffd479">SHA-256</text>
+  <text x="275" y="148" class="s24" text-anchor="middle">→ "3a9f2b..." (hex)</text>
+  <text x="275" y="8" class="t24" text-anchor="middle" fill="#9aa3b2">Sha256</text>
+
+  <!-- HMAC -->
+  <rect x="380" y="30" width="160" height="52" class="box24" fill="#161922" stroke="#2a2f3d"/>
+  <text x="460" y="52" class="t24" text-anchor="middle">평문 값</text>
+  <text x="460" y="70" class="s24" text-anchor="middle">"123-45-6789" (SSN)</text>
+  <line x1="460" y1="82" x2="460" y2="108" class="arr24"/>
+  <rect x="380" y="108" width="160" height="52" class="box24" fill="#0d1a20" stroke="#7aa2ff"/>
+  <text x="460" y="128" class="s24" text-anchor="middle" fill="#7aa2ff">HMAC + 키</text>
+  <text x="460" y="148" class="s24" text-anchor="middle">→ keyed 다이제스트</text>
+  <text x="460" y="8" class="t24" text-anchor="middle" fill="#9aa3b2">Hmac</text>
+
+  <!-- RSA -->
+  <rect x="565" y="30" width="180" height="52" class="box24" fill="#161922" stroke="#2a2f3d"/>
+  <text x="655" y="52" class="t24" text-anchor="middle">평문 값</text>
+  <text x="655" y="70" class="s24" text-anchor="middle">"홍길동" (이름)</text>
+  <line x1="655" y1="82" x2="655" y2="108" class="arr24"/>
+  <rect x="565" y="108" width="180" height="52" class="box24" fill="#200d1a" stroke="#ff8b8b"/>
+  <text x="655" y="128" class="s24" text-anchor="middle" fill="#ff8b8b">AES-GCM 암호문</text>
+  <text x="655" y="148" class="s24" text-anchor="middle">+ RSA 래핑 키</text>
+  <text x="655" y="8" class="t24" text-anchor="middle" fill="#9aa3b2">Rsa</text>
+
+  <!-- Labels below -->
+  <text x="90" y="185" class="s24" text-anchor="middle" fill="#8be9c0">검색 ✓ 전부</text>
+  <text x="275" y="185" class="s24" text-anchor="middle" fill="#ffd479">검색 ✓ exact만</text>
+  <text x="460" y="185" class="s24" text-anchor="middle" fill="#7aa2ff">검색 ✓ exact만</text>
+  <text x="655" y="185" class="s24" text-anchor="middle" fill="#ff8b8b">검색 ✗ (기본)</text>
+
+  <text x="90" y="205" class="s24" text-anchor="middle">키 없음</text>
+  <text x="275" y="205" class="s24" text-anchor="middle">키 없음</text>
+  <text x="460" y="205" class="s24" text-anchor="middle">HMAC 키</text>
+  <text x="655" y="205" class="s24" text-anchor="middle">RSA 공개키</text>
+
+  <!-- 복호 가능 화살표 -->
+  <text x="655" y="245" class="s24" text-anchor="middle" fill="#c792ea">← 개인키로 복호화 가능</text>
+  <text x="90" y="245" class="s24" text-anchor="middle" fill="#ff8b8b">← 복호화 불가 (일방향)</text>
+  <text x="275" y="245" class="s24" text-anchor="middle" fill="#ff8b8b">← 복호화 불가 (일방향)</text>
+  <text x="460" y="245" class="s24" text-anchor="middle" fill="#ff8b8b">← 복호화 불가 (일방향)</text>
+</svg>
+<figcaption>FieldProtection 4단계: 평문이 어떻게 변환돼 저장되고, 무엇이 가능하고 불가능한지.</figcaption>
+</figure>
+
+<h3>None — 평문</h3>
+<p>아무 변환 없이 그대로 저장합니다. 민감하지 않은 필드에 씁니다. 검색은 모든 방식이 가능하고, 별도 키 설정이 필요 없습니다.</p>
+
+<h3>Sha256 — 키 없는 단방향 해시</h3>
+<p>평문의 SHA-256 다이제스트만 저장합니다. 검색할 때는 질의어를 똑같이 SHA-256으로 해싱해 비교하므로 <em>exact 일치 검색</em>은 동작합니다. 원본 평문은 복호화할 수 없습니다. 다만 키가 없으므로 디스크를 열람할 수 있는 공격자가 사전 공격(dictionary attack)을 시도할 수 있습니다 — 전화번호, 주민번호처럼 경우의 수가 유한한 값에는 위험합니다.</p>
+
+<h3>Hmac — 키 있는 단방향 해시</h3>
+<p>HMAC-SHA-256으로 다이제스트를 만들고, 그 다이제스트를 만드는 데 쓴 키 버전도 함께 저장합니다. 검색 시 서버는 질의어를 같은 HMAC 키로 해싱해 비교하므로 exact 일치가 가능합니다. <strong>키 없이는 오프라인 사전 공격이 불가능합니다.</strong> SSN, 전화번호 같은 저엔트로피 값에는 Sha256 대신 반드시 Hmac을 써야 하는 이유입니다.</p>
+
+<h3>Rsa — 복호화 가능한 하이브리드 암호</h3>
+<p>값을 AES-256-GCM으로 암호화하고, 그 AES 키를 RSA 공개키로 감싸 저장합니다. 개인키를 가진 주체만 복호화할 수 있습니다. 기본적으로 검색이 불가능하지만, <span class="pill">26장 블라인드 인덱스</span>를 추가하면 prefix/ngram 검색이 가능해집니다. 왜 이 독특한 하이브리드 구조를 택했는지는 <span class="pill">25장</span>에서 자세히 설명합니다.</p>
+
+<div class="callout key"><span class="lab">보안 포인트</span><p>SHA-256은 "키가 없다 = 누구나 같은 해시를 만들 수 있다"는 뜻입니다. 전화번호 01012345678을 SHA-256한 값은 전 세계 어디서나 동일하므로, 공격자가 10억 개의 한국 번호를 해싱해 테이블을 만들면(레인보우 테이블) 다이제스트만으로 원본을 복구할 수 있습니다. HMAC은 서버만 아는 비밀 키가 섞이므로 그런 사전 공격이 원천 봉쇄됩니다.</p></div>
+
+<h2>보호는 레지스트리 필드에만 적용됩니다</h2>
+
+<p>이 지점이 가장 자주 혼동되는 부분입니다. 반드시 기억해야 합니다.</p>
+
+<div class="callout warn"><span class="lab">주의</span><p><strong>FieldProtection은 레지스트리 필드(엔티티의 속성)에만 적용됩니다.</strong> 감사 로그 행의 <code>method</code>, <code>url</code>, <code>content</code>, 커스텀 컬럼은 <em>항상 평문</em>입니다. 민감한 정보(PII, 비밀번호, SSN)를 <code>content</code>나 URL에 넣으면 보호되지 않습니다. 민감한 값은 레지스트리 필드로 설계해 보호 수준을 붙이고, <code>entity_id</code>는 불투명한 ID(UUID 등)로 유지하세요.</p></div>
+
+<p>예를 들어 환자 정보를 기록한다면 이렇게 설계합니다.</p>
+
+<pre><span class="filename">TypeSchema 설계 예시</span><code><span class="fn">store</span>.define_type(<span class="ty">TypeSchema</span>::new(<span class="str">"patient"</span>, <span class="fn">vec!</span>[
+    <span class="hl"><span class="ty">FieldDef</span>::text(<span class="str">"ssn"</span>).protection(<span class="ty">FieldProtection</span>::Hmac).indexed(),</span>
+    <span class="ty">FieldDef</span>::text(<span class="str">"name"</span>).protection(<span class="ty">FieldProtection</span>::Rsa),
+    <span class="ty">FieldDef</span>::text(<span class="str">"mrn"</span>).protection(<span class="ty">FieldProtection</span>::Sha256).indexed(),
+]))?;
+<span class="com">// entity_id는 opaque id (예: "patient-uuid-001") — SSN 직접 사용 금지</span>
+<span class="com">// content, url 같은 로그 컬럼에는 PII를 넣지 마세요</span></code></pre>
+
+<h2>정리</h2>
+<ul>
+  <li>보호 수준은 <strong>필드별 선택</strong>이다 — 전역 스위치가 아니라 필드마다 용도에 맞게 골라야 한다.</li>
+  <li><strong>None</strong> 평문, <strong>Sha256</strong> 키 없는 단방향, <strong>Hmac</strong> 키 있는 단방향, <strong>Rsa</strong> 복호화 가능. 검색성은 앞 셋은 exact(Rsa는 기본 없음).</li>
+  <li><strong>저엔트로피 값에는 Hmac</strong>을 쓴다 — Sha256은 오프라인 사전 공격에 취약하다.</li>
+  <li><strong>보호는 레지스트리 필드만</strong> — 로그 컬럼(method/url/content)은 항상 평문이다.</li>
+  <li>암호화하면서 검색도 하고 싶다면 → <span class="pill">25장 하이브리드 암호</span>와 <span class="pill">26장 블라인드 인덱스</span>.</li>
+</ul>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① DB의 TDE와 컬럼 암호화는 왜 "검색 불가" 문제를 갖게 되나요? Quipu-Log의 Sha256/Hmac은 이 문제를 어떻게 회피했나요?<br>② SSN을 Sha256으로 보호하면 왜 위험한지, Hmac으로 바꿔야 하는 이유를 한 문장으로 설명해 보세요.<br>③ 환자의 이름을 로그 <code>url</code>에 넣는 것이 왜 문제인가요? 올바른 설계는 무엇인가요?</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="23-threat-model.html"><span class="dir">← 이전</span><span class="t">23 · tamper-evident vs tamper-proof, 그리고 위협 모델</span></a><a class="next" href="25-crypto-internals.html"><span class="dir">다음 →</span><span class="t">25 · 대칭·비대칭·하이브리드 암호와 AEAD</span></a></div>
+</div>
+</main>
+</div>
+<script src="../assets/textbook.js"></script>
+</body>
+</html>

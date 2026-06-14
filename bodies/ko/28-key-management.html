@@ -1,0 +1,182 @@
+<article>
+
+<p class="lead">암호화를 도입한 순간, 새로운 책임이 생깁니다 — 키 관리. 감사 로그에서 키를 잃는다는 건 DB에서 잊어버린 비밀번호와 다릅니다. <strong>키를 잃으면 그 키로 보호된 모든 과거 기록을 영영 읽을 수 없게 됩니다.</strong> 에스크로도, 백도어도, 복구 방법도 없습니다. 이 챕터에서는 키링 버전 체계와 로테이션·리키 두 운영 경로를 정리합니다.</p>
+
+<div class="callout"><span class="lab">한 문장 요약</span><p>키 로테이션(새 키 추가)은 저렴하고 일상적입니다. 리키(old→new 재암호화)는 키 유출 후 딱 한 번, 비싸고 무겁습니다. 혼동하지 마세요.</p></div>
+
+<h2>KeyRing: 버전 키 관리자</h2>
+
+<p><code>KeyRing</code>은 RSA 키쌍과 HMAC 키를 버전 번호로 관리합니다. 버전은 <code>u32</code>이고 0은 "키 없음" 센티넬로 예약돼 있어, 실제 키 버전은 1부터 시작합니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/crypto.rs — KeyVersion, KEYLESS</span><code><span class="kw">pub type</span> <span class="ty">KeyVersion</span> = <span class="ty">u32</span>;
+<span class="hl"><span class="kw">pub const</span> <span class="ty">KEYLESS</span>: <span class="ty">KeyVersion</span> = 0; <span class="com">// SHA-256 보호 필드의 다이제스트에 쓰는 센티넬</span></span>
+
+<span class="kw">pub struct</span> <span class="ty">KeyRing</span> {
+    rsa: <span class="ty">BTreeMap</span>&lt;<span class="ty">KeyVersion</span>, <span class="ty">RsaPair</span>&gt;,  <span class="com">// BTreeMap: 버전 오름차순 정렬</span>
+    macs: <span class="ty">BTreeMap</span>&lt;<span class="ty">KeyVersion</span>, <span class="ty">Vec</span>&lt;u8&gt;&gt;,
+}
+<span class="com">// 활성 키 = 가장 높은 버전: BTreeMap::keys().next_back()</span></code></pre>
+
+<p>새 레코드를 쓸 때는 항상 <strong>가장 높은 버전(활성 키)</strong>이 사용됩니다. 저장된 레코드는 어떤 버전의 키로 만들었는지를 <code>key_version</code> 필드에 기록합니다. 읽을 때는 그 버전의 키를 꺼내씁니다.</p>
+
+<figure>
+<svg viewBox="0 0 760 220" role="img" aria-label="키 버전 로테이션 타임라인">
+  <defs>
+    <marker id="arr28" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .t28{fill:#e6e8ee;font:600 12px -apple-system,sans-serif}
+    .s28{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .bx28{rx:6;stroke-width:1.5}
+    .ln28{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#arr28)}
+  </style>
+
+  <!-- Timeline axis -->
+  <line x1="40" y1="100" x2="720" y2="100" class="ln28"/>
+  <text x="730" y="104" class="s28">시간</text>
+
+  <!-- Version 1 era -->
+  <rect x="40" y="60" width="200" height="30" class="bx28" fill="#16241d" stroke="#8be9c0"/>
+  <text x="140" y="80" class="t28" text-anchor="middle" fill="#8be9c0">키 v1 활성 (쓰기+읽기)</text>
+
+  <!-- Rotation point -->
+  <line x1="240" y1="40" x2="240" y2="130" stroke="#ffd479" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="243" y="38" class="s28" fill="#ffd479">로테이션</text>
+  <text x="243" y="52" class="s28" fill="#ffd479">(v2 추가)</text>
+
+  <!-- Version 1 read-only -->
+  <rect x="240" y="60" width="230" height="30" class="bx28" fill="#161922" stroke="#2a2f3d"/>
+  <text x="355" y="80" class="t28" text-anchor="middle" fill="#9aa3b2">키 v1 → 읽기 전용</text>
+
+  <!-- Version 2 active -->
+  <rect x="240" y="30" width="230" height="22" class="bx28" fill="#16241d" stroke="#8be9c0"/>
+  <text x="355" y="46" class="t28" text-anchor="middle" fill="#8be9c0">키 v2 활성 (쓰기+읽기)</text>
+
+  <!-- Second rotation -->
+  <line x1="470" y1="20" x2="470" y2="130" stroke="#ffd479" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="473" y="18" class="s28" fill="#ffd479">로테이션</text>
+  <text x="473" y="32" class="s28" fill="#ffd479">(v3 추가)</text>
+
+  <!-- v1, v2 read-only, v3 active -->
+  <rect x="470" y="60" width="240" height="30" class="bx28" fill="#161922" stroke="#2a2f3d"/>
+  <text x="590" y="80" class="t28" text-anchor="middle" fill="#9aa3b2">v1, v2 → 읽기 전용</text>
+
+  <rect x="470" y="20" width="240" height="22" class="bx28" fill="#16241d" stroke="#8be9c0"/>
+  <text x="590" y="36" class="t28" text-anchor="middle" fill="#8be9c0">키 v3 활성 (쓰기+읽기)</text>
+
+  <!-- Records on timeline -->
+  <rect x="60" y="110" width="80" height="35" class="bx28" fill="#0b0d12" stroke="#7aa2ff"/>
+  <text x="100" y="125" class="s28" text-anchor="middle" fill="#7aa2ff">레코드 A</text>
+  <text x="100" y="140" class="s28" text-anchor="middle">key_v = 1</text>
+
+  <rect x="280" y="110" width="80" height="35" class="bx28" fill="#0b0d12" stroke="#7aa2ff"/>
+  <text x="320" y="125" class="s28" text-anchor="middle" fill="#7aa2ff">레코드 B</text>
+  <text x="320" y="140" class="s28" text-anchor="middle">key_v = 2</text>
+
+  <rect x="520" y="110" width="80" height="35" class="bx28" fill="#0b0d12" stroke="#7aa2ff"/>
+  <text x="560" y="125" class="s28" text-anchor="middle" fill="#7aa2ff">레코드 C</text>
+  <text x="560" y="140" class="s28" text-anchor="middle">key_v = 3</text>
+
+  <!-- Note -->
+  <text x="40" y="185" class="s28">* 레코드 A(key_v=1) 읽을 때: KeyRing에서 v1 키 꺼내 복호화. 로테이션 후에도 옛 레코드 읽기 가능.</text>
+  <text x="40" y="200" class="s28">* 로테이션 = 새 버전 키 추가만. 옛 키 삭제하지 않음. 리키 없이 모든 구버전 레코드 계속 접근 가능.</text>
+</svg>
+<figcaption>키 로테이션은 새 버전을 추가하는 것. 이전 버전은 읽기용으로 유지된다. 레코드에 key_version이 기록돼 있어 어떤 키로 만들었는지 항상 알 수 있다.</figcaption>
+</figure>
+
+<h2>로테이션 — 저렴하고 일상적</h2>
+
+<p>정기적인 키 교체(로테이션)는 보안 위생의 기본입니다. Quipu-Log에서 로테이션은 단순합니다: <strong>새 버전의 키를 KeyRing에 추가하기만 하면 됩니다.</strong> 기존 레코드를 건드릴 필요가 없습니다.</p>
+
+<pre><span class="filename">quipu-server config.json — 버전 목록으로 전환</span><code><span class="str">"keys"</span>: {
+    <span class="str">"hmac_keys"</span>: [
+        { <span class="str">"version"</span>: 1, <span class="str">"file"</span>: <span class="str">"/etc/quipu/hmac-v1.key"</span> },
+        <span class="hl">{ <span class="str">"version"</span>: 2, <span class="str">"file"</span>: <span class="str">"/etc/quipu/hmac-v2.key"</span> }</span>  <span class="com">// 새 활성 키</span>
+    ],
+    <span class="str">"rsa_keys"</span>: [
+        { <span class="str">"version"</span>: 1, <span class="str">"public_key_pem_file"</span>: <span class="str">"/etc/quipu/rsa-v1-pub.pem"</span> },
+        <span class="hl">{ <span class="str">"version"</span>: 2, <span class="str">"public_key_pem_file"</span>: <span class="str">"/etc/quipu/rsa-v2-pub.pem"</span> }</span>
+    ]
+}</code></pre>
+
+<p>서버 재시작 후 v2가 활성 키가 됩니다. 새 레코드는 v2로 암호화됩니다. v1으로 만든 옛 레코드는 v1 키가 KeyRing에 남아 있으므로 여전히 읽을 수 있습니다. 아주 간단합니다.</p>
+
+<div class="callout why"><span class="lab">왜 이렇게?</span><p>레코드에 <code>key_version</code>을 기록하는 이유가 여기에 있습니다. "이 레코드를 만들 때 어떤 키를 썼나"를 레코드 자체가 알려주므로, KeyRing에 여러 버전이 있어도 올바른 키를 자동으로 골라 씁니다. 버전 없이는 "어떤 키로 만들었나?"를 알 방법이 없어서 로테이션이 불가능합니다.</p></div>
+
+<h2>리키 — 키 유출 후의 비상 수단</h2>
+
+<p>일반적인 로테이션과 달리 리키(re-key)는 키 <em>유출</em>이 발생했을 때의 대응입니다. 유출된 RSA 개인키로는 이미 저장된 모든 암호문을 복호화할 수 있습니다. 이를 막으려면 저장된 레코드들을 <em>새 키로 다시 암호화</em>해야 합니다.</p>
+
+<table>
+  <tr><th></th><th>로테이션</th><th>리키</th></tr>
+  <tr><td>언제</td><td>정기적 (분기, 연간 등)</td><td>키 유출 후</td></tr>
+  <tr><td>하는 일</td><td>새 키 버전 추가</td><td>전체 레지스트리 재암호화</td></tr>
+  <tr><td>비용</td><td>저렴 (설정 변경만)</td><td>비쌈 (전체 레코드 읽기+쓰기)</td></tr>
+  <tr><td>다운타임</td><td>없음 (재시작만)</td><td>있음 (오프라인 단독 실행)</td></tr>
+  <tr><td>결과</td><td>새 레코드만 새 키 사용</td><td>전체 레코드가 새 키 사용</td></tr>
+</table>
+
+<p>리키 패스는 <code>quipu-server rekey config.json</code> 커맨드(또는 임베디드 <code>AuditStore::rekey()</code>)로 실행합니다. 오프라인 전용입니다 — 서버가 내린 상태에서만 실행할 수 있습니다(스토어 락이 동시 실행을 차단).</p>
+
+<h2>RSA 리키의 실제 동작 — rewrap</h2>
+
+<p>RSA 필드 리키는 "데이터 전체를 다시 암호화"가 아닙니다. AES 암호문(ciphertext)과 nonce는 그대로 두고, <strong>DEK(AES 키)를 감싼 RSA 래핑만 교체</strong>합니다. 이것이 <code>KeyRing::rewrap()</code>이 하는 일입니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/crypto.rs — KeyRing::rewrap</span><code><span class="kw">pub fn</span> <span class="fn">rewrap</span>(&amp;self, stored: &amp;<span class="ty">StoredValue</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">StoredValue</span>&gt; {
+    <span class="com">// 1. 구버전 개인키로 DEK 복호화 (unwrap)</span>
+    <span class="kw">let</span> dek = old.decrypt(<span class="ty">Oaep</span>::new::&lt;<span class="ty">Sha256</span>&gt;(), &amp;b64::decode(wrapped_key))?;
+    <span class="com">// 2. 활성 버전 공개키로 DEK 재암호화 (re-wrap)</span>
+    <span class="kw">let</span> wrapped = self.rsa_public_of(active)?.encrypt(&amp;<span class="kw">mut</span> rand::thread_rng(),
+        <span class="ty">Oaep</span>::new::&lt;<span class="ty">Sha256</span>&gt;(), &amp;dek)?;
+    <span class="hl">// nonce와 ciphertext는 그대로 — DEK 자체는 안 바뀜, 페이로드 무결성 유지</span>
+    <span class="ty">Ok</span>(<span class="ty">StoredValue</span>::Rsa { key_version: active, wrapped_key: b64::encode(&amp;wrapped),
+        nonce: nonce.clone(), ciphertext: ciphertext.clone() })
+}</code></pre>
+
+<p>AES 암호문을 건드리지 않으므로 <em>리키 중 전원이 꺼져도 페이로드가 손상되지 않습니다.</em> DEK 재포장만 실패하는 것이고, 이미 재포장된 레코드는 새 키로 읽을 수 있습니다.</p>
+
+<h2>리키의 무결성 문제 — RekeyEvent</h2>
+
+<p>리키는 레지스트리 테이블 전체를 새로 씁니다. 머클 트리 관점에서 이것은 변조와 구분이 안 됩니다 — 나무가 통째로 바뀌니까요. 이 "정당한 재작성"을 "부정한 변조"와 구분하는 장치가 <code>RekeyEvent</code>입니다.</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs — RekeyEvent</span><code><span class="kw">pub struct</span> <span class="ty">RekeyEvent</span> {
+    pub occurred_at: <span class="ty">u64</span>,
+    pub rsa_version: <span class="ty">KeyVersion</span>,
+    pub hmac_version: <span class="ty">KeyVersion</span>,
+    pub tables: <span class="ty">Vec</span>&lt;<span class="ty">RekeyedTable</span>&gt;,    <span class="com">// 테이블별 old_root → new_root 전환</span>
+    pub signing_key_version: <span class="ty">KeyVersion</span>,
+    <span class="hl">pub signature: <span class="ty">Vec</span>&lt;u8&gt;,           // RSA 서명: 재작성이 감사됐음을 증명</span>
+}</code></pre>
+
+<p>리키 패스가 완료되면 이 이벤트가 meta 테이블에 기록됩니다. <code>verify_integrity()</code>가 이 서명을 검증하고, 각 레지스트리의 현재 트리가 서명된 new_root와 일관성 있는지 확인합니다(일관성 증명). "감사된 재작성"과 "조용한 변조"가 구분됩니다.</p>
+
+<h2>HMAC 필드는 리키가 불가능하다</h2>
+
+<p>중요한 제약이 하나 있습니다. HMAC과 SHA-256으로 보호된 필드는 <strong>리키할 수 없습니다.</strong> 일방향 함수이기 때문입니다 — 다이제스트에서 원본 평문을 복구할 방법이 없고, 평문이 없으면 새 키로 새 다이제스트를 만들 수 없습니다.</p>
+
+<div class="callout warn"><span class="lab">주의</span><p>HMAC 키가 유출되면 유출 이전에 기록된 다이제스트는 영구적으로 노출된 것입니다. 공격자가 그 키와 다이제스트를 갖고 사전 공격을 할 수 있습니다. HMAC 키는 유출되지 않도록 매우 엄중히 관리해야 하고, 정기 로테이션으로 유출 후 피해 기간을 최소화해야 합니다. "유출되면 되돌릴 수 있다"는 안전망이 없습니다.</p></div>
+
+<h2>키 유실 = 데이터 영구 소실</h2>
+
+<p>Quipu-Log에는 키 에스크로, 마스터 키, 복구 백도어가 없습니다. 이것은 의도된 설계입니다 — 내부자 위협을 포함한 더 넓은 위협 모델을 막기 위해 백도어를 없앴습니다. 그 대가로, <strong>RSA 개인키를 잃으면 그 키로 보호된 모든 레코드는 영영 복호화 불가</strong>입니다.</p>
+
+<div class="callout key"><span class="lab">보안 포인트</span><p><strong>키를 스토어 디렉토리와 같은 장소에 백업하지 마세요.</strong> 스토어 백업을 탈취한 공격자가 같은 장소의 키 백업도 가져가면 암호화 보호가 무너집니다. 키는 스토어와 분리된 별도 경로로 백업하고, HSM(하드웨어 보안 모듈)이나 KMS 사용을 고려하세요.</p></div>
+
+<h2>서명 키 격리</h2>
+
+<p>체크포인트 서명에 쓰는 RSA 개인키는 데이터 암호화에 쓰는 키와 분리하는 것을 권장합니다. 서명 키가 데이터 노드(스토어가 돌아가는 서버)에 있으면, 디스크 접근 권한을 가진 내부자가 서명 키를 이용해 체크포인트를 위조할 수 있습니다. 서명 키를 별도 호스트나 HSM에 두면 이 공격이 불가능해집니다.</p>
+
+<h2>정리</h2>
+<ul>
+  <li><strong>KeyRing</strong>: 버전 번호(u32)로 RSA+HMAC 키를 관리. 최고 버전 = 활성 키, 낮은 버전 = 읽기용.</li>
+  <li><strong>로테이션</strong>(평시): 새 버전 키 추가만. 기존 레코드 건드리지 않음. 저렴하고 무중단.</li>
+  <li><strong>리키</strong>(유출 후): DEK 재포장으로 RSA 필드 재암호화. 오프라인, 비쌈. RekeyEvent로 감사됨.</li>
+  <li><strong>HMAC 필드는 리키 불가</strong> — 일방향이라 원본 복구 불가. 유출 시 기존 다이제스트 영구 노출.</li>
+  <li><strong>키 유실 = 복구 불가</strong> — 에스크로 없음. 키 백업은 스토어와 반드시 분리.</li>
+</ul>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① 키 로테이션과 리키(re-key)의 차이를 "언제", "하는 일", "비용" 세 가지로 설명해 보세요.<br>② HMAC 보호 필드가 리키 불가능한 수학적 이유를 설명해 보세요.<br>③ RSA 개인키를 스토어 백업과 같은 경로에 저장하면 왜 위험한가요?</p></div>
+
+</article>

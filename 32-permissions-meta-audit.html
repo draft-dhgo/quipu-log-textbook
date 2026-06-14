@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>32 · Permissions (RBAC), filters, and meta-audit — The Quipu-Log Book</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ Contents</button><b>The Quipu-Log Book</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn active" href="32-permissions-meta-audit.html">EN</a><a class="langbtn" href="ko/32-permissions-meta-audit.html">한국어</a></div>
+<a class="home" href="index.html">The Quipu-Log Book</a>
+<div class="sub">Storage engines and tamper-evident audit logs, built on nothing but the filesystem — explained from the ground up</div>
+<div class="part">Part 1 · Starting point: files, not a DB</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>What an audit log is, and why “files, no DB”</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>The map, and the DB↔filesystem correspondence</a>
+<div class="part">Part 2 · Filesystem basics</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>Filesystem basics: files, directories, inodes, descriptors</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>Reading &amp; writing, and the atomicity of rename</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>When data really hits disk: the page cache and fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>The std::fs toolbox: handling files in Rust</a>
+<div class="part">Part 3 · The heart of the engine: the append-only log</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>Append-only log = the WAL is the database</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>Segment files and rollover</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>Record framing: length, CRC32, magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>Serialization: turning structs into bytes</a>
+<div class="part">Part 4 · Re-creating what a DB gave you for free, on files</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>Durability: fsync policy and group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>Atomicity and crash recovery: torn writes and tail detection</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>Concurrency I: single-writer and the file lock</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>Concurrency II: read snapshots and MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>Indexing: in-memory index + on-disk tokens</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>Query execution: segment scans and cursor pagination</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>Deletion and retention: segment unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>Store layout and format versioning</a>
+<div class="part">Part 5 · Integrity: making tampering evident (Security I)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>Hash functions and SHA-256: a digital fingerprint</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>The Merkle history tree: committing the log to 32 bytes</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>Inclusion proofs and consistency proofs</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>Checkpoints and external anchoring</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>Tamper-evident vs tamper-proof, and the threat model</a>
+<div class="part">Part 6 · Confidentiality: searching while keeping secrets (Security II)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>Field protection in four levels: plaintext/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>Symmetric, asymmetric, hybrid encryption and AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>Blind indexes: searching without plaintext</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>Write-only deployment: a server without the private key</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>Key management: keyring, versioning, rotation vs re-keying</a>
+<div class="part">Part 7 · The write &amp; read paths</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>The async pipeline: non-blocking emit and backpressure</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>Reliability: retries, backoff, DLQ, idempotency</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>The tower middleware: auto-recording HTTP requests</a>
+<a class="lnk active" href="32-permissions-meta-audit.html"><span class="n">32</span>Permissions (RBAC), filters, and meta-audit</a>
+<div class="part">Part 8 · Distribution, operations, scaling</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>Single point of failure and availability: the client spool</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>Horizontal scaling: sharding, consistent hashing, read replicas</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>Server, client, MCP, and observability</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">Part 7 · The write &amp; read paths</span><h1><span class="chno">32</span> · Permissions (RBAC), filters, and meta-audit</h1></div><article>
+
+<p class="lead">Controlling "who can write records, and who can read them" is the job of permission management. And one step further — "should we also record <em>who read the records</em>?" is the meta-audit question. This chapter covers both.</p>
+
+<div class="callout"><span class="lab">In one sentence</span><p>RBAC controls emit/query/administer per role, and read access itself is recorded in a separate table — reading the audit log is itself audited.</p></div>
+
+<h2>RBAC: start with deny-by-default</h2>
+
+<p>Quipu-Log's permission model is concise: three <code>Action</code>s.</p>
+
+<table>
+  <tr><th>Action</th><th>What it allows</th><th>Who needs it</th></tr>
+  <tr><td><code>Emit</code></td><td>Write audit events</td><td>API servers, batch jobs — anything that produces records</td></tr>
+  <tr><td><code>Query</code></td><td>Read recorded logs</td><td>Auditors, compliance teams</td></tr>
+  <tr><td><code>Administer</code></td><td>Schema changes, DLQ redrive, retention runs, integrity verification</td><td>Operations teams, admins</td></tr>
+</table>
+
+<p>These three actions are mapped to <code>Role</code>s. The key design choice is <strong>deny-by-default</strong> — a role that hasn't been explicitly granted a permission can do nothing. The opposite, allow-by-default, is convenient for development but is not recommended in production.</p>
+
+<pre><span class="filename">crates/quipu-middleware/src/permissions.rs</span><code><span class="hl">let policy = PermissionPolicy::deny_by_default()</span>
+<span class="hl">    .grant(Role::new("auditor"),  &amp;[Action::Query])</span>
+<span class="hl">    .grant(Role::new("service"),  &amp;[Action::Emit])</span>
+    .grant(Role::new("admin"),    &amp;[Action::Emit, Action::Query, Action::Administer]);
+
+<span class="dim">// Unknown roles can do nothing</span>
+assert!(!policy.is_allowed(&amp;Role::new("intruder"), Action::Query));</code></pre>
+
+<p><code>PermissionPolicy</code> is configured once when the pipeline starts, and every subsequent <code>AuditHandle</code> method checks it automatically — no extra calls needed.</p>
+
+<h2>pre/post filters: exempt requests or enrich events</h2>
+
+<p>If permissions control "who," filters control "what" at a finer grain. Two kinds of filters are registered in a <code>FilterSet</code>.</p>
+
+<ul>
+  <li><strong>pre-filter</strong>: runs <em>before</em> the request reaches the inner service. Exempts requests that don't need auditing (health checks, internal pings) with a <code>Skip</code> decision. Because it runs before the body is read, the cost is low.</li>
+  <li><strong>post-filter</strong>: runs <em>after</em> the response is produced. Can decide based on the response status code (<code>304 Not Modified</code> may not need auditing), or can directly mutate the event struct to add fields (event enrichment).</li>
+</ul>
+
+<pre><span class="filename">crates/quipu-middleware/src/filter.rs</span><code><span class="com">// post-filter: enrich or exempt based on the response</span>
+<span class="kw">pub type</span> <span class="ty">PostFilter</span> =
+    Box&lt;dyn Fn(&amp;RequestInfo, &amp;ResponseInfo, <span class="hl">&amp;mut AuditEvent</span>) -&gt; FilterDecision + Send + Sync&gt;;</code></pre>
+
+<p>The key point is that the post-filter receives <code>&amp;mut AuditEvent</code>. You can look at the response and attach fields to the event — for example, "if the response is 403, tag a custom field with 'forbidden'."</p>
+
+<h2>Meta-audit: recording who read the audit log</h2>
+
+<p>HIPAA and financial regulations often require auditing "who accessed patient records." Quipu-Log supports this through <strong>meta-audit</strong>.</p>
+
+<figure>
+<svg viewBox="0 0 580 220" role="img" aria-label="Meta-audit structure: a separate access/ table from the main log table, with no self-referential loop">
+  <defs>
+    <marker id="arr4" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .l4{fill:#e6e8ee;font:600 12px -apple-system,sans-serif}
+    .s4{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .bx4{fill:#161922;stroke:#2a2f3d;stroke-width:1.5}
+    .acc4{fill:#1a1228;stroke:#3d2c5a;stroke-width:1.5}
+    .ar4{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#arr4)}
+    .ar4b{stroke:#c792ea;stroke-width:1.5;stroke-dasharray:4,3;marker-end:url(#arr4)}
+    .ar4c{stroke:#7aa2ff;stroke-width:1.5;marker-end:url(#arr4)}
+  </style>
+
+  <!-- Main log table -->
+  <rect x="20" y="40" width="200" height="100" rx="8" class="bx4"/>
+  <text x="120" y="62" class="l4" text-anchor="middle" fill="#8be9c0">root/logs/</text>
+  <text x="120" y="80" class="s4" text-anchor="middle">main audit log</text>
+  <text x="120" y="96" class="s4" text-anchor="middle">Merkle chain + checkpoints</text>
+  <text x="120" y="112" class="s4" text-anchor="middle">independent retention policy</text>
+
+  <!-- Access table -->
+  <rect x="360" y="40" width="200" height="100" rx="8" class="acc4"/>
+  <text x="460" y="62" class="l4" text-anchor="middle" fill="#c792ea">root/access/</text>
+  <text x="460" y="80" class="s4" text-anchor="middle">meta-audit table</text>
+  <text x="460" y="96" class="s4" text-anchor="middle">who accessed what and when</text>
+  <text x="460" y="112" class="s4" text-anchor="middle">its own hash chain</text>
+
+  <!-- Query action -->
+  <rect x="200" y="165" width="180" height="40" rx="6" fill="#16241d" stroke="#2c4a3a" stroke-width="1.5"/>
+  <text x="290" y="183" class="l4" text-anchor="middle" fill="#ffd479">handle.query(role, q)</text>
+  <text x="290" y="198" class="s4" text-anchor="middle">queries main log</text>
+
+  <!-- Arrows -->
+  <line x1="290" y1="165" x2="120" y2="142" class="ar4c"/>
+  <text x="155" y="160" class="s4" fill="#7aa2ff">query</text>
+  <line x1="290" y1="165" x2="460" y2="142" class="ar4b"/>
+  <text x="355" y="158" class="s4" fill="#c792ea">append only</text>
+  <text x="345" y="170" class="s4" fill="#c792ea">(no self-reference)</text>
+</svg>
+<figcaption>The main log and the access log are separate tables. The access log is a pure append that bypasses the query path, making a self-referential loop structurally impossible.</figcaption>
+</figure>
+
+<p>Two key design decisions in meta-audit are worth remembering.</p>
+
+<p><strong>① A separate table.</strong> Access records accumulate in <code>root/access/</code>. Because it's independent of the main log table (<code>root/logs/</code>), it can have its own retention policy and it's invisible to the main log query API.</p>
+
+<p><strong>② No self-referential loop.</strong> If "recording an access" triggered another "access event," you'd have infinite recursion. Quipu-Log blocks this structurally — <code>record_access</code> is a <em>plain append</em> that never goes through the query path. <em>Reading</em> the access log is recorded as an access event, but that recording in turn does not produce another access event.</p>
+
+<pre><span class="filename">crates/quipu-core/src/access.rs (comment excerpt)</span><code><span class="com">// No self-reference loop: recording an access is a plain table append —</span>
+<span class="com">// it never goes through a query path, so it can never trigger another</span>
+<span class="hl">// access record. Querying the access log *is* an access and is recorded</span>
+<span class="hl">// (exactly one record per query), but that recording again is just an</span>
+<span class="com">// append: growth is strictly one record per externally-initiated</span>
+<span class="com">// operation, never recursive.</span></code></pre>
+
+<div class="callout key"><span class="lab">Security note</span><p>Search query values (probe values) are never stored in the access record. When searching a field protected by HMAC or RSA, having that query value appear in plain text in the access log would defeat the field protection entirely. The access log records only the <em>shape</em> of the search — which field, which matching mode, which time range — never the value itself.</p></div>
+
+<p>Querying the access log requires <code>Action::Administer</code> — because "who accessed what" is itself sensitive information.</p>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① Why is deny-by-default safer than allow-by-default for production?<br>② Why are search query values never stored in access records?<br>③ Explain why the access log must be in a <em>separate</em> table from the main log, from a retention policy perspective.</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="31-tower-middleware.html"><span class="dir">← Prev</span><span class="t">31 · The tower middleware: auto-recording HTTP requests</span></a><a class="next" href="33-availability-spool.html"><span class="dir">Next →</span><span class="t">33 · Single point of failure and availability: the client spool</span></a></div>
+</div>
+</main>
+</div>
+<script src="assets/textbook.js"></script>
+</body>
+</html>

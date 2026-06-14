@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>22 · 체크포인트와 외부 앵커링 — Quipu-Log 교과서</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ 목차</button><b>Quipu-Log 교과서</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn" href="../22-checkpoint-anchoring.html">EN</a><a class="langbtn active" href="22-checkpoint-anchoring.html">한국어</a></div>
+<a class="home" href="index.html">Quipu-Log 교과서</a>
+<div class="sub">파일시스템만으로 짓는 저장 엔진과 변조-탐지 감사 로그 — 밑바닥부터</div>
+<div class="part">파트 1 · 출발점: DB 없이, 파일로</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>감사 로그란, 그리고 왜 &#x27;DB 없이 파일로&#x27;인가</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>Quipu-Log 지도와 DB↔파일시스템 대응표</a>
+<div class="part">파트 2 · 파일시스템 기본기</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>파일시스템의 기본: 파일·디렉토리·inode·디스크립터</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>읽고 쓰기, 그리고 rename의 원자성</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>데이터는 언제 진짜 디스크에 남나: page cache와 fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>std::fs 도구상자: Rust로 파일 다루기</a>
+<div class="part">파트 3 · 저장 엔진의 심장: append-only 로그</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>append-only 로그 = WAL이 곧 데이터베이스</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>세그먼트 파일과 롤오버</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>레코드 프레이밍: 길이·CRC32·magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>직렬화: 구조체를 바이트로</a>
+<div class="part">파트 4 · DB가 공짜로 주던 보장을 파일로 재현</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>내구성: fsync 정책과 group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>원자성과 크래시 복구: torn write와 꼬리 탐지</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>동시성 제어 ①: single-writer와 파일 락</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>동시성 제어 ②: 읽기 스냅샷과 MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>인덱싱: 인메모리 인덱스 + 디스크 토큰</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>쿼리 실행: 세그먼트 스캔과 커서 페이지네이션</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>삭제와 보존: 세그먼트 unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>저장소 레이아웃과 포맷 버저닝</a>
+<div class="part">파트 5 · 무결성: 고치면 티가 나게 (보안 ①)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>해시 함수와 SHA-256: 디지털 지문</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>머클 히스토리 트리: 로그를 32바이트로 커밋</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>포함 증명·일관성 증명</a>
+<a class="lnk active" href="22-checkpoint-anchoring.html"><span class="n">22</span>체크포인트와 외부 앵커링</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>tamper-evident vs tamper-proof, 그리고 위협 모델</a>
+<div class="part">파트 6 · 기밀성: 비밀을 지키면서 검색하기 (보안 ②)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>필드 보호 4단계: 평문/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>대칭·비대칭·하이브리드 암호와 AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>블라인드 인덱스: 평문 없이 검색</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>쓰기 전용 배포: 개인키 없는 서버</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>키 관리: 키링·버저닝·로테이션 vs 리키</a>
+<div class="part">파트 7 · 쓰기·읽기 경로</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>비동기 파이프라인: 논블로킹 emit과 백프레셔</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>신뢰성: 재시도·백오프·DLQ·멱등성</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>tower 미들웨어: HTTP 요청 자동 기록</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>권한(RBAC)·필터·메타 감사</a>
+<div class="part">파트 8 · 분산·운영·확장</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>단일 장애점과 가용성: 클라이언트 스풀</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>수평 확장: 샤딩·일관성 해싱·읽기 복제</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>서버·클라이언트·MCP·관측성</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">파트 5 · 무결성: 고치면 티가 나게 (보안 ①)</span><h1><span class="chno">22</span> · 체크포인트와 외부 앵커링</h1></div><article>
+
+<p class="lead">머클 스파인이 레코드 변조를 잡는다면, 누군가 스파인 파일도 같이 고치면 어떻게 될까요? 디스크 전체 권한을 가진 내부자라면 로그와 스파인을 모두 삭제하고, 처음부터 다시 쌓은 자체 일관된 트리로 교체할 수 있습니다. 체크포인트와 외부 앵커링은 바로 이 시나리오를 막기 위해 존재합니다 — "내부자도 속일 수 없는 기준점"을 <em>다른 신뢰 도메인</em>에 심어두는 것입니다.</p>
+
+<div class="callout"><span class="lab">한 문장 요약</span><p>체크포인트는 (세그먼트 위치, 레코드 수, 머클 루트)를 RSA 서명으로 봉인하고, 외부 앵커 훅으로 그 루트를 스토어 밖으로 내보낸다 — 내부자가 로그를 전부 재작성해도 앵커된 과거 루트와 일관성 증명이 맞지 않는다.</p></div>
+
+<h2>머클 스파인만으로 충분하지 않은 이유</h2>
+
+<p>지금까지의 방어 체계를 정리해 봅시다:</p>
+
+<ul>
+  <li>레코드 in-place 수정 → 리프 해시가 달라지고 → 루트가 달라짐 ✅</li>
+  <li>세그먼트 파일 교체 → 리프 순서가 달라지고 → 루트가 달라짐 ✅</li>
+  <li>꼬리 절단(세그먼트 삭제) → 트리 크기가 줄어 → 이전 체크포인트와 불일치 ✅</li>
+</ul>
+
+<p>그러나 한 가지 시나리오가 남습니다: 공격자가 <strong>스토어 전체(세그먼트 + 스파인 + 체크포인트 파일)를 삭제하고, 조작된 레코드로 처음부터 다시 쌓은 자체 일관된 스토어</strong>를 만들면? 내부에는 비교할 "원래 값"이 없습니다.</p>
+
+<figure>
+<svg viewBox="0 0 740 300" role="img" aria-label="내부 vs 외부 신뢰 도메인: 전체 재작성 공격과 외부 앵커">
+  <defs>
+    <marker id="arr22" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+    <marker id="arr22r" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#ff8b8b"/>
+    </marker>
+    <marker id="arr22g" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#8be9c0"/>
+    </marker>
+  </defs>
+  <style>
+    .t22{fill:#e6e8ee;font:600 13px -apple-system,sans-serif;text-anchor:middle}
+    .s22{fill:#9aa3b2;font:11px -apple-system,sans-serif;text-anchor:middle}
+    .box22{fill:#161922;stroke:#2a2f3d;stroke-width:1.5;rx:8}
+    .inner22{fill:#0b0d12;stroke:#2a2f3d;stroke-width:2;stroke-dasharray:6,3;rx:10}
+    .outer22{fill:#0b1a0b;stroke:#2c4a3a;stroke-width:2;rx:10}
+    .cp22{fill:#241f12;stroke:#ffd479;stroke-width:1.5;rx:6}
+    .anc22{fill:#16241d;stroke:#8be9c0;stroke-width:2;rx:6}
+    .atk22{stroke:#ff8b8b;stroke-width:1.5;stroke-dasharray:4,2}
+  </style>
+
+  <!-- 내부 신뢰 도메인 (공격자 도달 가능) -->
+  <rect x="10" y="20" width="420" height="260" class="inner22" rx="10"/>
+  <text x="220" y="44" class="t22" fill="#ff8b8b">내부 신뢰 도메인 (공격자 접근 가능)</text>
+
+  <rect x="30" y="58" width="170" height="56" class="box22" rx="6"/>
+  <text x="115" y="80" class="t22">로그 세그먼트</text>
+  <text x="115" y="96" class="s22">레코드 페이로드</text>
+
+  <rect x="220" y="58" width="170" height="56" class="box22" rx="6"/>
+  <text x="305" y="80" class="t22">merkle.spine</text>
+  <text x="305" y="96" class="s22">리프 해시 목록</text>
+
+  <rect x="120" y="155" width="180" height="70" class="cp22" rx="6"/>
+  <text x="210" y="177" class="t22" fill="#ffd479">checkpoints.log</text>
+  <text x="210" y="193" class="s22">signed(tree_size, root)</text>
+  <text x="210" y="209" class="s22">← 이것도 공격자가 지울 수 있음</text>
+
+  <!-- 공격 화살표 -->
+  <line x1="210" y1="250" x2="210" y2="228" stroke="#ff8b8b" stroke-width="2" marker-end="url(#arr22r)"/>
+  <text x="290" y="268" style="fill:#ff8b8b;font:700 11px -apple-system,sans-serif;text-anchor:middle">공격자: 전부 삭제 후 재작성</text>
+
+  <!-- 외부 신뢰 도메인 -->
+  <rect x="460" y="20" width="270" height="260" class="outer22" rx="10"/>
+  <text x="595" y="44" class="t22" fill="#8be9c0">외부 신뢰 도메인</text>
+  <text x="595" y="58" class="s22">(공격자 도달 불가)</text>
+
+  <rect x="490" y="80" width="210" height="56" class="anc22" rx="6"/>
+  <text x="595" y="102" class="t22" fill="#8be9c0">외부 앵커</text>
+  <text x="595" y="118" class="s22">타임스탬프 서비스 / 별도 호스트</text>
+
+  <rect x="490" y="160" width="210" height="56" class="anc22" rx="6"/>
+  <text x="595" y="182" class="t22" fill="#8be9c0">앵커된 루트</text>
+  <text x="595" y="198" class="s22">과거 시점의 tree_size + root</text>
+  <text x="595" y="214" class="s22">← 공격자가 건드릴 수 없음</text>
+
+  <!-- 정상 흐름 화살표 -->
+  <line x1="425" y1="175" x2="488" y2="175" stroke="#8be9c0" stroke-width="2" marker-end="url(#arr22g)"/>
+  <text x="456" y="165" class="s22" fill="#8be9c0" style="text-anchor:middle">AnchorHook</text>
+</svg>
+<figcaption>체크포인트는 내부 스토어에 기록되지만, AnchorHook이 그 루트를 공격자가 도달할 수 없는 외부 신뢰 도메인으로 내보낸다. 재작성 공격은 앵커된 과거 루트와의 일관성 증명으로 탐지된다.</figcaption>
+</figure>
+
+<h2>체크포인트: 서명된 스냅샷</h2>
+
+<p>체크포인트는 "특정 시점의 트리 상태"를 RSA 개인키로 서명하여 파일에 기록합니다. 핵심 필드를 보겠습니다:</p>
+
+<pre><span class="filename">crates/quipu-core/src/checkpoint.rs — Checkpoint 구조체</span><code><span class="kw">pub struct</span> <span class="ty">Checkpoint</span> {
+    <span class="kw">pub</span> created_at:   <span class="ty">u64</span>,    <span class="com">// UTC 마이크로초</span>
+    <span class="kw">pub</span> segment_seq:  <span class="ty">u64</span>,    <span class="com">// 체크포인트 당시 활성 세그먼트 번호</span>
+    <span class="kw">pub</span> record_count: <span class="ty">u64</span>,    <span class="com">// 디스크상 레코드 수 (리텐션 후 감소 가능)</span>
+<span class="hl">    <span class="kw">pub</span> tree_size:    <span class="ty">u64</span>,    <span class="com">// 머클 트리 크기 (절대 감소 안 함, 스파인은 purge 없음)</span></span>
+<span class="hl">    <span class="kw">pub</span> merkle_root:  <span class="ty">Hash</span>,   <span class="com">// 해당 tree_size에서의 머클 루트 — 이게 "봉인"</span></span>
+    <span class="kw">pub</span> key_version:  <span class="ty">u32</span>,    <span class="com">// 서명에 사용한 RSA 키 버전</span>
+    <span class="kw">pub</span> signature:    <span class="ty">Vec&lt;u8&gt;</span>, <span class="com">// RSA PKCS#1 v1.5 / SHA-256 서명</span>
+}</code></pre>
+
+<p><code>tree_size</code>와 <code>record_count</code>가 분리된 점에 주목하세요. 리텐션으로 오래된 레코드가 삭제되면 <code>record_count</code>는 줄지만, 머클 스파인은 삭제하지 않으므로 <code>tree_size</code>는 절대 줄지 않습니다. 따라서 체크포인트 이후 리텐션이 돌아도, 현재 트리가 과거 체크포인트의 <em>확장</em>임을 일관성 증명으로 여전히 검증할 수 있습니다.</p>
+
+<p>서명은 단순히 <code>SHA-256(도메인_분리_prefix || 필드들)</code>에 RSA PKCS#1 v1.5를 적용합니다:</p>
+
+<pre><span class="filename">crates/quipu-core/src/checkpoint.rs — 서명 바이트 구성</span><code><span class="kw">const</span> SIGNING_DOMAIN: <span class="ty">&amp;[u8]</span> = <span class="str">b"quipu-checkpoint-v2\0"</span>;
+
+<span class="kw">fn</span> <span class="fn">signing_bytes</span>(created_at, segment_seq, record_count, tree_size, merkle_root) {
+<span class="hl">    <span class="com">// 도메인 분리: 이 서명은 다른 용도의 RSA 서명과 절대 혼동되지 않음</span></span>
+    out.extend_from_slice(SIGNING_DOMAIN);
+    <span class="dim">out.extend_from_slice(&amp;created_at.to_le_bytes());
+    // ... 나머지 필드 ...</span>
+    out.extend_from_slice(merkle_root);
+}</code></pre>
+
+<h2>체크포인트는 언제 찍나</h2>
+
+<p>RSA 서명은 밀리초 단위 연산이라 모든 레코드마다 체크포인트를 찍으면 성능에 부담이 됩니다. Quipu-Log는 세 시점에만 찍습니다:</p>
+
+<ol>
+  <li><strong>세그먼트 봉인(seal) 시점</strong> — 세그먼트가 <code>max_segment_bytes</code>를 넘어 새 파일로 롤오버될 때</li>
+  <li><strong>리텐션 실행 직후</strong> — 오래된 세그먼트를 삭제했으니, 현재 상태를 봉인해 "삭제 후에도 일관하다"를 기록</li>
+  <li><strong>수동 요청</strong> — 관리자가 명시적으로 체크포인트를 원할 때</li>
+</ol>
+
+<p>핫 패스(emit 경로)에 RSA 서명이 없으므로, 레코드 하나 쓸 때마다 지연이 생기지 않습니다.</p>
+
+<h2>AnchorHook: 외부로 내보내기</h2>
+
+<p>체크포인트 파일 자체도 스토어 안에 있으니 공격자가 지울 수 있습니다. 그래서 <code>StoreConfig</code>에 <code>anchor</code> 훅을 제공합니다:</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs — AnchorHook 타입</span><code><span class="com">/// 체크포인트가 기록될 때마다 호출되는 콜백.</span>
+<span class="com">/// Arc&lt;dyn Fn&gt; — StoreConfig가 Clone이라 Arc 필요.</span>
+<span class="kw">pub type</span> <span class="ty">AnchorHook</span> = <span class="ty">Arc</span>&lt;<span class="kw">dyn</span> <span class="ty">Fn</span>(&amp;<span class="ty">Checkpoint</span>) + <span class="ty">Send</span> + <span class="ty">Sync</span>&gt;;
+
+<span class="com">// 설정 방법:</span>
+<span class="dim">StoreConfig::new(root)</span>
+<span class="hl">    .anchor(|cp: &amp;<span class="ty">Checkpoint</span>| {
+        <span class="com">// 외부 시스템(티켓, 별도 DB, 타임스탬프 서비스)에 cp.merkle_root_hex() 전송</span>
+        <span class="com">// 패닉/에러는 삼켜짐 — 가용성 &gt; 앵커링</span>
+    })</span></code></pre>
+
+<p>훅이 실패하거나 패닉을 내도 쓰기 경로는 영향을 받지 않습니다. 앵커 전달 실패는 보안 문제지만, 그 때문에 감사 로그 쓰기가 중단되는 건 더 큰 문제가 될 수 있으니까요. 앵커 재전달은 훅의 책임입니다.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ 파일시스템</span><p><strong>DB에서는</strong> "백업 검증"이 비슷한 역할을 합니다 — 백업이 원본과 일치하는지 체크섬으로 확인하죠. <strong>Quipu-Log에서는</strong> 한 걸음 더 나아가, DB 백업 검증은 "같은 신뢰 도메인 안에서 일치 확인"이지만, 외부 앵커링은 <em>다른 신뢰 도메인</em>(다른 서버, 서비스)에 기준점을 두어 내부자도 속일 수 없게 합니다.</p></div>
+
+<h2>검증: 현재 트리가 체크포인트와 일관한가</h2>
+
+<p>감사 또는 모니터링 시, 현재 스파인이 과거 체크포인트와 일관한지 확인하는 절차는 다음과 같습니다:</p>
+
+<ol>
+  <li>외부 앵커에서 체크포인트 루트 <code>R_m</code>과 <code>tree_size_m</code>을 가져온다</li>
+  <li>현재 스파인의 <code>tree_size_n</code>과 현재 루트 <code>R_n</code>을 읽는다</li>
+  <li><code>tree_size_m ≤ tree_size_n</code>이어야 한다 (로그는 줄지 않음)</li>
+  <li><code>prove_consistency(first_size=tree_size_m)</code>로 증명을 구한다</li>
+  <li><code>verify_consistency(tree_size_m, tree_size_n, R_m, R_n, proof)</code> → 참이면 이상 없음</li>
+</ol>
+
+<p>만약 공격자가 스토어 전체를 삭제하고 재작성했다면, 새 스토어의 루트가 앵커된 <code>R_m</code>과 일관한 증명을 만들 수 없습니다 — 원래 레코드가 없으니까요.</p>
+
+<div class="callout key"><span class="lab">보안 포인트</span><p>서명 키(RSA 개인키)가 데이터 노드와 <em>다른 곳</em>(별도 호스트, HSM, KMS)에 있어야 체크포인트가 의미를 가집니다. 개인키도 데이터 노드에 있다면, 공격자는 재작성 후 재서명까지 할 수 있습니다. README는 이를 명시합니다: "Separate the signing key for anchoring."</p></div>
+
+<h2>write-only 구성에서 체크포인트</h2>
+
+<p>27장에서 다룰 write-only 배포(공개키만 서버에 있는 구성)에서는, 체크포인트 서명에 필요한 개인키가 없습니다. 이 경우 Quipu-Log는 오류를 내지 않고 조용히 체크포인트를 건너뜁니다 — <code>KeyRing::can_sign()</code>이 false면 skip입니다. "체크포인트가 안 쌓이는데 왜지?"라는 의문이 들면, 키 구성을 먼저 확인하세요.</p>
+
+<h2>정리</h2>
+
+<ul>
+  <li>체크포인트 = (세그먼트 번호 + 레코드 수 + tree_size + 머클 루트)의 RSA 서명. 세그먼트 봉인·리텐션 후·수동으로 찍힘.</li>
+  <li><code>AnchorHook</code>으로 각 체크포인트 직후에 루트를 외부 신뢰 도메인으로 내보냄.</li>
+  <li>외부 앵커된 루트 + 일관성 증명 → 전체 재작성 공격까지 탐지 가능.</li>
+  <li>서명 키는 반드시 데이터 노드 밖에. write-only 구성에서 체크포인트는 조용히 skip.</li>
+</ul>
+
+<div class="callout check"><span class="lab">스스로 확인</span><p>① 공격자가 스토어 전체를 재작성하는 데 성공했습니다. 어떤 조건이 갖춰져야 이 공격이 외부 앵커에 의해 탐지되나요?<br>② 리텐션이 실행되어 오래된 세그먼트가 삭제됐습니다. 그 후 외부 감사인이 "삭제된 레코드가 있던 과거 루트"와 현재 루트 사이의 일관성 증명을 요청했습니다. 이 증명이 성공하려면 어떤 파일이 살아있어야 하나요?<br>③ AnchorHook에서 패닉이 발생하면 레코드 쓰기가 실패하나요? 그 이유를 설계 관점에서 설명해 보세요.</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="21-proofs.html"><span class="dir">← 이전</span><span class="t">21 · 포함 증명·일관성 증명</span></a><a class="next" href="23-threat-model.html"><span class="dir">다음 →</span><span class="t">23 · tamper-evident vs tamper-proof, 그리고 위협 모델</span></a></div>
+</div>
+</main>
+</div>
+<script src="../assets/textbook.js"></script>
+</body>
+</html>

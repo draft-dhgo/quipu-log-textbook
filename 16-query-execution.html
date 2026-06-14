@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>16 · Query execution: segment scans and cursor pagination — The Quipu-Log Book</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ Contents</button><b>The Quipu-Log Book</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn active" href="16-query-execution.html">EN</a><a class="langbtn" href="ko/16-query-execution.html">한국어</a></div>
+<a class="home" href="index.html">The Quipu-Log Book</a>
+<div class="sub">Storage engines and tamper-evident audit logs, built on nothing but the filesystem — explained from the ground up</div>
+<div class="part">Part 1 · Starting point: files, not a DB</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>What an audit log is, and why “files, no DB”</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>The map, and the DB↔filesystem correspondence</a>
+<div class="part">Part 2 · Filesystem basics</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>Filesystem basics: files, directories, inodes, descriptors</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>Reading &amp; writing, and the atomicity of rename</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>When data really hits disk: the page cache and fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>The std::fs toolbox: handling files in Rust</a>
+<div class="part">Part 3 · The heart of the engine: the append-only log</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>Append-only log = the WAL is the database</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>Segment files and rollover</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>Record framing: length, CRC32, magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>Serialization: turning structs into bytes</a>
+<div class="part">Part 4 · Re-creating what a DB gave you for free, on files</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>Durability: fsync policy and group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>Atomicity and crash recovery: torn writes and tail detection</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>Concurrency I: single-writer and the file lock</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>Concurrency II: read snapshots and MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>Indexing: in-memory index + on-disk tokens</a>
+<a class="lnk active" href="16-query-execution.html"><span class="n">16</span>Query execution: segment scans and cursor pagination</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>Deletion and retention: segment unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>Store layout and format versioning</a>
+<div class="part">Part 5 · Integrity: making tampering evident (Security I)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>Hash functions and SHA-256: a digital fingerprint</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>The Merkle history tree: committing the log to 32 bytes</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>Inclusion proofs and consistency proofs</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>Checkpoints and external anchoring</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>Tamper-evident vs tamper-proof, and the threat model</a>
+<div class="part">Part 6 · Confidentiality: searching while keeping secrets (Security II)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>Field protection in four levels: plaintext/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>Symmetric, asymmetric, hybrid encryption and AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>Blind indexes: searching without plaintext</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>Write-only deployment: a server without the private key</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>Key management: keyring, versioning, rotation vs re-keying</a>
+<div class="part">Part 7 · The write &amp; read paths</div>
+<a class="lnk" href="29-async-pipeline.html"><span class="n">29</span>The async pipeline: non-blocking emit and backpressure</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>Reliability: retries, backoff, DLQ, idempotency</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>The tower middleware: auto-recording HTTP requests</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>Permissions (RBAC), filters, and meta-audit</a>
+<div class="part">Part 8 · Distribution, operations, scaling</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>Single point of failure and availability: the client spool</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>Horizontal scaling: sharding, consistent hashing, read replicas</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>Server, client, MCP, and observability</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">Part 4 · Re-creating what a DB gave you for free, on files</span><h1><span class="chno">16</span> · Query execution: segment scans and cursor pagination</h1></div><article>
+
+<p class="lead">"Show me the 20 most recent documents Alice touched in the last hour" — let's trace the path that processes that one sentence. You'll see exactly where a scan gets skipped, how the cursor points to the next page, and why a slow query never blocks a fast write. Compare it to a DB's table scan vs. index scan, and LIMIT/OFFSET vs. keyset pagination, and the design intent comes into sharp focus.</p>
+
+<div class="callout"><span class="lab">In one sentence</span><p>A Quipu-Log query works in three steps: (1) pull a set of log_ids from the registry index that match the filter conditions, (2) prune segments by time range then scan sequentially, (3) advance pages using a physical-position keyset cursor.</p></div>
+
+<h2>What you already know: table scan, index scan, OFFSET vs. keyset</h2>
+
+<p>In a DB, a query plan takes one of two main shapes. A <strong>table scan</strong> (heap scan): read the whole table and apply the filter. An <strong>index scan</strong>: pull matching row addresses from a secondary index first, then fetch those rows directly from the table.</p>
+
+<p>Pagination follows the same split. <code>LIMIT 20 OFFSET 1000</code> reads and throws away the first 1,000 rows — the cost is O(offset), growing the further back you go. Keyset pagination (cursor-based) instead remembers the key of the last row received and fetches the next batch with <code>WHERE id &gt; last_id LIMIT 20</code>. Any page, O(1) cost.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ Filesystem</span><p><strong>DB index scan</strong>: secondary index → row heap pointer → random table read. <strong>Quipu-Log</strong>: registry index (in-memory) → set of log_ids → sequential scan of log segments. Random reads are replaced with "sequential scan + filter" — segment files are optimized for sequential reads, so pruning the scan target to segments within the time range is the key optimization.</p></div>
+
+<h2>Declaring a query: LogQuery</h2>
+
+<p>The caller builds a <code>LogQuery</code> and hands it over. All conditions are ANDed together.</p>
+
+<pre><span class="filename">crates/quipu-core/src/query.rs</span><code><span class="kw">pub struct</span> <span class="ty">LogQuery</span> {
+    <span class="dim">pub from_micros: Option&lt;u64&gt;,   // time range (inclusive)</span>
+    <span class="dim">pub to_micros:   Option&lt;u64&gt;,</span>
+    <span class="dim">pub method:      Option&lt;String&gt;, // HTTP method</span>
+    <span class="dim">pub url_prefix:  Option&lt;String&gt;,</span>
+    <span class="dim">pub actor:       Option&lt;TargetFilter&gt;, // actor condition</span>
+<span class="hl">    pub targets:     Vec&lt;TargetFilter&gt;,  // target conditions (AND)</span>
+    <span class="dim">pub custom:      BTreeMap&lt;String, Value&gt;,</span>
+    <span class="dim">pub limit:       Option&lt;usize&gt;,</span>
+<span class="hl">    pub order:       Order,              // Asc | Desc (default Desc = newest first)</span>
+<span class="hl">    pub cursor:      Option&lt;String&gt;,     // keyset cursor</span>
+}</code></pre>
+
+<p><code>TargetFilter</code> carries a <code>MatchMode</code> — <code>Exact</code>, <code>ExactCi</code> (case-insensitive), <code>Prefix</code>, <code>Contains</code> (substring). Each mode pairs with one of the index types from <span class="pill">Ch. 15 (Indexing)</span>.</p>
+
+<h2>The three-step execution path</h2>
+
+<p>Executing a query, <code>ReadSnapshot::query_page()</code> walks three steps.</p>
+
+<figure>
+<svg viewBox="0 0 720 300" role="img" aria-label="Quipu-Log query execution: three steps">
+  <defs>
+    <marker id="arr16" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .t16{fill:#e6e8ee;font:600 13px -apple-system,sans-serif}
+    .s16{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .bx16{fill:#161922;stroke:#2a2f3d;stroke-width:1.5;rx:6}
+    .idx16{fill:#1a2535;stroke:#7aa2ff;stroke-width:1.5;rx:6}
+    .seg16{fill:#0e1c14;stroke:#8be9c0;stroke-width:1.5;rx:4}
+    .skip16{fill:#1c1200;stroke:#ffd479;stroke-width:1;rx:4;opacity:0.7}
+    .ar16{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#arr16)}
+    .lab16{fill:#8be9c0;font:bold 11px -apple-system,sans-serif}
+    .dim16{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+  </style>
+
+  <!-- Step 1: index lookup -->
+  <rect x="10" y="10" width="160" height="100" class="idx16"/>
+  <text x="20" y="30" class="t16">① Index lookup</text>
+  <text x="20" y="50" class="s16">registry in-memory index</text>
+  <text x="20" y="68" class="s16">TargetFilter matching</text>
+  <text x="20" y="86" class="lab16">→ set of log_ids</text>
+  <text x="20" y="104" class="dim16">(skipped if no target filter)</text>
+
+  <line x1="172" y1="60" x2="210" y2="60" class="ar16"/>
+
+  <!-- Step 2: segment pruning + scan -->
+  <rect x="212" y="10" width="290" height="165" class="bx16"/>
+  <text x="222" y="30" class="t16">② Segment pruning + scan</text>
+
+  <rect x="222" y="40" width="75" height="38" class="skip16"/>
+  <text x="228" y="54" class="s16" fill="#ffd479">seg-0</text>
+  <text x="228" y="70" class="s16" fill="#ffd479">skipped</text>
+
+  <rect x="302" y="40" width="75" height="38" class="skip16"/>
+  <text x="308" y="54" class="s16" fill="#ffd479">seg-1</text>
+  <text x="308" y="70" class="s16" fill="#ffd479">skipped</text>
+
+  <rect x="382" y="40" width="80" height="38" class="seg16"/>
+  <text x="388" y="54" class="lab16">seg-2</text>
+  <text x="388" y="70" class="s16">scanning</text>
+
+  <text x="222" y="105" class="s16">each record: check frame ts against time range →</text>
+  <text x="222" y="122" class="s16">deserialize → apply filters (method, url, log_id set)</text>
+  <text x="222" y="142" class="s16">Desc direction: buffer per segment, drain in reverse</text>
+  <text x="222" y="162" class="lab16">limit+1 hit → more=true</text>
+
+  <line x1="504" y1="80" x2="540" y2="80" class="ar16"/>
+
+  <!-- Step 3: cursor + rendering -->
+  <rect x="542" y="10" width="168" height="165" class="bx16"/>
+  <text x="552" y="30" class="t16">③ Cursor + render</text>
+  <text x="552" y="52" class="s16">last_pos → cursor</text>
+  <text x="552" y="70" class="s16">(seq, idx, order)</text>
+  <text x="552" y="92" class="s16">look up relations</text>
+  <text x="552" y="110" class="s16">for page hits only</text>
+  <text x="552" y="132" class="lab16">QueryPage {</text>
+  <text x="552" y="150" class="lab16">  logs,</text>
+  <text x="552" y="168" class="lab16">  next_cursor?</text>
+
+  <!-- legend -->
+  <text x="10" y="200" class="s16" fill="#ffd479">■ Yellow segments: min/max_ts outside from..to → file is never opened</text>
+  <text x="10" y="220" class="lab16">■ Green segments: within range → sequential read via PositionedScan</text>
+  <text x="10" y="244" class="s16">Desc query: traverse from newest segment, stop as soon as limit is hit</text>
+  <text x="10" y="264" class="s16">Why slow queries don't block the writer: ReadSnapshot is cloned; scan runs on an independent thread</text>
+</svg>
+<figcaption>The three-step query execution path. The index lookup narrows candidate log_ids; time-range pruning prunes segments; a physical-position cursor advances pages.</figcaption>
+</figure>
+
+<h3>Step 1: registry index lookup</h3>
+
+<p>If there are <code>targets</code> filters, the engine first finds all entity_ids in the registry index that match the conditions, then pulls the set of log_ids in which those entity versions appear from the relation log. Multiple target filters are narrowed by intersection (AND).</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs (ReadSnapshot)</span><code><span class="kw">fn</span> <span class="fn">resolve_filters</span>(&amp;<span class="kw">mut</span> <span class="kw">self</span>, q: &amp;<span class="ty">LogQuery</span>) -&gt; <span class="ty">Result</span>&lt;<span class="ty">ResolvedFilters</span>&gt; {
+    <span class="kw">let mut</span> allowed_by_target: <span class="ty">Option</span>&lt;<span class="ty">HashSet</span>&lt;<span class="ty">Uid</span>&gt;&gt; = <span class="ty">None</span>;
+    <span class="kw">for</span> f <span class="kw">in</span> &amp;q.targets {
+        <span class="kw">let</span> ids = self.<span class="fn">log_ids_for_filter</span>(f, q.from_micros, q.to_micros)?;
+<span class="hl">        allowed_by_target = <span class="ty">Some</span>(<span class="kw">match</span> allowed_by_target {</span>
+<span class="hl">            <span class="ty">Some</span>(prev) =&gt; prev.intersection(&amp;ids).copied().collect(), <span class="com">// AND</span></span>
+<span class="hl">            <span class="ty">None</span> =&gt; ids,</span>
+<span class="hl">        });</span>
+    }
+    <span class="dim">// actor condition handled similarly...</span>
+}</code></pre>
+
+<p>If there are no target filters this step is skipped entirely. If there are, the log_id set is established up front, so during the scan each row only needs a set-membership check.</p>
+
+<h3>Step 2: PositionedScan — segment pruning and time filter</h3>
+
+<p>The heart of the log scan is <code>PositionedScan</code>, which handles three levels of optimization.</p>
+
+<p><strong>Segment pruning</strong>: every sealed segment records its <code>min_ts / max_ts</code> in a sidecar (<code>.meta</code> file). Segments whose range falls entirely outside <code>from_micros</code> / <code>to_micros</code> are not opened at all. This is what lets a "last hour" query skip a year's worth of segments.</p>
+
+<p><strong>Cursor pruning</strong>: if a cursor is present — encoding the last position from the previous page (segment seq, record idx) — all segments on the already-consumed side of that position are skipped.</p>
+
+<p><strong>Desc direction</strong>: because the file format stores frames in forward order, direct reverse reading is not possible. Instead, one segment is read forward into a buffer and then drained from the back. Memory is capped by one segment's size (<code>max_segment_bytes</code>, default 64 MB).</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/table.rs (PositionedScan)</span><code><span class="kw">fn</span> <span class="fn">prune</span>(&amp;<span class="kw">self</span>, s: &amp;<span class="ty">SegmentSlice</span>) -&gt; <span class="ty">bool</span> {
+<span class="hl">    <span class="com">// segments outside the time range are never opened</span></span>
+<span class="hl">    <span class="kw">if</span> s.max_ts &lt; self.from || s.min_ts &gt; self.to { <span class="kw">return</span> <span class="kw">true</span>; }</span>
+    <span class="com">// segments already consumed by the cursor are also skipped</span>
+    <span class="kw">match</span> self.after {
+        <span class="ty">Some</span>(p) <span class="kw">if</span> !self.desc &amp;&amp; s.seq &lt; p.seq =&gt; <span class="kw">true</span>,
+        <span class="ty">Some</span>(p) <span class="kw">if</span>  self.desc &amp;&amp; s.seq &gt; p.seq =&gt; <span class="kw">true</span>,
+        _ =&gt; <span class="kw">false</span>,
+    }
+}</code></pre>
+
+<h3>Step 3: QueryPage — cursor and rendering</h3>
+
+<p>As soon as the scan hits the limit+1th match it stops and sets <code>more = true</code>. The physical position (Position) of the last collected record is encoded as the cursor.</p>
+
+<pre><span class="filename">crates/quipu-core/src/query.rs</span><code><span class="kw">const</span> CURSOR_LEN: <span class="ty">usize</span> = 1 + 1 + 8 + 8; <span class="com">// version + order + seq + idx</span>
+
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="fn">encode_cursor</span>(order: <span class="ty">Order</span>, pos: <span class="ty">Position</span>) -&gt; <span class="ty">String</span> {
+    <span class="kw">let mut</span> b = [<span class="num">0u8</span>; CURSOR_LEN];
+    b[<span class="num">0</span>] = CURSOR_V1;
+    b[<span class="num">1</span>] = (order == <span class="ty">Order</span>::Desc) <span class="kw">as</span> <span class="ty">u8</span>;
+<span class="hl">    b[<span class="num">2</span>..<span class="num">10</span>].copy_from_slice(&amp;pos.seq.to_le_bytes()); <span class="com">// segment number</span></span>
+<span class="hl">    b[<span class="num">10</span>..<span class="num">18</span>].copy_from_slice(&amp;pos.idx.to_le_bytes()); <span class="com">// index within segment</span></span>
+    URL_SAFE_NO_PAD.encode(b)
+}</code></pre>
+
+<p>The cursor is an opaque token encoded as URL-safe base64. The client just passes it back in the next request's <code>LogQuery::cursor</code> without interpreting it. The server decodes it and resumes from "this position."</p>
+
+<div class="callout analogy"><span class="lab">Analogy</span><p>Think of a bookmark reading "page 247." That bookmark points to the same spot in any copy (snapshot) of the book you open. In an append-only log, (seq, idx) works the same way — a record never moves, so a cursor is valid across different snapshots. Even if new records are appended in the meantime, the record at the cursor's position is still exactly where it was.</p></div>
+
+<h2>Why a slow query never blocks a fast write</h2>
+
+<p>In a DB, a slow full table scan can monopolize the shared buffer pool and I/O, slowing down other transactions. Quipu-Log eliminates this problem entirely with a snapshot.</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs</span><code><span class="kw">pub fn</span> <span class="fn">snapshot</span>(&amp;<span class="kw">mut</span> self) -&gt; <span class="ty">Result</span>&lt;<span class="ty">ReadSnapshot</span>&gt; {
+<span class="hl">    <span class="ty">Ok</span>(<span class="ty">ReadSnapshot</span> {</span>
+<span class="hl">        keys: self.cfg.keys.clone(),</span>
+<span class="hl">        registries: self.registries.iter().map(|(k, v)| (k.clone(), v.idx.clone())).collect(),</span>
+<span class="hl">        logs: self.logs.slices()?,     <span class="com">// copies paths + byte boundaries only</span></span>
+<span class="hl">        relations: self.relations.slices()?,</span>
+<span class="hl">    })</span>
+}</code></pre>
+
+<p><code>snapshot()</code> copies only the registry index (a HashMap clone) and a list of segment paths. No actual file data is copied. The resulting <code>ReadSnapshot</code> is <code>Send</code>, so it can scan on a different thread. Any appends made after the snapshot go to new records or new segments, outside the boundary the snapshot captured — they are invisible to the scan.</p>
+
+<p>This is the same "reads don't block writes" principle from <span class="pill">Ch. 14 (Read Snapshots and MVCC)</span>, applied directly to the query path.</p>
+
+<h2>QueryPage observability: segments_scanned</h2>
+
+<p>The response structure <code>QueryPage</code> includes a <code>segments_scanned</code> field.</p>
+
+<pre><span class="filename">crates/quipu-core/src/query.rs</span><code><span class="kw">pub struct</span> <span class="ty">QueryPage</span> {
+    <span class="dim">pub logs: Vec&lt;LogView&gt;,</span>
+    <span class="dim">pub next_cursor: Option&lt;String&gt;,</span>
+<span class="hl">    /// Number of segment files actually opened by this query — an observable</span>
+<span class="hl">    /// indicator of pruning effectiveness.</span>
+<span class="hl">    pub segments_scanned: u64,</span>
+}</code></pre>
+
+<p>If a "last hour" query shows <code>segments_scanned</code> equal to the total number of segments, that's a signal the time range is not being expressed as an index constraint — for instance because record timestamps are not monotonically increasing (re-ingestion from a dead-letter queue, etc.). This number is the right starting point for diagnosing query performance.</p>
+
+<h2>Recap</h2>
+
+<ul>
+  <li>A query runs three steps: index lookup to extract a log_id set → time-range pruning to eliminate segments → sequential scan with early exit at limit.</li>
+  <li>The keyset cursor holds the physical position of the last record (segment seq, record idx), so any page can start in O(1) without reading the N preceding records the way OFFSET does.</li>
+  <li>The cursor is valid across snapshots thanks to append-only — records never move from their physical positions.</li>
+  <li>Cloning a <code>ReadSnapshot</code> lets queries and writes proceed independently, so a slow full scan never blocks emit.</li>
+</ul>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① Explain why <code>LIMIT 20 OFFSET 1000</code> and a keyset cursor diverge in performance at large offsets. What does Quipu-Log's cursor actually store?<br>② For a "last week" query over a year of segments, roughly how many files do you expect to be opened? What condition minimizes that number?<br>③ Why is it safe to run a query concurrently with an ongoing append? (Hint: what does snapshot() actually do?)</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="15-indexing.html"><span class="dir">← Prev</span><span class="t">15 · Indexing: in-memory index + on-disk tokens</span></a><a class="next" href="17-retention-delete.html"><span class="dir">Next →</span><span class="t">17 · Deletion and retention: segment unlink vs DELETE</span></a></div>
+</div>
+</main>
+</div>
+<script src="assets/textbook.js"></script>
+</body>
+</html>

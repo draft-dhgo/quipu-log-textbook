@@ -1,0 +1,193 @@
+<article>
+
+<p class="lead">There is a ceiling on how many writes a single writer can handle. "Can't we just add more writers?" — fair question. But Quipu-Log's tamper-evidence is built on the assumption of a single writer. This chapter covers how to multiply write throughput by <em>N</em> without breaking that assumption: per-tenant sharding.</p>
+
+<div class="callout"><span class="lab">In one sentence</span><p>The invariant to preserve isn't "one global chain" — it's <em>"one writer per chain."</em> Put N independent chains in place and tamper-evidence holds exactly as before while write throughput scales by N.</p></div>
+
+<h2>Why the single writer is the bottleneck</h2>
+
+<p>Every event passes through a single writer thread. Internally, a pipeline queue (<span class="pill">Ch. 29 async pipeline</span>) provides buffering, but the thread consuming that queue is still just one. One CPU and one disk I/O, shared. To break through that ceiling, you need more writers.</p>
+
+<p>The problem is that if multiple writers write to <em>the same chain</em> simultaneously, the chain head forks. You need consensus to decide which side is authoritative, and the moment a bug enters that consensus logic, the foundation of tamper detection collapses.</p>
+
+<p><strong>The solution</strong>: split the chain into multiple chains. Each chain still has exactly one writer. Events from different tenants simply go to different chains.</p>
+
+<h2>ShardRouter: write routing + read fan-out</h2>
+
+<p><code>ShardRouter</code> is a thin coordinator that wraps N independent <code>AuditPipeline</code>s. The core storage engine (<code>quipu-core</code>) is untouched — each shard is an <code>AuditStore</code> that operates exactly like today's single store, and <code>ShardRouter</code> is their "traffic cop."</p>
+
+<figure>
+<svg viewBox="0 0 700 380" role="img" aria-label="ShardRouter structure: write routing and read fan-out">
+  <defs>
+    <marker id="aw" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#7aa2ff"/>
+    </marker>
+    <marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#8be9c0"/>
+    </marker>
+    <marker id="af" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#ffd479"/>
+    </marker>
+  </defs>
+  <style>
+    .t34{fill:#e6e8ee;font:13px -apple-system,sans-serif}
+    .s34{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .bx34{fill:#161922;stroke:#2a2f3d;stroke-width:1.5}
+    .sh0{fill:#16241d;stroke:#8be9c0;stroke-width:1.5}
+    .sh1{fill:#1a1a12;stroke:#ffd479;stroke-width:1.5}
+    .shn{fill:#1a1224;stroke:#c792ea;stroke-width:1.5}
+    .shf{fill:#121216;stroke:#2a2f3d;stroke-width:1.5;stroke-dasharray:4,3}
+  </style>
+
+  <!-- Services -->
+  <rect x="10" y="80" width="100" height="36" class="bx34" rx="5"/>
+  <text x="60" y="103" class="s34" text-anchor="middle">Service A (tenant-x)</text>
+  <rect x="10" y="130" width="100" height="36" class="bx34" rx="5"/>
+  <text x="60" y="153" class="s34" text-anchor="middle">Service B (tenant-y)</text>
+  <rect x="10" y="180" width="100" height="36" class="bx34" rx="5"/>
+  <text x="60" y="203" class="s34" text-anchor="middle">Service C (tenant-z)</text>
+
+  <!-- ShardRouter -->
+  <rect x="148" y="60" width="150" height="240" class="bx34" rx="8"/>
+  <text x="223" y="82" class="t34" text-anchor="middle">ShardRouter</text>
+  <rect x="158" y="92" width="130" height="42" rx="5" fill="#0b0d12" stroke="#7aa2ff" stroke-width="1"/>
+  <text x="223" y="112" class="s34" text-anchor="middle" fill="#7aa2ff">ShardMap</text>
+  <text x="223" y="127" class="s34" text-anchor="middle">consistent hashing ring</text>
+  <text x="223" y="162" class="s34" text-anchor="middle">route_write(tenant)</text>
+  <text x="223" y="180" class="t34" text-anchor="middle" fill="#7aa2ff">→ active shard</text>
+  <text x="223" y="220" class="s34" text-anchor="middle">read_targets(tenant)</text>
+  <text x="223" y="238" class="t34" text-anchor="middle" fill="#8be9c0">→ shard list</text>
+  <text x="223" y="275" class="s34" text-anchor="middle">query_merged()</text>
+  <text x="223" y="290" class="t34" text-anchor="middle" fill="#ffd479">timestamp merge</text>
+
+  <!-- Shards -->
+  <rect x="340" y="50" width="130" height="80" class="sh0" rx="6"/>
+  <text x="405" y="72" class="t34" text-anchor="middle" fill="#8be9c0">shard-0000</text>
+  <text x="405" y="90" class="s34" text-anchor="middle">AuditPipeline</text>
+  <text x="405" y="105" class="s34" text-anchor="middle">writer + chain + registry</text>
+  <text x="405" y="120" class="s34" text-anchor="middle">checkpoint</text>
+
+  <rect x="340" y="155" width="130" height="80" class="sh1" rx="6"/>
+  <text x="405" y="177" class="t34" text-anchor="middle" fill="#ffd479">shard-0001</text>
+  <text x="405" y="195" class="s34" text-anchor="middle">AuditPipeline</text>
+  <text x="405" y="210" class="s34" text-anchor="middle">writer + chain + registry</text>
+  <text x="405" y="225" class="s34" text-anchor="middle">checkpoint</text>
+
+  <rect x="340" y="260" width="130" height="80" class="shn" rx="6"/>
+  <text x="405" y="282" class="t34" text-anchor="middle" fill="#c792ea">shard-N (frozen)</text>
+  <text x="405" y="300" class="s34" text-anchor="middle">read-only</text>
+  <text x="405" y="318" class="s34" text-anchor="middle">no writes (permanent)</text>
+  <text x="405" y="333" class="s34" text-anchor="middle">historical records preserved</text>
+
+  <!-- Merge -->
+  <rect x="510" y="155" width="170" height="70" rx="6" fill="#161922" stroke="#ffd479" stroke-width="1.5"/>
+  <text x="595" y="178" class="t34" text-anchor="middle" fill="#ffd479">cross-shard query</text>
+  <text x="595" y="196" class="s34" text-anchor="middle">each shard → up to limit rows</text>
+  <text x="595" y="212" class="s34" text-anchor="middle">(timestamp, log_id) k-way merge</text>
+
+  <!-- Arrows: services → router -->
+  <line x1="110" y1="98" x2="148" y2="120" stroke="#7aa2ff" stroke-width="1.2" marker-end="url(#aw)"/>
+  <line x1="110" y1="148" x2="148" y2="148" stroke="#7aa2ff" stroke-width="1.2" marker-end="url(#aw)"/>
+  <line x1="110" y1="198" x2="148" y2="190" stroke="#7aa2ff" stroke-width="1.2" marker-end="url(#aw)"/>
+
+  <!-- Arrows: router → shards (write) -->
+  <line x1="298" y1="115" x2="340" y2="90" stroke="#7aa2ff" stroke-width="1.5" marker-end="url(#aw)"/>
+  <line x1="298" y1="150" x2="340" y2="195" stroke="#ffd479" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#af)"/>
+
+  <!-- Arrows: router → shards (read fan-out) -->
+  <line x1="298" y1="240" x2="340" y2="90" stroke="#8be9c0" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#ar)"/>
+  <line x1="298" y1="255" x2="340" y2="195" stroke="#8be9c0" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#ar)"/>
+  <line x1="298" y1="270" x2="340" y2="300" stroke="#8be9c0" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#ar)"/>
+
+  <!-- Arrows: shards → merge -->
+  <line x1="470" y1="90" x2="510" y2="180" stroke="#8be9c0" stroke-width="1" marker-end="url(#ar)"/>
+  <line x1="470" y1="195" x2="510" y2="195" stroke="#8be9c0" stroke-width="1" marker-end="url(#ar)"/>
+  <line x1="470" y1="300" x2="510" y2="210" stroke="#8be9c0" stroke-width="1" marker-end="url(#ar)"/>
+</svg>
+<figcaption>ShardRouter routes writes to one shard based on the tenant, then fans reads out across all relevant shards and merges by timestamp. A frozen shard accepts reads only — it will never receive a write again.</figcaption>
+</figure>
+
+<h2>Consistent hashing: scale up with minimal redistribution</h2>
+
+<p>The <code>ShardMap</code> decides which shard a tenant goes to. A naive <code>tenant_id % N</code> would move <em>every</em> tenant to a different shard whenever the shard count changes — a serious problem, since all previous history now lives on the wrong shard.</p>
+
+<p>The answer is <strong>consistent hashing</strong>. Virtual nodes for each shard are placed on a hash ring, and the shard for a tenant is found by locating which virtual node comes after the tenant's hash on the ring. When a shard is added, only <em>a fraction</em> of tenants need to move.</p>
+
+<pre><span class="filename">crates/quipu-middleware/src/sharding/shard_map.rs</span><code><span class="kw">const</span> VNODES_PER_SHARD: <span class="ty">u32</span> = 64; <span class="com">// virtual nodes per shard</span>
+
+<span class="kw">pub fn</span> <span class="fn">route_write</span>(&amp;self, tenant: &amp;<span class="ty">str</span>) -&gt; <span class="ty">ShardId</span> {
+    let h = self.hash(&amp;tenant);
+    <span class="hl">// First virtual node on the ring with key ≥ h → the shard that node belongs to.</span>
+    match self.ring.binary_search_by_key(&amp;h, |(rh, _)| *rh) {
+        Ok(i) =&gt; self.ring[i].1,
+        Err(i) if i &lt; self.ring.len() =&gt; self.ring[i].1,
+        Err(_) =&gt; self.ring[0].1, <span class="com">// wrap around past the end of the ring</span>
+    }
+}</code></pre>
+
+<h2>Resharding is add-only: records never move</h2>
+
+<p>Append-only chains cannot be relocated. Moving a written record to a different shard breaks the chain and destroys tamper-evidence. So resharding works like this.</p>
+
+<ol>
+  <li><strong>Freeze</strong> the existing shard. From this point on, that shard accepts no writes — ever.</li>
+  <li>Add a new empty shard and make it active.</li>
+  <li>All subsequent writes are directed to the new shard by consistent hashing.</li>
+</ol>
+
+<p>The historical records in the frozen shard stay exactly where they are. Reads for a tenant query the current owning shard <em>and all frozen shards</em> (<code>read_targets</code>). <strong>Records never move, and the single-writer invariant per chain is never broken.</strong></p>
+
+<pre><span class="filename">crates/quipu-middleware/src/sharding/shard_map.rs</span><code><span class="kw">pub fn</span> <span class="fn">read_targets</span>(&amp;self, tenant: <span class="ty">Option</span>&lt;&amp;<span class="ty">str</span>&gt;) -&gt; <span class="ty">Vec</span>&lt;<span class="ty">ShardId</span>&gt; {
+    match tenant {
+        <span class="hl">Some(t) =&gt; {
+            // Current active owning shard + all frozen shards
+            // (pre-reshard history may live in frozen shards)
+            let mut targets = vec![self.route_write(t)];
+            targets.extend(self.frozen.iter());
+            targets
+        }</span>
+        None =&gt; self.all_shards().collect(), <span class="com">// no tenant filter → fan out to all</span>
+    }
+}</code></pre>
+
+<div class="callout warn"><span class="lab">Caution</span><p>Resharding only goes in one direction — you can add shards but never remove them. Plan your shard count carefully upfront. Also, the last remaining active shard cannot be frozen (writes would have nowhere to go).</p></div>
+
+<h2>Cross-shard queries: fan-out + timestamp merge</h2>
+
+<p>A query spanning multiple shards issues the same sub-query to each shard and merges the results by <code>(timestamp_micros, log_id)</code> in a k-way merge. Because there is no global total order, the timestamp is the ordering key.</p>
+
+<p>Pagination is the tricky part. Without a global index, each page turn must carry along how far into each shard we've read. That's <code>MultiCursor</code> — a map of independent per-shard cursors.</p>
+
+<pre><span class="filename">crates/quipu-middleware/src/sharding/fanout.rs</span><code><span class="com">/// A resumable cross-shard cursor. Remembers the position after the last emitted row, per shard.</span>
+<span class="kw">pub struct</span> <span class="ty">MultiCursor</span> {
+    <span class="hl">per_shard: BTreeMap&lt;u32, String&gt;,  // opaque cursor per shard</span>
+    done: BTreeSet&lt;u32&gt;,               <span class="com">// exhausted shards — don't restart them</span>
+}</code></pre>
+
+<div class="callout analogy"><span class="lab">Analogy</span><p>Imagine reading several books simultaneously and editing their contents into a single chronological stream. You keep a bookmark in each book, and each time you advance, you compare the next date across all books and read whichever comes earliest. <code>MultiCursor</code> is that collection of bookmarks.</p></div>
+
+<h2>Global order is surrendered — integrity is not</h2>
+
+<p>Sharding means there is no single global timeline. Events across different shards are ordered only by clock-based timestamps. This is an intentional trade-off (ADR-2).</p>
+
+<p>Integrity, however, is fully preserved. Each shard independently maintains its chain, checkpoints, and anchoring. On top of that, <strong>cross-shard anchoring</strong> (ADR-5, <code>GlobalCheckpoint</code>) detects "entire shard deleted or rolled back" — even if every individual shard passes its own verification, any change to the set of shards is caught by the global checkpoint.</p>
+
+<table>
+  <tr><th>Property</th><th>Single store</th><th>After sharding</th></tr>
+  <tr><td>Write throughput</td><td>1 writer's worth</td><td>~N× (number of shards)</td></tr>
+  <tr><td>Single writer per chain</td><td>✅ 1</td><td>✅ 1 per shard (invariant)</td></tr>
+  <tr><td>Global total order</td><td>✅ yes</td><td>❌ no (clock-based)</td></tr>
+  <tr><td>Per-shard tamper-evidence</td><td>✅</td><td>✅ identical</td></tr>
+  <tr><td>Global integrity</td><td>✅</td><td>✅ GlobalCheckpoint</td></tr>
+  <tr><td>Read replica</td><td>not possible (active shared)</td><td>✅ sealed segments via rsync/snapshot</td></tr>
+</table>
+
+<h2>Read replica: sealed segments are safe to copy as-is</h2>
+
+<p>Sealed segments, as described in <span class="pill">Ch. 8 segments and rollover</span>, are immutable — not a single byte ever changes. That means you can rsync or snapshot them to another host to create a query-only node. Integrity is unaffected — a copy is verified the same way with CRC and Merkle tree.</p>
+
+<p>The one exception: the active (currently-being-written) segment tail may be incomplete at copy time, so exclude it. Run <code>POST /v1/admin/flush</code> before copying to get a consistent snapshot that includes the tail.</p>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① Explain the difference between "one writer per chain" and "one global writer." How does sharding preserve the former while increasing throughput?<br>② Tenant A's history is split between shard-0000 (frozen) and shard-0002 (active). Which shards need to be queried? How does <code>read_targets</code> determine this?<br>③ Why is giving up global total order still sufficient for the purpose of an audit log? (Hint: think about per-shard order and per-shard checkpoints.)</p></div>
+
+</article>

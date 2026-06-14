@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>29 · The async pipeline: non-blocking emit and backpressure — The Quipu-Log Book</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="topbar"><button id="menuBtn">☰ Contents</button><b>The Quipu-Log Book</b></div>
+<div class="wrap">
+<nav class="toc" id="toc">
+<div class="langtoggle"><a class="langbtn active" href="29-async-pipeline.html">EN</a><a class="langbtn" href="ko/29-async-pipeline.html">한국어</a></div>
+<a class="home" href="index.html">The Quipu-Log Book</a>
+<div class="sub">Storage engines and tamper-evident audit logs, built on nothing but the filesystem — explained from the ground up</div>
+<div class="part">Part 1 · Starting point: files, not a DB</div>
+<a class="lnk" href="01-audit-log-and-why-files.html"><span class="n">01</span>What an audit log is, and why “files, no DB”</a>
+<a class="lnk" href="02-map-and-db-fs-bridge.html"><span class="n">02</span>The map, and the DB↔filesystem correspondence</a>
+<div class="part">Part 2 · Filesystem basics</div>
+<a class="lnk" href="03-fs-basics.html"><span class="n">03</span>Filesystem basics: files, directories, inodes, descriptors</a>
+<a class="lnk" href="04-read-write-rename.html"><span class="n">04</span>Reading &amp; writing, and the atomicity of rename</a>
+<a class="lnk" href="05-durability-fsync.html"><span class="n">05</span>When data really hits disk: the page cache and fsync</a>
+<a class="lnk" href="06-std-fs-toolbox.html"><span class="n">06</span>The std::fs toolbox: handling files in Rust</a>
+<div class="part">Part 3 · The heart of the engine: the append-only log</div>
+<a class="lnk" href="07-append-only-wal.html"><span class="n">07</span>Append-only log = the WAL is the database</a>
+<a class="lnk" href="08-segments.html"><span class="n">08</span>Segment files and rollover</a>
+<a class="lnk" href="09-record-framing-crc.html"><span class="n">09</span>Record framing: length, CRC32, magic/version</a>
+<a class="lnk" href="10-serialization.html"><span class="n">10</span>Serialization: turning structs into bytes</a>
+<div class="part">Part 4 · Re-creating what a DB gave you for free, on files</div>
+<a class="lnk" href="11-durability-policy.html"><span class="n">11</span>Durability: fsync policy and group commit</a>
+<a class="lnk" href="12-crash-recovery.html"><span class="n">12</span>Atomicity and crash recovery: torn writes and tail detection</a>
+<a class="lnk" href="13-single-writer-lock.html"><span class="n">13</span>Concurrency I: single-writer and the file lock</a>
+<a class="lnk" href="14-read-snapshot-mvcc.html"><span class="n">14</span>Concurrency II: read snapshots and MVCC</a>
+<a class="lnk" href="15-indexing.html"><span class="n">15</span>Indexing: in-memory index + on-disk tokens</a>
+<a class="lnk" href="16-query-execution.html"><span class="n">16</span>Query execution: segment scans and cursor pagination</a>
+<a class="lnk" href="17-retention-delete.html"><span class="n">17</span>Deletion and retention: segment unlink vs DELETE</a>
+<a class="lnk" href="18-layout-versioning.html"><span class="n">18</span>Store layout and format versioning</a>
+<div class="part">Part 5 · Integrity: making tampering evident (Security I)</div>
+<a class="lnk" href="19-hash-sha256.html"><span class="n">19</span>Hash functions and SHA-256: a digital fingerprint</a>
+<a class="lnk" href="20-merkle-tree.html"><span class="n">20</span>The Merkle history tree: committing the log to 32 bytes</a>
+<a class="lnk" href="21-proofs.html"><span class="n">21</span>Inclusion proofs and consistency proofs</a>
+<a class="lnk" href="22-checkpoint-anchoring.html"><span class="n">22</span>Checkpoints and external anchoring</a>
+<a class="lnk" href="23-threat-model.html"><span class="n">23</span>Tamper-evident vs tamper-proof, and the threat model</a>
+<div class="part">Part 6 · Confidentiality: searching while keeping secrets (Security II)</div>
+<a class="lnk" href="24-field-protection.html"><span class="n">24</span>Field protection in four levels: plaintext/SHA-256/HMAC/RSA</a>
+<a class="lnk" href="25-crypto-internals.html"><span class="n">25</span>Symmetric, asymmetric, hybrid encryption and AEAD</a>
+<a class="lnk" href="26-blind-index.html"><span class="n">26</span>Blind indexes: searching without plaintext</a>
+<a class="lnk" href="27-write-only-deploy.html"><span class="n">27</span>Write-only deployment: a server without the private key</a>
+<a class="lnk" href="28-key-management.html"><span class="n">28</span>Key management: keyring, versioning, rotation vs re-keying</a>
+<div class="part">Part 7 · The write &amp; read paths</div>
+<a class="lnk active" href="29-async-pipeline.html"><span class="n">29</span>The async pipeline: non-blocking emit and backpressure</a>
+<a class="lnk" href="30-reliability-dlq.html"><span class="n">30</span>Reliability: retries, backoff, DLQ, idempotency</a>
+<a class="lnk" href="31-tower-middleware.html"><span class="n">31</span>The tower middleware: auto-recording HTTP requests</a>
+<a class="lnk" href="32-permissions-meta-audit.html"><span class="n">32</span>Permissions (RBAC), filters, and meta-audit</a>
+<div class="part">Part 8 · Distribution, operations, scaling</div>
+<a class="lnk" href="33-availability-spool.html"><span class="n">33</span>Single point of failure and availability: the client spool</a>
+<a class="lnk" href="34-sharding-scaling.html"><span class="n">34</span>Horizontal scaling: sharding, consistent hashing, read replicas</a>
+<a class="lnk" href="35-server-client-mcp-obs.html"><span class="n">35</span>Server, client, MCP, and observability</a>
+</nav>
+<main>
+<div class="inner">
+<div class="chaptertop"><span class="partlabel">Part 7 · The write &amp; read paths</span><h1><span class="chno">29</span> · The async pipeline: non-blocking emit and backpressure</h1></div><article>
+
+<p class="lead">If handling an HTTP request takes tens of microseconds, you can't afford to spend hundreds of microseconds writing an audit log to disk. This chapter walks through how Quipu-Log turns <code>emit</code> into a <strong>non-blocking path that queues the event and returns immediately</strong>.</p>
+
+<div class="callout"><span class="lab">In one sentence</span><p><code>emit</code> pushes an event into a bounded channel and returns right away. The actual disk write is handled by a dedicated writer thread.</p></div>
+
+<h2>The producer-consumer pattern</h2>
+
+<p>This is exactly the queue you already know. A single channel sits between the <strong>producers</strong> (the app threads handling requests) and the <strong>consumer</strong> (the writer thread that writes to disk). A producer's job ends the moment it drops the event into the channel; the consumer picks events out one by one and writes them to disk in order.</p>
+
+<p>Rust's standard library <code>sync_channel</code> is that channel. <strong>Bounded</strong> means there's a cap on how many events can wait inside it (4096 by default). Without a cap, memory usage would be unbounded.</p>
+
+<figure>
+<svg viewBox="0 0 680 260" role="img" aria-label="AuditPipeline queue flow: app threads emit into a bounded channel, and a dedicated writer thread drains it into AuditStore">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .lbl{fill:#e6e8ee;font:600 13px -apple-system,sans-serif}
+    .sub{fill:#9aa3b2;font:12px -apple-system,sans-serif}
+    .box{fill:#161922;stroke:#2a2f3d;stroke-width:1.5}
+    .thr{fill:#16241d;stroke:#2c4a3a;stroke-width:1.5}
+    .ch{fill:#241f12;stroke:#4a3f1f;stroke-width:1.5}
+    .stor{fill:#1a1228;stroke:#3d2c5a;stroke-width:1.5}
+    .arr{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#arr)}
+    .hlline{stroke:#7aa2ff;stroke-width:2;marker-end:url(#arr)}
+  </style>
+
+  <!-- App threads (producers) -->
+  <rect x="20" y="30" width="130" height="50" rx="6" class="thr"/>
+  <text x="85" y="52" class="lbl" text-anchor="middle">Request thread A</text>
+  <text x="85" y="70" class="sub" text-anchor="middle">handle.emit()</text>
+
+  <rect x="20" y="100" width="130" height="50" rx="6" class="thr"/>
+  <text x="85" y="122" class="lbl" text-anchor="middle">Request thread B</text>
+  <text x="85" y="140" class="sub" text-anchor="middle">handle.emit()</text>
+
+  <rect x="20" y="170" width="130" height="50" rx="6" class="thr"/>
+  <text x="85" y="192" class="lbl" text-anchor="middle">Request thread C</text>
+  <text x="85" y="210" class="sub" text-anchor="middle">handle.emit()</text>
+
+  <!-- Bounded channel -->
+  <rect x="200" y="50" width="160" height="155" rx="6" class="ch"/>
+  <text x="280" y="74" class="lbl" text-anchor="middle" fill="#ffd479">Bounded channel</text>
+  <text x="280" y="92" class="sub" text-anchor="middle">capacity: 4096</text>
+  <rect x="220" y="102" width="120" height="18" rx="3" fill="#0b0d12"/>
+  <rect x="220" y="126" width="120" height="18" rx="3" fill="#0b0d12"/>
+  <rect x="220" y="150" width="120" height="18" rx="3" fill="#0b0d12"/>
+  <rect x="220" y="174" width="80" height="18" rx="3" fill="#0b0d12"/>
+  <text x="280" y="207" class="sub" text-anchor="middle">↑ try_send</text>
+
+  <!-- Writer thread (consumer) -->
+  <rect x="420" y="70" width="120" height="60" rx="6" fill="#1a1e2e" stroke="#3d5a8a" stroke-width="1.5"/>
+  <text x="480" y="96" class="lbl" text-anchor="middle" fill="#7aa2ff">writer thread</text>
+  <text x="480" y="116" class="sub" text-anchor="middle">audit-writer</text>
+
+  <!-- AuditStore -->
+  <rect x="420" y="160" width="120" height="55" rx="6" class="stor"/>
+  <text x="480" y="185" class="lbl" text-anchor="middle" fill="#c792ea">AuditStore</text>
+  <text x="480" y="203" class="sub" text-anchor="middle">disk write</text>
+
+  <!-- Arrows: producers → channel -->
+  <line x1="150" y1="55" x2="198" y2="105" class="arr"/>
+  <line x1="150" y1="125" x2="198" y2="140" class="arr"/>
+  <line x1="150" y1="195" x2="198" y2="175" class="arr"/>
+
+  <!-- channel → writer -->
+  <line x1="360" y1="128" x2="418" y2="100" class="hlline"/>
+
+  <!-- writer → store -->
+  <line x1="480" y1="130" x2="480" y2="158" class="arr"/>
+
+  <!-- QueueFull label -->
+  <text x="340" y="240" class="sub" fill="#ff8b8b">← returns QueueFull when channel is full</text>
+</svg>
+<figcaption>Producers (request threads) drop events into the channel and return immediately. Only the dedicated writer thread ever touches AuditStore.</figcaption>
+</figure>
+
+<h2>The core code: what emit actually does</h2>
+
+<p><code>AuditHandle</code> is the cloneable handle that app code holds directly. Looking at <code>emit_unchecked</code> shows just how short the hot path really is.</p>
+
+<pre><span class="filename">crates/quipu-middleware/src/pipeline.rs</span><code><span class="kw">pub fn</span> <span class="fn">emit_unchecked</span>(&amp;self, event: AuditEvent) -&gt; Result&lt;(), MiddlewareError&gt; {
+    <span class="dim">if self.reject_emit_when_disk_full &amp;&amp; self.health.disk_full() { ... }</span>
+    self.metrics.queue_inc();
+    <span class="hl">match self.tx.try_send(Command::Emit(Box::new(event))) {</span>
+<span class="hl">        Ok(()) =&gt; Ok(()),</span>
+<span class="hl">        Err(TrySendError::Full(Command::Emit(ev))) =&gt; {</span>
+            self.metrics.rejected_queue_full();
+            Err(MiddlewareError::QueueFull(ev))
+        }
+        <span class="dim">Err(_) =&gt; Err(MiddlewareError::WorkerGone),</span>
+    }
+}</code></pre>
+
+<p><code>try_send</code> returns <code>Err</code> immediately — without blocking — when the channel is full. That produces a <code>QueueFull</code> error, and the event comes back to the caller (so the caller can drop it or route it to a separate fallback). This is <strong>backpressure</strong> — the system's way of saying "I'm too busy right now, I can't take any more."</p>
+
+<div class="callout analogy"><span class="lab">Analogy</span><p>Think of a restaurant handing out numbered tickets. The guest (producer) takes a ticket and immediately goes to find a seat — no waiting. The kitchen (writer thread) processes orders in ticket order. When the tickets run out (channel full), no more can be issued — that's QueueFull.</p></div>
+
+<h2>AuditPipeline and AuditHandle</h2>
+
+<p><code>AuditPipeline</code> owns the writer thread. Exactly one exists for the lifetime of the server; at shutdown you call <code>shutdown()</code> to drain whatever's left in the queue and clean up the thread. <code>AuditHandle</code> is the lightweight clone you get by calling <code>handle()</code> on the pipeline. It wraps an <code>Arc&lt;SyncSender&gt;</code>, so cloning is essentially free — pass it wherever you need it.</p>
+
+<pre><span class="filename">crates/quipu-middleware/src/pipeline.rs</span><code><span class="dim">// Start the pipeline once, at server initialization</span>
+<span class="kw">let</span> pipeline = <span class="ty">AuditPipeline</span>::<span class="fn">start</span>(store, root, permissions, cfg, fallback)?;
+
+<span class="hl">let handle = pipeline.handle(); // cloneable AuditHandle</span>
+<span class="dim">// pass handle anywhere via axum State, Arc, etc.</span>
+handle.<span class="fn">emit</span>(&amp;role, event)?;   <span class="com">// non-blocking</span></code></pre>
+
+<div class="callout why"><span class="lab">Why this design?</span><p>quipu-core's <code>AuditStore</code> follows the single-writer principle (Ch. 13). If multiple request threads called <code>AuditStore</code> directly in a multi-threaded server, you'd get lock contention or consistency issues. Serializing through a channel to a single thread lets the store keep its single-writer guarantee while keeping the app completely non-blocking.</p></div>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① What would go wrong if <code>send</code> (blocking send) were used instead of <code>try_send</code>?<br>② Why does a <code>QueueFull</code> error return the event to the caller rather than simply dropping it?<br>③ Why is <code>AuditHandle</code> designed to implement <code>Clone</code>?</p></div>
+
+</article>
+
+<div class="prevnext"><a class="prev" href="28-key-management.html"><span class="dir">← Prev</span><span class="t">28 · Key management: keyring, versioning, rotation vs re-keying</span></a><a class="next" href="30-reliability-dlq.html"><span class="dir">Next →</span><span class="t">30 · Reliability: retries, backoff, DLQ, idempotency</span></a></div>
+</div>
+</main>
+</div>
+<script src="assets/textbook.js"></script>
+</body>
+</html>

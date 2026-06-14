@@ -1,0 +1,136 @@
+<article>
+
+<p class="lead">Calling <code>file.write_all(b"hello")</code> does not mean the data has landed on disk. There are buffers on both the Rust side and the OS side, and the data passes through two stages before it ever touches physical storage. If the power dies in between — the data is gone. This chapter is about understanding <em>when data actually makes it to disk</em> and how Quipu-Log controls that.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ Filesystem</span><p><strong>In a DB</strong>, the WAL is fsync'd at <code>COMMIT</code> time to guarantee no data loss. <strong>In Quipu-Log</strong>, we make that fsync call ourselves — using <code>SyncPolicy</code> to choose between "fsync on every append," "fsync every N appends," and "leave it to the OS."</p></div>
+
+<h2>Two-stage buffering: user space + kernel page cache</h2>
+
+<p>When you call <code>write()</code>, data actually passes through two separate buffers.</p>
+
+<figure>
+<svg viewBox="0 0 680 260" role="img" aria-label="Two-stage buffer structure: BufWriter, page cache, and disk">
+  <defs><marker id="ar5" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/></marker></defs>
+  <style>
+    .l5{fill:#e6e8ee;font:600 13px -apple-system,sans-serif}
+    .s5{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .s5b{fill:#ffd479;font:700 11px -apple-system,sans-serif}
+    .ar5{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#ar5)}
+    .app{fill:#1a2133;stroke:#7aa2ff;stroke-width:2;rx:6}
+    .buf{fill:#1d1a28;stroke:#c792ea;stroke-width:1.5;rx:6}
+    .pc{fill:#16241d;stroke:#8be9c0;stroke-width:1.5;rx:6}
+    .disk{fill:#241f12;stroke:#ffd479;stroke-width:2;rx:6}
+  </style>
+
+  <!-- Application -->
+  <rect x="20" y="20" width="140" height="60" rx="6" fill="#1a2133" stroke="#7aa2ff" stroke-width="2"/>
+  <text x="36" y="46" class="l5" fill="#7aa2ff">Application</text>
+  <text x="36" y="64" class="s5">seg.append(payload)</text>
+
+  <!-- BufWriter -->
+  <rect x="210" y="20" width="160" height="60" rx="6" fill="#1d1a28" stroke="#c792ea" stroke-width="1.5"/>
+  <text x="226" y="42" class="l5" fill="#c792ea">BufWriter (user space)</text>
+  <text x="226" y="60" class="s5">256 KB buffer</text>
+  <text x="226" y="74" class="s5b">flush() hands off to kernel</text>
+
+  <!-- page cache -->
+  <rect x="420" y="20" width="160" height="60" rx="6" fill="#16241d" stroke="#8be9c0" stroke-width="1.5"/>
+  <text x="436" y="42" class="l5" fill="#8be9c0">Kernel page cache</text>
+  <text x="436" y="60" class="s5">dirty pages in OS memory</text>
+  <text x="436" y="74" class="s5b">fsync() forces to disk</text>
+
+  <!-- Disk -->
+  <rect x="300" y="160" width="160" height="60" rx="6" fill="#241f12" stroke="#ffd479" stroke-width="2"/>
+  <text x="316" y="186" class="l5" fill="#ffd479">Physical disk (NVMe)</text>
+  <text x="316" y="204" class="s5">survives power loss</text>
+
+  <!-- Arrows -->
+  <line x1="160" y1="50" x2="210" y2="50" class="ar5"/>
+  <text x="165" y="44" class="s5">write()</text>
+  <line x1="370" y1="50" x2="420" y2="50" class="ar5"/>
+  <text x="375" y="44" class="s5">flush()</text>
+  <line x1="500" y1="80" x2="500" y2="160" class="ar5"/>
+  <text x="506" y="128" class="s5">fsync()</text>
+
+  <!-- Power-loss danger zone -->
+  <text x="228" y="128" class="s5" fill="#ff8b8b">⚡ danger zone: data lost if power dies here</text>
+  <line x1="280" y1="115" x2="500" y2="115" stroke="#ff8b8b" stroke-width="1" stroke-dasharray="4"/>
+  <line x1="280" y1="80" x2="280" y2="150" stroke="#ff8b8b" stroke-width="1" stroke-dasharray="4"/>
+  <line x1="500" y1="80" x2="500" y2="150" stroke="#ff8b8b" stroke-width="1" stroke-dasharray="4"/>
+</svg>
+<figcaption>Writes pass through two buffers. BufWriter (user space) → page cache (kernel) → disk (physical). flush() drains the first buffer; fsync() pushes the page cache all the way to disk.</figcaption>
+</figure>
+
+<p>Breaking it down:</p>
+
+<ol>
+  <li><strong>BufWriter (user-space buffer)</strong>: when you call <code>write()</code>, data first accumulates in BufWriter's internal buffer (256 KB in Quipu-Log). It only moves to the kernel when the buffer fills up or you explicitly call <code>flush()</code>.</li>
+  <li><strong>Kernel page cache (OS buffer)</strong>: once <code>flush()</code> hands data to the kernel, the OS doesn't write it to disk immediately. It holds it as "dirty pages" in RAM and writes them out together later (write-back). If the power dies at this point — <strong>it's gone.</strong></li>
+  <li><strong>fsync()</strong>: calling <code>fsync()</code> forces the OS to write dirty pages to disk right now. Once this call returns, a power failure won't lose the data. The trade-off: it's slow because it involves a round-trip to the disk.</li>
+</ol>
+
+<h2>In Quipu-Log: BufWriter, flush, and sync</h2>
+
+<p><code>Segment</code> uses a <code>BufWriter&lt;File&gt;</code>. <code>append()</code> writes to the BufWriter, <code>flush()</code> gets data to the page cache, and <code>sync()</code> gets it all the way to disk.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs</span><code><span class="kw">pub fn</span> <span class="fn">flush</span>(&amp;<span class="kw">mut</span> self) -&gt; <span class="ty">Result</span>&lt;()&gt; {
+<span class="hl">    self.writer.flush()?;   <span class="com">// BufWriter → page cache (OS memory)</span></span>
+    <span class="ty">Ok</span>(())
+}
+
+<span class="kw">pub fn</span> <span class="fn">sync</span>(&amp;<span class="kw">mut</span> self) -&gt; <span class="ty">Result</span>&lt;()&gt; {
+    self.writer.flush()?;
+<span class="hl">    self.writer.get_ref().sync_data()?;  <span class="com">// page cache → physical disk</span></span>
+    <span class="ty">Ok</span>(())
+}</code></pre>
+
+<p><code>sync_data()</code> is Rust's wrapper around <code>fdatasync(2)</code>. Similar to <code>fsync(2)</code>, but it skips metadata updates (like access time), making it slightly faster. For data durability it's sufficient.</p>
+
+<h2>SyncPolicy: the durability vs. throughput trade-off</h2>
+
+<p>fsync-ing after every append is safe but slow. Leaving it to the OS is fast but risks losing recent records if the power dies. Quipu-Log lets you pick your trade-off with <code>SyncPolicy</code>.</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs</span><code><span class="kw">pub enum</span> <span class="ty">SyncPolicy</span> {
+<span class="hl">    <span class="ty">Always</span>,          <span class="com">// fsync after every append. Safest, slowest.</span></span>
+<span class="hl">    <span class="ty">EveryN</span>(<span class="ty">u32</span>),     <span class="com">// fsync every N appends. Middle ground.</span></span>
+<span class="hl">    <span class="ty">OsManaged</span>,       <span class="com">// no explicit fsync. Leave it to the OS. Fastest.</span></span>
+}</code></pre>
+
+<p>Seeing where each option actually applies makes it concrete:</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs — apply_sync_policy()</span><code><span class="kw">match</span> self.cfg.sync_policy {
+<span class="hl">    <span class="ty">SyncPolicy</span>::<span class="ty">Always</span> =&gt; self.sync_all()?,</span>
+    <span class="ty">SyncPolicy</span>::<span class="ty">EveryN</span>(n) =&gt; {
+        self.appends_since_sync += <span class="num">1</span>;
+        <span class="kw">if</span> self.appends_since_sync &gt;= n {
+<span class="hl">            self.sync_all()?;   <span class="com">// fsync on every Nth append</span></span>
+        } <span class="kw">else</span> {
+            self.logs.flush()?; <span class="com">// all others: page cache only</span>
+            self.relations.flush()?;
+        }
+    }
+<span class="hl">    <span class="ty">SyncPolicy</span>::<span class="ty">OsManaged</span> =&gt; {
+        self.logs.flush()?;    <span class="com">// only drain BufWriter, no fsync</span>
+    }</span>
+}</code></pre>
+
+<h2>The trade-off in numbers</h2>
+
+<p>The benchmark figures in the README show the difference (Apple M4, NVMe SSD):</p>
+
+<table>
+  <tr><th>SyncPolicy</th><th>Durable throughput</th><th>Max data loss on power failure</th></tr>
+  <tr><td><code>OsManaged</code></td><td>~56,000 events/s</td><td>Whatever was in the OS write-back window (tens of ms to seconds)</td></tr>
+  <tr><td><code>EveryN(64)</code></td><td>~4,800 events/s</td><td>Up to 63 events</td></tr>
+  <tr><td><code>Always</code></td><td>~750 events/s (estimated)</td><td>0 events (returns only after fsync)</td></tr>
+</table>
+
+<p><code>EveryN(64)</code> is the default — for most audit log workloads, "up to 63 events possibly lost" is an acceptable risk, and the throughput is plenty. In strict environments like HIPAA, consider <code>Always</code>.</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ Filesystem</span><p>PostgreSQL's <code>synchronous_commit = off</code> corresponds to <code>OsManaged</code>; <code>on</code> (the default) corresponds to <code>Always</code>. MySQL InnoDB's <code>innodb_flush_log_at_trx_commit = 2</code> is similar to <code>OsManaged</code>. <strong>The choices a DB engine makes internally are choices we make explicitly here, with <code>SyncPolicy</code>.</strong></p></div>
+
+<div class="callout warn"><span class="lab">Caution</span><p><code>OsManaged</code> is safe against <em>application crashes</em> — the page cache is managed by the OS, so even if the process dies, the OS stays up and the page cache survives. Data loss is only a risk during <em>full system power loss</em> (power cut, OS crash, forced reset). On cloud VMs, the hypervisor typically flushes write-back quickly, so the practical risk may be low — but it's not guaranteed.</p></div>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① Explain the difference between <code>flush()</code> and <code>fsync()</code> in terms of "how far does the data travel?"<br>② If you're using <code>SyncPolicy::EveryN(64)</code> and the power dies, how many events can you lose at most?<br>③ Why does <code>OsManaged</code> behave differently for an "application crash" versus a "system power loss"?</p></div>
+
+</article>

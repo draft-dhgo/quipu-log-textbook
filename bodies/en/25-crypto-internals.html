@@ -1,0 +1,186 @@
+<article>
+
+<p class="lead">The previous chapter mentioned briefly that the <code>Rsa</code> protection level "encrypts with AES-256-GCM and wraps the key with RSA-OAEP." But why go through those two steps instead of just encrypting directly with RSA? This chapter builds an intuitive understanding of symmetric, asymmetric, and hybrid encryption — and then examines why AEAD layers integrity on top of confidentiality. We'll follow the theory right into Quipu-Log's <code>crypto.rs</code> to see how it's implemented.</p>
+
+<div class="callout"><span class="lab">In one sentence</span><p>Data is encrypted with fast AES-256-GCM (symmetric), and only the secret key is wrapped with the RSA public key (asymmetric). That's hybrid/key wrapping — each algorithm doing the job it's actually good at.</p></div>
+
+<h2>First: symmetric vs. asymmetric encryption</h2>
+
+<p>Let's nail down the core difference between the two.</p>
+
+<p><strong>Symmetric encryption</strong> uses the same key for both encryption and decryption. AES is the canonical example. It's <em>fast</em> and imposes no size limit on the data. The weakness is sharing — how do you securely hand the key to the other party? The server and client both need to know the same secret key, but if they've never met before and there's no secure channel, key exchange itself becomes the hard problem.</p>
+
+<p><strong>Asymmetric encryption</strong> uses a key pair: a public key and a private key. Encrypt with the public key; only the private key can decrypt. RSA is the canonical example. The public key can literally be made public — it doesn't matter who sees it. That solves the "how do we exchange keys securely" problem. The downside: it's <em>slow</em>, and there's a strict upper limit on how much data RSA can encrypt directly (RSA-2048 ≈ 245 bytes maximum). Encrypting a file of any real size directly with RSA is basically off the table.</p>
+
+<div class="callout analogy"><span class="lab">Analogy</span><p>Think of the public key as a locked mailbox slot. Anyone can drop a letter in (= encrypt with the public key), but only the owner with the key (= private key) can take letters out. The mailbox itself can sit in a public place — that's fine.</p></div>
+
+<h2>Why not encrypt directly with RSA — the birth of hybrid/key wrapping</h2>
+
+<p>Put the strengths and weaknesses side by side and the optimal strategy becomes obvious.</p>
+
+<table>
+  <tr><th></th><th>Symmetric (AES)</th><th>Asymmetric (RSA)</th></tr>
+  <tr><td>Speed</td><td>Very fast</td><td>Tens to hundreds of times slower</td></tr>
+  <tr><td>Size limit</td><td>None</td><td>Yes (RSA-2048 ≈ 245 bytes)</td></tr>
+  <tr><td>Key exchange problem</td><td>Yes</td><td>No (public key can be published)</td></tr>
+</table>
+
+<p>The solution is to combine the best of both. <strong>Encrypt the data itself with symmetric (AES), and wrap only that symmetric key (the DEK, Data Encryption Key) with asymmetric (RSA).</strong> This is <strong>hybrid/key wrapping</strong>.</p>
+
+<figure>
+<svg viewBox="0 0 760 280" role="img" aria-label="Hybrid key wrapping flow">
+  <defs>
+    <marker id="arr25" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/>
+    </marker>
+  </defs>
+  <style>
+    .t25{fill:#e6e8ee;font:600 13px -apple-system,sans-serif}
+    .s25{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .bx25{rx:8;stroke-width:1.5}
+    .ln25{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#arr25)}
+  </style>
+
+  <!-- Step 1: Generate DEK -->
+  <rect x="10" y="40" width="130" height="50" class="bx25" fill="#161922" stroke="#2a2f3d"/>
+  <text x="75" y="62" class="t25" text-anchor="middle">plaintext data</text>
+  <text x="75" y="80" class="s25" text-anchor="middle">"Alice Smith"</text>
+
+  <!-- AES-GCM box -->
+  <rect x="170" y="40" width="160" height="50" class="bx25" fill="#16241d" stroke="#8be9c0"/>
+  <text x="250" y="62" class="t25" text-anchor="middle" fill="#8be9c0">AES-256-GCM</text>
+  <text x="250" y="80" class="s25" text-anchor="middle">data encryption (fast)</text>
+  <line x1="140" y1="65" x2="170" y2="65" class="ln25"/>
+
+  <!-- Ciphertext -->
+  <rect x="360" y="40" width="130" height="50" class="bx25" fill="#200d1a" stroke="#ff8b8b"/>
+  <text x="425" y="62" class="t25" text-anchor="middle" fill="#ff8b8b">ciphertext</text>
+  <text x="425" y="80" class="s25" text-anchor="middle">ciphertext + nonce</text>
+  <line x1="330" y1="65" x2="360" y2="65" class="ln25"/>
+
+  <!-- DEK -->
+  <rect x="170" y="130" width="130" height="50" class="bx25" fill="#0d1a20" stroke="#7aa2ff"/>
+  <text x="235" y="152" class="t25" text-anchor="middle" fill="#7aa2ff">DEK (32 bytes)</text>
+  <text x="235" y="170" class="s25" text-anchor="middle">random AES key</text>
+
+  <!-- Line from DEK to AES -->
+  <line x1="235" y1="130" x2="235" y2="90" class="ln25" stroke="#7aa2ff"/>
+  <text x="165" y="120" class="s25" fill="#7aa2ff">used as key</text>
+
+  <!-- RSA-OAEP box -->
+  <rect x="330" y="130" width="160" height="50" class="bx25" fill="#1a1a0d" stroke="#ffd479"/>
+  <text x="410" y="152" class="t25" text-anchor="middle" fill="#ffd479">RSA-OAEP</text>
+  <text x="410" y="170" class="s25" text-anchor="middle">wrap DEK (slow, but only 32B)</text>
+  <line x1="300" y1="155" x2="330" y2="155" class="ln25"/>
+
+  <!-- Wrapped key -->
+  <rect x="520" y="130" width="130" height="50" class="bx25" fill="#1a1a0d" stroke="#ffd479"/>
+  <text x="585" y="152" class="t25" text-anchor="middle" fill="#ffd479">wrapped_key</text>
+  <text x="585" y="170" class="s25" text-anchor="middle">RSA ciphertext (b64)</text>
+  <line x1="490" y1="155" x2="520" y2="155" class="ln25"/>
+
+  <!-- RSA Public Key -->
+  <rect x="520" y="200" width="130" height="50" class="bx25" fill="#161922" stroke="#c792ea"/>
+  <text x="585" y="222" class="t25" text-anchor="middle" fill="#c792ea">RSA public key</text>
+  <text x="585" y="240" class="s25" text-anchor="middle">server can hold this</text>
+  <line x1="585" y1="200" x2="585" y2="180" class="ln25" stroke="#c792ea"/>
+
+  <!-- Final storage -->
+  <rect x="620" y="40" width="130" height="180" class="bx25" fill="#161922" stroke="#2a2f3d"/>
+  <text x="685" y="65" class="t25" text-anchor="middle">stored on disk</text>
+  <text x="685" y="90" class="s25" text-anchor="middle" fill="#ff8b8b">ciphertext</text>
+  <text x="685" y="110" class="s25" text-anchor="middle" fill="#ff8b8b">nonce</text>
+  <text x="685" y="130" class="s25" text-anchor="middle" fill="#ffd479">wrapped_key</text>
+  <text x="685" y="150" class="s25" text-anchor="middle">key_version</text>
+  <line x1="490" y1="65" x2="620" y2="100" class="ln25"/>
+  <line x1="650" y1="155" x2="620" y2="130" class="ln25"/>
+</svg>
+<figcaption>Data is encrypted with fast AES-256-GCM; only the DEK (the AES key) is wrapped with RSA-OAEP. Four pieces land on disk: ciphertext, nonce, wrapped_key, and key_version.</figcaption>
+</figure>
+
+<p>Let's look at exactly how this flow is implemented in the actual code.</p>
+
+<pre><span class="filename">crates/quipu-core/src/crypto.rs — KeyRing::protect (Rsa branch)</span><code><span class="com">// 1. DEK (Data Encryption Key): generate a random 32-byte symmetric key</span>
+<span class="kw">let mut</span> dek = [0u8; 32];
+rand::thread_rng().fill_bytes(&amp;mut dek);
+<span class="kw">let mut</span> nonce = [0u8; 12];
+rand::thread_rng().fill_bytes(&amp;mut nonce);
+
+<span class="com">// 2. Encrypt the data with AES-256-GCM</span>
+<span class="kw">let</span> cipher = <span class="ty">Aes256Gcm</span>::new_from_slice(&amp;dek).expect(<span class="str">"32-byte key"</span>);
+<span class="hl"><span class="kw">let</span> ciphertext = cipher.encrypt(<span class="ty">Nonce</span>::from_slice(&amp;nonce), value.canonical_bytes().as_slice())?;</span>
+
+<span class="com">// 3. Wrap the DEK with the RSA public key (OAEP padding) — DEK is 32 bytes, well within RSA's limit</span>
+<span class="hl"><span class="kw">let</span> wrapped_key = key.encrypt(&amp;<span class="kw">mut</span> rand::thread_rng(), <span class="ty">Oaep</span>::new::&lt;<span class="ty">Sha256</span>&gt;(), &amp;dek)?;</span></code></pre>
+
+<p>The DEK is only 32 bytes, so RSA's size limit is never a concern. Large data is handled quickly by AES. A fresh random DEK and nonce are generated for every record, so encrypting the same value twice always produces a different ciphertext.</p>
+
+<h2>AEAD: encryption and tamper detection in one pass</h2>
+
+<p>AES-256-GCM is more than a straightforward encryption algorithm — it belongs to the <strong>AEAD (Authenticated Encryption with Associated Data)</strong> family. GCM stands for Galois/Counter Mode, and the defining property of this mode is that it produces an authentication tag alongside the ciphertext.</p>
+
+<p>Here's how it works in brief. On encryption, it outputs ciphertext plus an authentication tag. On decryption, it verifies the tag first. If the tag doesn't match — meaning the ciphertext was modified even by a single bit — decryption fails outright.</p>
+
+<div class="callout key"><span class="lab">Security note</span><p>The core guarantee of AEAD: <strong>if anyone modifies the encrypted data, decryption fails.</strong> If an attacker flips a single bit in the ciphertext sitting on disk, <code>decrypt()</code> returns an error — it does not silently hand back a corrupted value. This is a cryptographic guarantee that is independent of the tamper detection covered in Part 5 (the Merkle tree). Both defenses work in parallel, layered on top of each other.</p></div>
+
+<p>This behavior is verified directly in the test suite.</p>
+
+<pre><span class="filename">crates/quipu-core/src/crypto.rs — tamper detection test</span><code><span class="kw">let mut</span> ct = b64::decode(&amp;ciphertext).unwrap();
+ct[0] ^= 1; <span class="com">// flip one bit in the first byte</span>
+<span class="kw">let</span> tampered = <span class="ty">StoredValue</span>::Rsa { key_version, wrapped_key, nonce,
+    ciphertext: b64::encode(&amp;ct) };
+<span class="hl">assert!(ring.decrypt(&amp;tampered).is_err(), <span class="str">"GCM must reject a flipped bit"</span>);</span></code></pre>
+
+<h2>HMAC — keyed hash</h2>
+
+<p>HMAC stands for Hash-based Message Authentication Code. Let's make the difference from keyless SHA-256 concrete.</p>
+
+<table>
+  <tr><th></th><th>SHA-256</th><th>HMAC-SHA-256</th></tr>
+  <tr><td>Key</td><td>none</td><td>secret key required</td></tr>
+  <tr><td>Same input → same output?</td><td>always</td><td>only with the same key</td></tr>
+  <tr><td>Offline dictionary attack</td><td>possible (public algorithm)</td><td>impossible without the key</td></tr>
+  <tr><td>Use case</td><td>medium-entropy values</td><td>low-entropy values (SSN, etc.)</td></tr>
+</table>
+
+<p>HMAC mixes the key into the data before hashing. So <em>without the server's key</em>, even if you know the SSN, you can't reproduce the digest.</p>
+
+<pre><span class="filename">crates/quipu-core/src/crypto.rs — HMAC computation</span><code><span class="kw">type</span> <span class="ty">HmacSha256</span> = <span class="ty">Hmac</span>&lt;<span class="ty">Sha256</span>&gt;;
+
+<span class="kw">pub fn</span> <span class="fn">hmac_hex_with</span>(&amp;self, version: <span class="ty">KeyVersion</span>, data: &amp;[u8]) -&gt; <span class="ty">Result</span>&lt;<span class="ty">String</span>&gt; {
+    <span class="kw">let mut</span> mac = &lt;<span class="ty">HmacSha256</span> <span class="kw">as</span> <span class="ty">Mac</span>&gt;::new_from_slice(self.mac_of(version)?)
+        .map_err(|e| <span class="ty">Error</span>::Crypto(e.to_string()))?;
+    mac.update(data);
+    <span class="hl"><span class="ty">Ok</span>(hex(&amp;mac.finalize().into_bytes()))</span>
+}</code></pre>
+
+<h2>RSA-OAEP: the safe padding for asymmetric encryption</h2>
+
+<p>Quipu-Log uses OAEP (Optimal Asymmetric Encryption Padding) for RSA encryption. The older PKCS#1 v1.5 encryption padding has a well-known vulnerability (the Bleichenbacher attack), so modern RSA encryption uses OAEP.</p>
+
+<p>That said, signatures (checkpoint signatures) use PKCS#1 v1.5 — because signatures must be deterministic (same data → same signature), and PSS is non-deterministic. So the library uses two different RSA padding schemes, each where it belongs: OAEP for encryption, PKCS#1 v1.5 for signing.</p>
+
+<h2>KeyRing manages all of this</h2>
+
+<p><code>KeyRing</code> is the struct that tracks RSA key pairs and HMAC keys by version number. The highest version is the active key used for new writes; lower versions are kept around to read records encrypted under older keys.</p>
+
+<pre><span class="filename">crates/quipu-core/src/crypto.rs — KeyRing structure</span><code><span class="kw">pub struct</span> <span class="ty">KeyRing</span> {
+    <span class="hl">rsa: <span class="ty">BTreeMap</span>&lt;<span class="ty">KeyVersion</span>, <span class="ty">RsaPair</span>&gt;,    <span class="com">// version → (public key, private key?)</span></span>
+    <span class="hl">macs: <span class="ty">BTreeMap</span>&lt;<span class="ty">KeyVersion</span>, <span class="ty">Vec</span>&lt;u8&gt;&gt;,  <span class="com">// version → HMAC key bytes</span></span>
+}
+<span class="com">// active key: keys().next_back() — BTreeMap is ascending order, so highest version</span></code></pre>
+
+<p>In a write-only deployment, <code>RsaPair</code>'s <code>private</code> field is <code>None</code>. With only the public key, encryption (write) is possible but decryption (read) is not. That asymmetry is the subject of the next chapter — <span class="pill">Ch. 27 write-only deploy</span>.</p>
+
+<h2>Recap</h2>
+<ul>
+  <li><strong>Symmetric (AES)</strong> is fast but requires key sharing. <strong>Asymmetric (RSA)</strong> handles key sharing elegantly but is slow with a strict size limit.</li>
+  <li><strong>Hybrid/key wrapping</strong>: data goes through AES-256-GCM; only the DEK is wrapped with RSA-OAEP — the best of both worlds.</li>
+  <li>AES-256-<strong>GCM is AEAD</strong> — encryption and tamper detection in one. Even a single flipped bit surfaces as a decryption failure.</li>
+  <li><strong>HMAC</strong> is a keyed hash — offline dictionary attacks are impossible without the key. It closes the low-entropy vulnerability of SHA-256.</li>
+  <li><strong>KeyRing</strong> manages versioned RSA and HMAC keys. The highest version is active; lower versions serve reads on older records.</li>
+</ul>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① Name two reasons why encrypting data directly with RSA is not a good idea.<br>② Why is AES-GCM better than plain AES-CTR? (Hint: AEAD)<br>③ Is the HMAC value for the same plaintext always the same, or can it differ? Compare with SHA-256 and explain.</p></div>
+
+</article>

@@ -1,0 +1,127 @@
+<article>
+
+<p class="lead">Quipu-Log's entire storage engine runs on nothing but Rust's standard library — <code>std::fs</code> and <code>std::io</code> — with no special OS features and no external libraries. This chapter collects the standard APIs that actually appear throughout the Quipu-Log codebase and looks at them from the angle of "this is the full set of tools we have."</p>
+
+<div class="callout dbfs"><span class="lab">DB ↔ Filesystem</span><p><strong>A DB engine</strong> provides B-tree management, a buffer pool, a lock manager, and a WAL engine in millions of lines of C code. <strong>In Quipu-Log</strong>, <code>std::fs</code> and <code>std::io</code> are the entire toolkit — and with them alone we build a WAL, indexes, locking, and snapshots. Seeing this toollist makes you realize just how far you can get without a database engine.</p></div>
+
+<h2>Opening files: File and OpenOptions</h2>
+
+<p>The most fundamental file operations are open and close. In Rust, <code>std::fs::File</code> is the file handle and <code>OpenOptions</code> controls how it's opened.</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — opening files</span><code><span class="kw">use</span> std::fs::{<span class="ty">File</span>, <span class="ty">OpenOptions</span>};
+
+<span class="com">// write-capable open (segment write path)</span>
+<span class="kw">let</span> file = <span class="ty">OpenOptions</span>::new()
+    .create(<span class="kw">true</span>).truncate(<span class="kw">false</span>).read(<span class="kw">true</span>).write(<span class="kw">true</span>)
+    .open(path)?;
+
+<span class="com">// read-only open (skim, snapshot reads)</span>
+<span class="hl"><span class="kw">let</span> file = <span class="ty">File</span>::open(path)?;  <span class="com">// read-only shorthand</span></span></code></pre>
+
+<p>A <code>File</code> is automatically closed when dropped — no explicit <code>close()</code> needed, thanks to Rust's RAII.</p>
+
+<h2>The I/O traits: Read, Write, Seek</h2>
+
+<p>Three core traits do the actual data transfer.</p>
+
+<table>
+  <tr><th>Trait</th><th>Key method</th><th>Use in Quipu-Log</th></tr>
+  <tr><td><code>std::io::Read</code></td><td><code>read_exact(&amp;mut [u8])</code></td><td>Reading frame headers and payloads</td></tr>
+  <tr><td><code>std::io::Write</code></td><td><code>write_all(&amp;[u8])</code></td><td>Writing frame headers and payloads</td></tr>
+  <tr><td><code>std::io::Seek</code></td><td><code>seek(SeekFrom::Start(n))</code></td><td>Moving to the append position, repositioning after skim for recovery</td></tr>
+</table>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — writing a frame</span><code><span class="kw">use</span> std::io::{<span class="ty">BufReader</span>, <span class="ty">BufWriter</span>, <span class="ty">Read</span>, <span class="ty">Seek</span>, <span class="ty">SeekFrom</span>, <span class="ty">Write</span>};
+
+<span class="com">// frame header 4+4+8 = 16 bytes, then the payload</span>
+self.writer.write_all(&amp;(payload.len() <span class="kw">as</span> <span class="ty">u32</span>).to_le_bytes())?;
+self.writer.write_all(&amp;crc.to_le_bytes())?;
+<span class="hl">self.writer.write_all(&amp;timestamp.to_le_bytes())?;</span>
+self.writer.write_all(payload)?;</code></pre>
+
+<h2>Buffered I/O: BufReader and BufWriter</h2>
+
+<p>Calling <code>write()</code> directly on a <code>File</code> triggers a system call every time. Frame header: 4 bytes, CRC: 4 bytes, timestamp: 8 bytes — that's three syscalls for just the header. <strong>BufWriter</strong> accumulates data in an internal buffer (256 KB) and issues a single syscall when it flushes.</p>
+
+<figure>
+<svg viewBox="0 0 680 180" role="img" aria-label="Comparison of direct writes vs. BufWriter buffering">
+  <defs><marker id="ar6" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#9aa3b2"/></marker></defs>
+  <style>
+    .l6{fill:#e6e8ee;font:600 12px -apple-system,sans-serif}
+    .s6{fill:#9aa3b2;font:11px -apple-system,sans-serif}
+    .s6r{fill:#ff8b8b;font:11px -apple-system,sans-serif}
+    .s6g{fill:#8be9c0;font:11px -apple-system,sans-serif}
+    .ar6{stroke:#9aa3b2;stroke-width:1.5;marker-end:url(#ar6)}
+    .ar6r{stroke:#ff8b8b;stroke-width:1.5;marker-end:url(#ar6)}
+    .ar6g{stroke:#8be9c0;stroke-width:1.5;marker-end:url(#ar6)}
+  </style>
+
+  <!-- Left: direct writes -->
+  <rect x="20" y="20" width="280" height="140" rx="6" fill="#241818" stroke="#ff8b8b" stroke-width="1.5"/>
+  <text x="36" y="44" class="l6" fill="#ff8b8b">Direct writes (File)</text>
+  <text x="36" y="64" class="s6r">write(4B) → syscall</text>
+  <text x="36" y="84" class="s6r">write(4B) → syscall</text>
+  <text x="36" y="104" class="s6r">write(8B) → syscall</text>
+  <text x="36" y="124" class="s6r">write(nB) → syscall</text>
+  <text x="36" y="148" class="s6">4 syscalls per record</text>
+
+  <!-- Right: BufWriter -->
+  <rect x="360" y="20" width="300" height="140" rx="6" fill="#16241d" stroke="#8be9c0" stroke-width="1.5"/>
+  <text x="376" y="44" class="l6" fill="#8be9c0">BufWriter&lt;File&gt; (256 KB buffer)</text>
+  <text x="376" y="64" class="s6">write(4B) → accumulates in buffer</text>
+  <text x="376" y="84" class="s6">write(4B) → accumulates in buffer</text>
+  <text x="376" y="104" class="s6">write(8B) → accumulates in buffer</text>
+  <text x="376" y="124" class="s6">write(nB) → accumulates in buffer</text>
+  <text x="376" y="148" class="s6g">flush() → one syscall for everything</text>
+</svg>
+<figcaption>BufWriter batches multiple write() calls and flushes them in a single syscall. This dramatically reduces syscall overhead.</figcaption>
+</figure>
+
+<p>The same principle applies to reads. <code>BufReader</code> reads a large chunk from disk at once, and <code>read_exact()</code> then pulls from that buffer:</p>
+
+<pre><span class="filename">crates/quipu-core/src/storage/segment.rs — skim() reads</span><code><span class="hl"><span class="kw">let mut</span> reader = <span class="ty">BufReader</span>::with_capacity(<span class="num">256</span> * <span class="num">1024</span>, file);</span>
+<span class="kw">let mut</span> header = [<span class="num">0u8</span>; FRAME_HEADER];
+reader.read_exact(&amp;<span class="kw">mut</span> header)?;   <span class="com">// pull 16 bytes from the buffer</span></code></pre>
+
+<h2>File and directory operations: the full list actually used</h2>
+
+<p>Here are all the <code>std::fs</code> functions used in Quipu-Log's storage module. This is the complete toolbox:</p>
+
+<table>
+  <tr><th>API</th><th>Where Quipu-Log uses it</th></tr>
+  <tr><td><code>std::fs::create_dir_all()</code></td><td>Initializing the store root and table directories</td></tr>
+  <tr><td><code>std::fs::read_dir()</code></td><td>Collecting the list of segment files when opening a table</td></tr>
+  <tr><td><code>std::fs::remove_file()</code></td><td>Retention — deleting old segments (unlink)</td></tr>
+  <tr><td><code>std::fs::rename()</code></td><td>Atomic replacement after a table rewrite</td></tr>
+  <tr><td><code>std::fs::metadata().len()</code></td><td>Checking segment size, deciding when to roll over</td></tr>
+  <tr><td><code>File::set_len()</code></td><td>Crash recovery — truncating the broken tail</td></tr>
+  <tr><td><code>File::try_lock()</code></td><td>Advisory OS lock on the root directory (MSRV 1.89)</td></tr>
+  <tr><td><code>File::sync_data()</code></td><td><code>SyncPolicy::Always</code> / <code>EveryN</code> — fsync</td></tr>
+</table>
+
+<h2>File locking: File::try_lock (MSRV 1.89)</h2>
+
+<p>Quipu-Log enforces a single-writer principle. If a second process tries to open the same root directory as a store, the in-memory index becomes inconsistent and segment writes collide. An OS advisory file lock is what prevents that.</p>
+
+<pre><span class="filename">crates/quipu-core/src/store.rs — AuditStore::open()</span><code><span class="kw">let</span> lock = std::fs::<span class="ty">OpenOptions</span>::new()
+    .create(<span class="kw">true</span>).truncate(<span class="kw">false</span>).write(<span class="kw">true</span>)
+    .open(cfg.root.join(<span class="str">"LOCK"</span>))?;
+
+<span class="hl">lock.try_lock().map_err(|e| <span class="kw">match</span> e {
+    std::fs::<span class="ty">TryLockError</span>::<span class="ty">WouldBlock</span> =&gt; <span class="ty">Error</span>::<span class="ty">Locked</span>(cfg.root.display().to_string()),
+    std::fs::<span class="ty">TryLockError</span>::<span class="ty">Error</span>(e) =&gt; <span class="ty">Error</span>::<span class="ty">Io</span>(e),
+})?;</span></code></pre>
+
+<p><code>File::try_lock()</code> was stabilized in Rust 1.89. That's why Quipu-Log's MSRV (minimum supported Rust version) is 1.89. The reason is spelled out in Cargo.toml:</p>
+
+<pre><span class="filename">Cargo.toml</span><code><span class="com"># MSRV floor: the store guards its root with `std::fs::File::try_lock` and</span>
+<span class="com"># matches on `std::fs::TryLockError`, both stabilized in Rust 1.89.</span>
+<span class="hl">rust-version = <span class="str">"1.89"</span></span></code></pre>
+
+<p>A note on advisory locks: they have no effect <em>within</em> a single process — they only prevent conflicts <em>between processes.</em> When the process dies, the OS releases the lock automatically (the fd is closed). There's something elegant about the lock file: it doesn't need even a single byte of content — just opening it and calling <code>try_lock</code> is enough.</p>
+
+<div class="callout why"><span class="lab">Why this design?</span><p>The reason Quipu-Log uses only <code>std::fs</code> — no external databases, no special OS APIs like mmap or io_uring — is <strong>portability.</strong> The code comment says it plainly: "Only <code>std::fs</code>/<code>std::io</code> are used, so behaviour is identical on every OS Rust targets." The same code runs on Windows, Linux, macOS, and FreeBSD.</p></div>
+
+<div class="callout check"><span class="lab">Check yourself</span><p>① What goes wrong if you call <code>write()</code> dozens of times directly on a <code>File</code> instead of using <code>BufWriter</code>? How does the behavior differ?<br>② Why does <code>File::try_lock()</code> require MSRV 1.89? What alternatives exist if you want to lower the MSRV?<br>③ Name one advantage and one disadvantage of using only <code>std::fs</code>.</p></div>
+
+</article>
